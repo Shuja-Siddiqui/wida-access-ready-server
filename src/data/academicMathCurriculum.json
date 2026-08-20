@@ -1,0 +1,299 @@
+{
+  "subject": "mathematics",
+  "gradeBand": "6-8",
+  "description": "Common Core Grade 6-8 mathematics — real-world word problem scenarios organized by grade and unit. Each unit includes Tier-3 vocabulary scaled to WIDA levels 3-6 and scenario seeds that Claude uses to write the listening passage.",
+  "units": [
+    {
+      "id": "g6_ratios",
+      "grade": 6,
+      "unit": "Ratios & Proportional Relationships",
+      "ccs": "6.RP",
+      "tier3ByLevel": {
+        "3": ["ratio", "rate", "unit rate", "equivalent", "per"],
+        "4": ["ratio", "rate", "unit rate", "percent", "proportion", "equivalent ratio"],
+        "5": ["ratio", "proportional", "unit rate", "percent", "equivalent ratio", "scale factor"],
+        "6": ["ratio", "proportional relationship", "unit rate", "percent", "proportion", "scale factor", "constant ratio"]
+      },
+      "scenarios": [
+        "A grocery store sells apples at a fixed price per pound. A shopper wants to buy different amounts and compare costs.",
+        "Two students are making lemonade using different amounts of lemon juice and water, and they want to know whose recipe is stronger.",
+        "A car travels at a constant speed on the highway, and the driver tracks how far it goes over several hours.",
+        "A baker uses a recipe that calls for ingredients in a specific ratio and needs to adjust it to make a larger batch.",
+        "A store is offering a 25% discount on shoes, and a customer wants to figure out the sale price.",
+        "Two runners are training at different speeds, and a coach compares how long each takes to finish the same route."
+      ]
+    },
+    {
+      "id": "g6_fractions",
+      "grade": 6,
+      "unit": "Division of Fractions & Number Systems",
+      "ccs": "6.NS",
+      "tier3ByLevel": {
+        "3": ["fraction", "divide", "half", "whole", "equal"],
+        "4": ["fraction", "divide", "mixed number", "quotient", "rational number"],
+        "5": ["fraction", "divide", "mixed number", "quotient", "rational number", "reciprocal"],
+        "6": ["fraction", "divide", "rational number", "quotient", "reciprocal", "integer", "absolute value"]
+      },
+      "scenarios": [
+        "A cook has a large container of flour and needs to divide it equally among several smaller bags for a bake sale.",
+        "A student is cutting a ribbon into equal pieces for a school project and needs to figure out how many pieces she can make.",
+        "A family is sharing a pizza equally among several children, and one child wants to know how much each person gets.",
+        "A construction worker has a board of lumber and cuts it into equal sections for a fence project."
+      ]
+    },
+    {
+      "id": "g6_rational_numbers",
+      "grade": 6,
+      "unit": "Rational Numbers & the Number Line",
+      "ccs": "6.NS.C",
+      "tier3ByLevel": {
+        "3": ["negative", "below zero", "number line", "above", "below"],
+        "4": ["negative number", "integer", "number line", "opposite", "absolute value"],
+        "5": ["negative number", "integer", "absolute value", "rational number", "coordinate", "opposite"],
+        "6": ["negative number", "integer", "absolute value", "rational number", "coordinate plane", "quadrant", "opposite values"]
+      },
+      "scenarios": [
+        "A scientist measures the temperature inside a freezer, which drops several degrees below zero overnight.",
+        "A diver starts at the surface of the ocean and descends to different depths to observe sea life.",
+        "A bank account starts with some money, and then the owner makes several deposits and withdrawals over the week.",
+        "A city records the highest and lowest temperatures during a cold week in January."
+      ]
+    },
+    {
+      "id": "g6_expressions",
+      "grade": 6,
+      "unit": "Expressions, Equations & Inequalities",
+      "ccs": "6.EE",
+      "tier3ByLevel": {
+        "3": ["equation", "solve", "unknown", "value", "equal"],
+        "4": ["expression", "equation", "variable", "solve", "substitute"],
+        "5": ["expression", "equation", "variable", "evaluate", "substitute", "inequality"],
+        "6": ["algebraic expression", "equation", "variable", "evaluate", "inequality", "solution set", "coefficient"]
+      },
+      "scenarios": [
+        "A student earns the same amount of money for each hour of babysitting and wants to know how much she earns for different numbers of hours.",
+        "A store charges a flat fee plus a per-item cost, and a customer wants to figure out the total bill.",
+        "A plumber charges a fixed service fee and an hourly rate, and a homeowner wants to know the total cost.",
+        "A school fundraiser sells cookies for a set price each, and the team needs to figure out how many to sell to reach their goal."
+      ]
+    },
+    {
+      "id": "g6_geometry",
+      "grade": 6,
+      "unit": "Geometry: Area, Surface Area & Volume",
+      "ccs": "6.G",
+      "tier3ByLevel": {
+        "3": ["area", "perimeter", "length", "width", "square"],
+        "4": ["area", "surface area", "volume", "rectangle", "triangle", "net"],
+        "5": ["area", "surface area", "volume", "rectangular prism", "triangle", "composite figure", "net"],
+        "6": ["area", "surface area", "volume", "rectangular prism", "composite figure", "polygon", "three-dimensional figure"]
+      },
+      "scenarios": [
+        "A homeowner wants to tile a rectangular kitchen floor and needs to figure out how many tiles to buy.",
+        "A student is wrapping a birthday present in a box and wants to know how much wrapping paper she needs.",
+        "A gardener is building a raised garden bed and needs to figure out how much soil to fill it with.",
+        "An architect designs a room and needs to calculate the total area of the walls to determine how much paint to buy."
+      ]
+    },
+    {
+      "id": "g6_statistics",
+      "grade": 6,
+      "unit": "Statistics & Data",
+      "ccs": "6.SP",
+      "tier3ByLevel": {
+        "3": ["average", "most", "least", "data", "graph"],
+        "4": ["mean", "median", "mode", "data set", "distribution"],
+        "5": ["mean", "median", "mode", "range", "distribution", "variability", "histogram"],
+        "6": ["mean", "median", "mode", "range", "interquartile range", "variability", "distribution", "outlier"]
+      },
+      "scenarios": [
+        "A teacher records student test scores for a class and analyzes how well the class did overall.",
+        "A weather station records daily high temperatures for a month and looks for patterns.",
+        "A sports coach tracks how many points each player scored over the season to decide who plays the most.",
+        "A school tracks student arrival times each morning to see how many students are late and by how much."
+      ]
+    },
+    {
+      "id": "g7_proportional",
+      "grade": 7,
+      "unit": "Proportional Relationships",
+      "ccs": "7.RP",
+      "tier3ByLevel": {
+        "3": ["proportion", "ratio", "percent", "equal", "double"],
+        "4": ["proportional", "ratio", "percent increase", "percent decrease", "constant"],
+        "5": ["proportional relationship", "constant of proportionality", "percent change", "markup", "discount"],
+        "6": ["proportional relationship", "constant of proportionality", "percent change", "markup", "discount", "scale factor", "similar figures"]
+      },
+      "scenarios": [
+        "A traveler is exchanging dollars for euros and wants to know how much foreign currency she will receive.",
+        "A restaurant charges a fixed tax and tip on every bill, and a customer wants to estimate the total cost of a meal.",
+        "A driver tracks how many miles her car travels per gallon of gas to plan a long road trip.",
+        "A store marks up the price of items by a fixed percentage and then offers a sale discount — a shopper wants to find the final price.",
+        "A map uses a scale where one inch equals 50 miles, and a hiker wants to measure the real distance between two cities.",
+        "A population of bacteria doubles every hour, and a scientist tracks how many there are after several hours."
+      ]
+    },
+    {
+      "id": "g7_rational_ops",
+      "grade": 7,
+      "unit": "Operations with Rational Numbers",
+      "ccs": "7.NS",
+      "tier3ByLevel": {
+        "3": ["add", "subtract", "negative", "positive", "total"],
+        "4": ["rational number", "add", "subtract", "multiply", "negative", "positive"],
+        "5": ["rational number", "operation", "negative", "absolute value", "multiply", "divide", "integer"],
+        "6": ["rational number", "operation", "negative integer", "absolute value", "multiplicative inverse", "additive inverse"]
+      },
+      "scenarios": [
+        "A student has some money in a bank account and makes a series of deposits and withdrawals throughout the month.",
+        "A weather station in Alaska records temperature changes over several days, including drops below zero.",
+        "A football team gains and loses yards on different plays during a drive toward the end zone.",
+        "An investor tracks the rise and fall of a stock price over one week."
+      ]
+    },
+    {
+      "id": "g7_expressions_equations",
+      "grade": 7,
+      "unit": "Expressions & Linear Equations",
+      "ccs": "7.EE",
+      "tier3ByLevel": {
+        "3": ["equation", "solve", "equal", "total", "cost"],
+        "4": ["expression", "equation", "variable", "coefficient", "solve"],
+        "5": ["linear equation", "variable", "coefficient", "solution", "equivalent expression"],
+        "6": ["linear equation", "variable", "coefficient", "solution", "equivalent expression", "inequality", "rational coefficient"]
+      },
+      "scenarios": [
+        "A phone company charges a flat monthly fee plus a cost per text message, and a customer wants to predict her monthly bill.",
+        "Two students save money each week at different rates and start with different amounts — a teacher asks when they will have the same total.",
+        "A gym offers two membership plans with different monthly fees and per-visit costs, and a person wants to choose the cheaper one.",
+        "A taxi company charges a base fare plus a rate per mile, and a passenger wants to estimate the cost of a ride."
+      ]
+    },
+    {
+      "id": "g7_geometry",
+      "grade": 7,
+      "unit": "Geometry: Scale, Area & Volume",
+      "ccs": "7.G",
+      "tier3ByLevel": {
+        "3": ["area", "circle", "triangle", "scale", "measurement"],
+        "4": ["area", "circumference", "radius", "diameter", "scale drawing", "volume"],
+        "5": ["area", "circumference", "radius", "diameter", "scale factor", "surface area", "volume", "cross-section"],
+        "6": ["area", "circumference", "pi", "radius", "diameter", "scale factor", "surface area", "volume", "composite figure"]
+      },
+      "scenarios": [
+        "A landscape designer is planning a circular garden and needs to know how much fencing to buy for the border.",
+        "An architect draws a scale model of a new park and marks the real distances using the map scale.",
+        "A swimmer is calculating the volume of a cylindrical pool to figure out how many gallons of water it holds.",
+        "A student decorates a cylindrical can for a science project and needs to find the total surface area to cover."
+      ]
+    },
+    {
+      "id": "g7_statistics",
+      "grade": 7,
+      "unit": "Statistics & Probability",
+      "ccs": "7.SP",
+      "tier3ByLevel": {
+        "3": ["likely", "unlikely", "sample", "survey", "data"],
+        "4": ["probability", "sample", "population", "inference", "random"],
+        "5": ["probability", "sample", "population", "inference", "random sampling", "compound event"],
+        "6": ["probability", "sample", "population", "inference", "random sampling", "compound event", "independent", "dependent"]
+      },
+      "scenarios": [
+        "A school surveys a sample of students about their favorite lunch and uses the results to predict what all students prefer.",
+        "A student flips a coin and rolls a die and wants to figure out the probability of certain outcomes.",
+        "A store surveys customers about a new product and uses the responses to decide whether to stock more.",
+        "A doctor collects data from a random sample of patients to estimate how common a condition is in the community."
+      ]
+    },
+    {
+      "id": "g8_linear_equations",
+      "grade": 8,
+      "unit": "Linear Equations & Systems",
+      "ccs": "8.EE",
+      "tier3ByLevel": {
+        "3": ["equation", "solve", "slope", "line", "intercept"],
+        "4": ["linear equation", "slope", "y-intercept", "system of equations", "solution"],
+        "5": ["linear equation", "slope", "y-intercept", "system of equations", "solution", "coefficient", "elimination"],
+        "6": ["linear equation", "slope", "y-intercept", "system of equations", "solution", "coefficient", "elimination", "substitution", "consistent system"]
+      },
+      "scenarios": [
+        "Two friends start a savings account with different amounts and save different amounts each week — a teacher asks when they will have the same amount.",
+        "A car rental company charges a base fee plus a daily rate, and a traveler wants to compare two companies to find the cheaper option.",
+        "A cyclist rides at a constant speed and a teacher describes her position over time using a graph.",
+        "A school store sells pens and notebooks, and the total sold in one day equals a certain amount — a student tries to figure out how many of each were sold."
+      ]
+    },
+    {
+      "id": "g8_functions",
+      "grade": 8,
+      "unit": "Functions",
+      "ccs": "8.F",
+      "tier3ByLevel": {
+        "3": ["input", "output", "pattern", "change", "value"],
+        "4": ["function", "input", "output", "rate of change", "linear"],
+        "5": ["function", "input", "output", "rate of change", "linear function", "nonlinear"],
+        "6": ["function", "domain", "range", "rate of change", "linear function", "nonlinear function", "initial value"]
+      },
+      "scenarios": [
+        "A plant grows by the same amount every week starting from a certain height, and a scientist records its height over several months.",
+        "A phone battery loses charge at a steady rate during the day, and a student tracks the percentage remaining every hour.",
+        "A swimmer's speed changes as she gets tired during a race, and a coach charts her speed over time.",
+        "A company's profit grows by the same amount every year, and an analyst projects future earnings."
+      ]
+    },
+    {
+      "id": "g8_geometry",
+      "grade": 8,
+      "unit": "Geometry: Congruence, Similarity & Transformations",
+      "ccs": "8.G.A",
+      "tier3ByLevel": {
+        "3": ["same shape", "size", "flip", "slide", "turn"],
+        "4": ["congruent", "similar", "reflection", "translation", "rotation"],
+        "5": ["congruent", "similar", "reflection", "translation", "rotation", "transformation", "angle"],
+        "6": ["congruent", "similar", "reflection", "translation", "rotation", "dilation", "transformation", "corresponding angles", "scale factor"]
+      },
+      "scenarios": [
+        "A graphic designer creates a logo and then resizes it for different uses while keeping the same shape.",
+        "An architect notices that two sections of a building have the exact same shape and size, and explains why.",
+        "A student rearranges tiles on a floor so that each tile is a mirror image of the one next to it.",
+        "A teacher explains how a smaller triangle and a larger triangle share the same angles but different side lengths."
+      ]
+    },
+    {
+      "id": "g8_pythagorean",
+      "grade": 8,
+      "unit": "Pythagorean Theorem",
+      "ccs": "8.G.B",
+      "tier3ByLevel": {
+        "3": ["triangle", "side", "right angle", "length", "distance"],
+        "4": ["right triangle", "hypotenuse", "leg", "Pythagorean theorem", "square root"],
+        "5": ["right triangle", "hypotenuse", "leg", "Pythagorean theorem", "square root", "irrational number"],
+        "6": ["right triangle", "hypotenuse", "leg", "Pythagorean theorem", "square root", "irrational number", "distance formula", "three-dimensional"]
+      },
+      "scenarios": [
+        "A firefighter leans a ladder against a building wall and a safety inspector needs to verify the ladder reaches a certain height.",
+        "Two hikers start at the same campsite and walk in perpendicular directions — a park ranger calculates how far apart they are.",
+        "A TV screen is described by its diagonal measurement, and a buyer wants to know the dimensions of the screen.",
+        "A ship sails directly east and then directly north, and a navigator calculates the straight-line distance back to the starting port."
+      ]
+    },
+    {
+      "id": "g8_data",
+      "grade": 8,
+      "unit": "Bivariate Data & Linear Models",
+      "ccs": "8.SP",
+      "tier3ByLevel": {
+        "3": ["graph", "predict", "more", "less", "trend"],
+        "4": ["scatter plot", "trend", "positive", "negative", "predict"],
+        "5": ["scatter plot", "linear model", "trend line", "correlation", "predict", "positive association"],
+        "6": ["scatter plot", "linear model", "trend line", "correlation", "predict", "positive association", "negative association", "outlier", "bivariate data"]
+      },
+      "scenarios": [
+        "A scientist plots the relationship between the number of hours students study and their test scores, and describes what the data shows.",
+        "A coach graphs the relationship between players' practice hours and the number of goals they score in a season.",
+        "A weather researcher compares average monthly temperatures and ice cream sales to look for a relationship.",
+        "A health researcher tracks whether people who sleep more hours tend to have lower or higher stress levels."
+      ]
+    }
+  ]
+}

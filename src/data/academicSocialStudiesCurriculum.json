@@ -1,0 +1,216 @@
+{
+  "subject": "social_studies",
+  "gradeBand": "6-8",
+  "description": "Grade 6-8 social studies units — organized by strand. Each unit includes listening scenario seeds (a teacher, historian, or narrator explaining a concept or event) and Tier-3 vocabulary scaled to WIDA levels 3-6.",
+  "units": [
+    {
+      "id": "wh_ancient_civ",
+      "strand": "World History",
+      "unit": "Ancient Civilizations",
+      "topics": "Mesopotamia, Ancient Egypt, Indus Valley, and Early China",
+      "tier3ByLevel": {
+        "3": ["civilization", "ancient", "farmer", "river", "ruler"],
+        "4": ["civilization", "ancient", "agriculture", "irrigation", "trade", "government"],
+        "5": ["civilization", "agriculture", "irrigation", "trade route", "government", "social hierarchy", "artifact"],
+        "6": ["civilization", "agriculture", "irrigation", "trade route", "government", "social hierarchy", "artifact", "polytheism", "cuneiform", "city-state"]
+      },
+      "scenarios": [
+        "A history teacher explains how ancient Mesopotamians used irrigation canals to bring water from the Tigris River to their crops in the dry desert.",
+        "A teacher describes why ancient Egyptian civilization grew and thrived along the banks of the Nile River.",
+        "A museum curator explains what archaeologists discovered when they excavated the ancient city of Mohenjo-Daro in the Indus Valley.",
+        "A history teacher explains how early Chinese civilization developed writing, silk production, and bronze tools along the Yellow River.",
+        "A teacher describes the social hierarchy of ancient Egypt, from the pharaoh at the top to farmers and slaves at the bottom."
+      ]
+    },
+    {
+      "id": "wh_classical_empires",
+      "strand": "World History",
+      "unit": "Classical Empires",
+      "topics": "Ancient Greece, the Roman Empire, and the Mesoamerican Empires",
+      "tier3ByLevel": {
+        "3": ["empire", "citizen", "law", "soldier", "trade"],
+        "4": ["empire", "democracy", "republic", "citizen", "conquest", "territory"],
+        "5": ["empire", "democracy", "republic", "citizen", "conquest", "territory", "senate", "philosophy"],
+        "6": ["empire", "democracy", "republic", "citizen", "conquest", "territory", "senate", "philosophy", "oligarchy", "theocracy", "tribute"]
+      },
+      "scenarios": [
+        "A history teacher explains how ancient Athens created one of the world's first democracies, where male citizens voted on city laws.",
+        "A teacher describes how the Roman Republic grew into the Roman Empire and what caused it to eventually fall.",
+        "A teacher explains how the Aztec Empire built a powerful city called Tenochtitlan on an island in the middle of a lake.",
+        "A historian explains how Alexander the Great conquered a vast territory stretching from Greece to Egypt to India.",
+        "A teacher describes how Roman roads, aqueducts, and laws shaped the cultures of every territory the Romans conquered."
+      ]
+    },
+    {
+      "id": "wh_geography",
+      "strand": "World History",
+      "unit": "Global Geography",
+      "topics": "Physical landforms, human migration, mapping, and regional cultures",
+      "tier3ByLevel": {
+        "3": ["mountain", "river", "map", "migrate", "culture"],
+        "4": ["landform", "migration", "geography", "latitude", "longitude", "culture"],
+        "5": ["landform", "migration", "geography", "latitude", "longitude", "culture", "climate zone", "population density"],
+        "6": ["landform", "migration", "geography", "latitude", "longitude", "climate zone", "population density", "push factor", "pull factor", "cultural diffusion"]
+      },
+      "scenarios": [
+        "A geography teacher explains why most of the world's major cities were built near rivers or coastlines.",
+        "A teacher describes why early humans migrated out of Africa and how they spread across every continent over thousands of years.",
+        "A cartographer explains how geographers use lines of latitude and longitude to locate any place on Earth.",
+        "A teacher explains how the Sahara Desert acts as a barrier that has separated the cultures of North Africa from the rest of the continent for thousands of years.",
+        "A geography teacher describes how the Silk Road allowed goods, ideas, and religions to travel between China and Europe."
+      ]
+    },
+    {
+      "id": "wh_middle_ages",
+      "strand": "World History",
+      "unit": "Middle Ages",
+      "topics": "European feudalism, the Silk Road, and African trading kingdoms",
+      "tier3ByLevel": {
+        "3": ["king", "peasant", "trade", "knight", "castle"],
+        "4": ["feudalism", "peasant", "knight", "trade route", "kingdom", "noble"],
+        "5": ["feudalism", "serf", "knight", "trade route", "kingdom", "noble", "manor", "plague"],
+        "6": ["feudalism", "serf", "knight", "trade route", "kingdom", "noble", "manor", "plague", "Crusades", "guild", "Black Death"]
+      },
+      "scenarios": [
+        "A history teacher explains how the feudal system in medieval Europe organized society, with kings and lords at the top and serfs at the bottom.",
+        "A teacher describes how merchants on the Silk Road traded goods like silk, spices, and glassware between Asia, the Middle East, and Europe.",
+        "A historian explains how the Mali Empire in West Africa became one of the richest kingdoms in the world by controlling gold and salt trade routes.",
+        "A teacher describes what life was like for a serf living on a lord's manor in medieval Europe — the work they did and the rules they had to follow.",
+        "A teacher explains how the bubonic plague spread along trade routes and killed roughly one-third of Europe's population in the 1300s."
+      ]
+    },
+    {
+      "id": "ush_early_america",
+      "strand": "U.S. History",
+      "unit": "Early America",
+      "topics": "Indigenous cultures, European exploration, and the thirteen colonies",
+      "tier3ByLevel": {
+        "3": ["colony", "settler", "Native American", "explore", "land"],
+        "4": ["colony", "indigenous", "settler", "explore", "trade", "conflict"],
+        "5": ["colony", "indigenous", "settler", "exploration", "trade", "conflict", "Columbian Exchange"],
+        "6": ["colony", "indigenous", "settler", "exploration", "Columbian Exchange", "mercantilism", "indentured servant", "plantation"]
+      },
+      "scenarios": [
+        "A teacher explains how Native American peoples like the Haudenosaunee developed complex governments and cultures long before Europeans arrived.",
+        "A history teacher describes why European nations like Spain, England, and France sent explorers to the Americas in the 1400s and 1500s.",
+        "A teacher explains what the Columbian Exchange was — the transfer of plants, animals, and diseases between Europe and the Americas.",
+        "A teacher describes why the first English settlers at Jamestown struggled to survive and what helped the colony eventually succeed.",
+        "A teacher explains how the thirteen American colonies were governed and what they had in common despite being very different from each other."
+      ]
+    },
+    {
+      "id": "ush_revolution",
+      "strand": "U.S. History",
+      "unit": "The American Revolution",
+      "topics": "Causes of the war, the Declaration of Independence, and the Revolutionary War",
+      "tier3ByLevel": {
+        "3": ["revolution", "colonist", "freedom", "war", "rights"],
+        "4": ["revolution", "colonist", "taxation", "independence", "rights", "militia"],
+        "5": ["revolution", "colonist", "taxation", "independence", "rights", "militia", "loyalist", "patriot"],
+        "6": ["revolution", "colonist", "taxation", "independence", "natural rights", "loyalist", "patriot", "declaration", "sovereignty", "representation"]
+      },
+      "scenarios": [
+        "A history teacher explains why American colonists were angry about the Stamp Act and began saying 'no taxation without representation.'",
+        "A teacher describes what happened at the Boston Massacre and how it turned many colonists against British rule.",
+        "A teacher explains the main ideas in the Declaration of Independence — that all people have natural rights and government gets its power from the people.",
+        "A teacher describes the turning point at the Battle of Saratoga and why it convinced France to help the American colonists.",
+        "A historian explains why the American Revolution succeeded and what role ordinary farmers and soldiers played in defeating the British army."
+      ]
+    },
+    {
+      "id": "ush_constitution",
+      "strand": "U.S. History",
+      "unit": "The Constitution",
+      "topics": "The three branches of government, the Bill of Rights, and civic duties",
+      "tier3ByLevel": {
+        "3": ["government", "law", "vote", "rights", "president"],
+        "4": ["constitution", "government", "branch", "congress", "rights", "amendment"],
+        "5": ["constitution", "branch of government", "congress", "amendment", "Bill of Rights", "checks and balances"],
+        "6": ["constitution", "legislative", "executive", "judicial", "amendment", "Bill of Rights", "checks and balances", "federalism", "ratify"]
+      },
+      "scenarios": [
+        "A civics teacher explains the three branches of the federal government and what each one is responsible for.",
+        "A teacher describes how the system of checks and balances prevents any one branch of government from becoming too powerful.",
+        "A teacher explains what the First Amendment protects — freedom of speech, religion, and the press — and why the founders considered these rights essential.",
+        "A teacher describes how a bill becomes a law, starting in Congress, going to the president, and possibly ending up in the Supreme Court.",
+        "A civics teacher explains what civic duties American citizens have, including paying taxes, serving on juries, and voting in elections."
+      ]
+    },
+    {
+      "id": "ush_westward",
+      "strand": "U.S. History",
+      "unit": "Westward Expansion",
+      "topics": "Manifest Destiny, industrialization, and the impacts on Native Americans",
+      "tier3ByLevel": {
+        "3": ["west", "settler", "railroad", "Native American", "land"],
+        "4": ["Manifest Destiny", "settler", "railroad", "Native American", "territory", "migration"],
+        "5": ["Manifest Destiny", "settler", "railroad", "Native American", "territory", "migration", "reservation", "industrialization"],
+        "6": ["Manifest Destiny", "settler", "railroad", "reservation", "industrialization", "treaty", "displacement", "assimilation", "Homestead Act"]
+      },
+      "scenarios": [
+        "A history teacher explains what Americans meant by 'Manifest Destiny' — the belief that the U.S. was destined to expand from coast to coast.",
+        "A teacher describes how the transcontinental railroad connected the East and West coasts and transformed trade and travel in America.",
+        "A teacher explains the devastating impact of westward expansion on Native American nations — their removal from ancestral lands and forced onto reservations.",
+        "A teacher describes the California Gold Rush of 1849 and how it brought hundreds of thousands of people west in search of fortune.",
+        "A historian explains how industrialization in the northern United States created new factories, cities, and a working class during the 1800s."
+      ]
+    },
+    {
+      "id": "ush_civil_war",
+      "strand": "U.S. History",
+      "unit": "The Civil War",
+      "topics": "Sectionalism, slavery, states' rights, and the Reconstruction era",
+      "tier3ByLevel": {
+        "3": ["slavery", "freedom", "soldier", "South", "North"],
+        "4": ["slavery", "sectionalism", "states' rights", "Confederacy", "Union", "emancipation"],
+        "5": ["slavery", "sectionalism", "states' rights", "Confederacy", "Union", "emancipation", "Reconstruction", "amendment"],
+        "6": ["slavery", "sectionalism", "states' rights", "Confederacy", "Union", "Emancipation Proclamation", "Reconstruction", "Thirteenth Amendment", "sharecropping", "Jim Crow"]
+      },
+      "scenarios": [
+        "A history teacher explains how disagreements over slavery and states' rights divided the North and South and eventually led to the Civil War.",
+        "A teacher describes what life was like for enslaved African Americans on a Southern plantation and what the system of slavery meant for those who lived under it.",
+        "A teacher explains what President Lincoln's Emancipation Proclamation declared and how it changed the purpose of the Civil War.",
+        "A teacher describes the hardships soldiers faced during the Civil War — the weapons used, the diseases, and the massive number of casualties.",
+        "A historian explains what Reconstruction was, why it gave formerly enslaved people new rights, and why many of those gains were later reversed."
+      ]
+    },
+    {
+      "id": "econ_systems",
+      "strand": "Financial Literacy and Economics",
+      "unit": "Economic Systems",
+      "topics": "Traditional, command, market, and mixed economies",
+      "tier3ByLevel": {
+        "3": ["economy", "buy", "sell", "price", "government"],
+        "4": ["economy", "market", "supply", "demand", "government control", "trade"],
+        "5": ["economic system", "market economy", "command economy", "supply", "demand", "scarcity", "incentive"],
+        "6": ["economic system", "market economy", "command economy", "mixed economy", "supply", "demand", "scarcity", "incentive", "GDP", "opportunity cost"]
+      },
+      "scenarios": [
+        "An economics teacher explains the difference between a market economy where individuals make decisions and a command economy where the government controls production.",
+        "A teacher describes how supply and demand determines the price of a product — like why the price of strawberries drops when farmers have a big harvest.",
+        "A teacher explains what scarcity means in economics and why people and governments must make choices about how to use limited resources.",
+        "A teacher describes how most countries in the world today have mixed economies that combine market and government elements.",
+        "An economics teacher explains why competition between businesses usually leads to lower prices and better products for consumers."
+      ]
+    },
+    {
+      "id": "econ_personal_finance",
+      "strand": "Financial Literacy and Economics",
+      "unit": "Personal Finance",
+      "topics": "Budgeting, saving, taxes, and understanding scarcity",
+      "tier3ByLevel": {
+        "3": ["budget", "save", "spend", "money", "tax"],
+        "4": ["budget", "savings", "income", "expense", "tax", "interest"],
+        "5": ["budget", "savings", "income", "expense", "tax", "interest", "credit", "investment"],
+        "6": ["budget", "savings", "income", "expense", "tax", "interest", "credit", "investment", "compound interest", "net income", "gross income"]
+      },
+      "scenarios": [
+        "A financial educator explains how to make a budget by listing monthly income, subtracting fixed expenses like rent, and deciding how much to save.",
+        "A teacher describes why saving money in a bank account earns interest and how compound interest makes savings grow faster over time.",
+        "A teacher explains the difference between a need and a want and why deciding between them is an important budgeting skill.",
+        "A financial literacy teacher explains what income tax is, why the government collects it, and how it is used to fund public services.",
+        "A teacher describes what credit is, how a credit card works, and why carrying a high balance from month to month costs the consumer more money."
+      ]
+    }
+  ]
+}

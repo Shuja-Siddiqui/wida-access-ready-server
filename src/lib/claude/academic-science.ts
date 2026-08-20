@@ -1,0 +1,157 @@
+/**
+ * Academic Science Listening content generator — Grade 6-8, WIDA levels 3-6.
+ *
+ * System prompt: role + BASE_BLOCK + LISTENING_CORE_BLOCK + SCIENCE_SUBJECT_BLOCK + SCIENCE_OUTPUT_SCHEMA
+ * No INPUT_FIELDS block — JSON field names are self-documenting.
+ *
+ * Permitted formats: all four (multiple_choice, sequence_ordering, pair_matching, agree_disagree)
+ * agree_disagree included — science deals in evidence-based claims.
+ * Questions test comprehension of scientific language, not memorized facts.
+ */
+
+import {
+  callClaude,
+  toDisplayText,
+  PASSAGE_SENTENCE_TARGETS,
+  LEVEL_QUESTION_COUNT,
+  LEVEL_MAX_TOKENS,
+} from "./client";
+import {
+  buildSystemPrompt,
+  BASE_BLOCK,
+  LISTENING_CORE_BLOCK,
+  SCIENCE_SUBJECT_BLOCK,
+  SCIENCE_OUTPUT_SCHEMA,
+} from "./prompts";
+import type { ListeningContent } from "./listening";
+
+const SYSTEM_PROMPT = buildSystemPrompt(
+  "You are an academic listening content generator for Grade 6–8 English Language Learners. Generate a science passage presented as a teacher or scientist narrating a phenomenon to the class, plus comprehension questions that test whether the student understood the scientific language and reasoning — not whether they have memorized science facts.",
+  BASE_BLOCK,
+  LISTENING_CORE_BLOCK,
+  SCIENCE_SUBJECT_BLOCK,
+  SCIENCE_OUTPUT_SCHEMA,
+);
+
+// ── Fallback ──────────────────────────────────────────────────────────────────
+
+export const FALLBACK_ACADEMIC_SCIENCE: ListeningContent = {
+  audioScript:
+    "Today we are going to look at how plants make their own food. This process is called photosynthesis — which means 'putting together with light.' A plant takes in three things: sunlight from the sky, water from the soil through its roots, and carbon dioxide from the air through tiny openings in its leaves. Inside the leaf, cells use the energy from sunlight to combine the water and carbon dioxide and turn them into sugar. The plant uses that sugar as food to grow. As a result, the plant releases oxygen into the air — and that is the oxygen that we breathe.",
+  topic: "Science — Life Science: Cells",
+  context: "Teacher explaining a science concept to the class",
+  questions: [
+    {
+      id: "1",
+      type: "multiple_choice",
+      question: "According to the teacher, what three things does a plant need for photosynthesis?",
+      options: [
+        "Sunlight, water, and carbon dioxide",
+        "Sunlight, oxygen, and soil",
+        "Water, nitrogen, and carbon dioxide",
+        "Sugar, sunlight, and oxygen",
+      ],
+      correct: 0,
+      explanation: "The audio names sunlight, water, and carbon dioxide.",
+    },
+    {
+      id: "2",
+      type: "multiple_choice",
+      question: "What does the teacher say the plant releases as a result of photosynthesis?",
+      options: ["Carbon dioxide", "Sugar", "Water vapor", "Oxygen"],
+      correct: 3,
+      explanation: "The audio says the plant releases oxygen.",
+    },
+    {
+      id: "3",
+      type: "multiple_choice",
+      question: "What does 'photosynthesis' mean according to the teacher?",
+      options: [
+        "Making food from soil",
+        "Putting together with light",
+        "Taking in oxygen",
+        "Releasing carbon dioxide",
+      ],
+      correct: 1,
+      explanation: "The teacher defines it as 'putting together with light.'",
+    },
+  ],
+};
+
+// ── Generator ─────────────────────────────────────────────────────────────────
+
+export async function generateAcademicScienceListeningContent(params: {
+  level: number;
+  fractionalLevel: number;
+  stepWithinLevel: number;
+  complexityInstruction: string;
+  oralFormat: string;
+  permittedFormats: string[];
+  canDo: { keyUse: string; action: string; items: string[] };
+  scienceUnit: string;
+  scienceStrand: string;
+  scienceScenario: string;
+  tier3Vocabulary: string[];
+  topic: string;
+  isRetry?: boolean;
+  lastSessionScore?: number | null;
+}): Promise<ListeningContent> {
+  const clampedLevel = Math.min(Math.max(params.level, 3), 6);
+  const questionCount = LEVEL_QUESTION_COUNT[clampedLevel] ?? 3;
+  const passageSentenceTarget =
+    PASSAGE_SENTENCE_TARGETS[clampedLevel] ?? PASSAGE_SENTENCE_TARGETS[3];
+  const maxTokens = LEVEL_MAX_TOKENS[clampedLevel] ?? 1500;
+
+  const prompt = JSON.stringify({
+    integer_level:          params.level,
+    step_within_level:      params.stepWithinLevel,
+    complexity_instruction: params.complexityInstruction,
+    can_do: {
+      key_use: params.canDo.keyUse,
+      action:  params.canDo.action,
+      items:   params.canDo.items,
+    },
+    oral_format:             params.oralFormat,
+    science_unit:            params.scienceUnit,
+    science_strand:          params.scienceStrand,
+    science_scenario:        params.scienceScenario,
+    tier3_vocabulary:        params.tier3Vocabulary,
+    topic:                   params.topic,
+    is_retry:                params.isRetry ?? false,
+    last_session_score:      params.lastSessionScore ?? null,
+    question_count:          questionCount,
+    passage_sentence_target: passageSentenceTarget,
+  });
+
+  try {
+    const result = (await callClaude(SYSTEM_PROMPT, prompt, maxTokens)) as {
+      audio_script: string;
+      topic: string;
+      context: string;
+      questions: Array<{
+        id: string;
+        type: string;
+        question: string;
+        options: string[];
+        correct: number;
+        explanation: string;
+      }>;
+    };
+
+    return {
+      audioScript: toDisplayText(result.audio_script),
+      topic:       result.topic ?? params.topic,
+      context:     result.context ?? "Teacher explaining a science concept to the class",
+      questions: (result.questions || []).map((q) => ({
+        id:          q.id,
+        type:        q.type,
+        question:    toDisplayText(q.question),
+        options:     q.options,
+        correct:     q.correct,
+        explanation: q.explanation,
+      })),
+    };
+  } catch {
+    return FALLBACK_ACADEMIC_SCIENCE;
+  }
+}

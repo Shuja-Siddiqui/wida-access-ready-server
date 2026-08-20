@@ -1,0 +1,810 @@
+{
+  "title": "Can Do Descriptors",
+  "edition": "KEY USES EDITION",
+  "grades": "Grades 6-8",
+  "tableHeader": "By the end of each of the given levels of English language proficiency* English language learners can...",
+  "footnote": "*Except for Level 6, for which there is no ceiling.",
+  "keyUseDefinitions": [
+    {
+      "keyUse": "Recount",
+      "text": "Recount: To display knowledge or narrate experiences or events. Example tasks for the Key Use of Recount include telling or summarizing stories, producing information reports, and sharing past experiences."
+    },
+    {
+      "keyUse": "Explain",
+      "text": "Explain: To clarify the \"why\" or the \"how\" of ideas, actions, or phenomena. Example tasks for the Key Use of Explain include describing life cycles, sharing why or how things work, stating causes and effects, and sharing results of experiments."
+    },
+    {
+      "keyUse": "Argue",
+      "text": "Argue: To persuade by making claims supported by evidence. Example tasks for the Key Use of Argue include stating preferences or opinions and constructing arguments with evidence."
+    },
+    {
+      "keyUse": "Discuss",
+      "text": "Discuss: To interact with others to build meaning and share knowledge. Example tasks for the Key Use of Discuss include participating in small or large group activities and projects."
+    }
+  ],
+  "levels": [
+    {
+      "elpLevel": "ELP Level 1",
+      "proficiencyLevel": "Entering",
+      "domains": [
+        {
+          "domain": "SPEAKING",
+          "keyUses": [
+            {
+              "keyUse": "Recount",
+              "action": "Recount by",
+              "canDo": [
+                "Answering select Wh-questions",
+                "Naming and briefly describing past community or school events using visual support (e.g., posters, photographs)"
+              ]
+            },
+            {
+              "keyUse": "Explain",
+              "action": "Explain by",
+              "canDo": [
+                "Comparing attributes of real-life objects with a partner",
+                "Showing how to solve real-world problems using symbols, numerals, graphs, or diagrams"
+              ]
+            },
+            {
+              "keyUse": "Argue",
+              "action": "Argue by",
+              "canDo": [
+                "Responding yes or no to short statements or questions related to a claim",
+                "Expressing personal points of view (in home language and English) in support of or against a claim"
+              ]
+            }
+          ]
+        },
+        {
+          "domain": "READING",
+          "keyUses": [
+            {
+              "keyUse": "Recount",
+              "action": "Process recounts by",
+              "canDo": [
+                "Identifying responses to Wh-questions in charts or illustrated text",
+                "Identifying icons in graphs, charts, and environmental print related to familiar topics"
+              ]
+            },
+            {
+              "keyUse": "Explain",
+              "action": "Process explanations by",
+              "canDo": [
+                "Matching content-related objects, pictures, or media to words and phrases",
+                "Identifying social or academic topics highlighted in text"
+              ]
+            },
+            {
+              "keyUse": "Argue",
+              "action": "Process arguments by",
+              "canDo": [
+                "Identifying words or phrases associated with topic choices",
+                "Classifying true from false short statements"
+              ]
+            }
+          ]
+        },
+        {
+          "domain": "WRITING",
+          "keyUses": [
+            {
+              "keyUse": "Recount",
+              "action": "Recount by",
+              "canDo": [
+                "Producing labeled illustrations of conclusions reached in problem-solving with a partner",
+                "Reproducing words and phrases related to topics (e.g., including cognates)"
+              ]
+            },
+            {
+              "keyUse": "Explain",
+              "action": "Explain by",
+              "canDo": [
+                "Indicating relationships by drawing and labeling content-related pictures on familiar topics",
+                "Describing processes or cycles by labeling diagrams and graphs"
+              ]
+            },
+            {
+              "keyUse": "Argue",
+              "action": "Argue by",
+              "canDo": [
+                "Generating words and phrases that represent opinions (e.g., \"I think…\")",
+                "Making lists of topic choices with peers"
+              ]
+            }
+          ]
+        },
+        {
+          "domain": "ORAL LANGUAGE",
+          "keyUses": [
+            {
+              "keyUse": "Discuss",
+              "action": "Discuss by",
+              "canDo": [
+                "Using appropriate nonverbal behaviors to show engagement and listening",
+                "Contributing to conversations by sharing own work (e.g., pictures, posters, graphics)"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "elpLevel": "ELP Level 2",
+      "proficiencyLevel": "Emerging",
+      "domains": [
+        {
+          "domain": "LISTENING",
+          "keyUses": [
+            {
+              "keyUse": "Recount",
+              "action": "Process recounts by",
+              "canDo": [
+                "Sequencing labeled visuals per oral directions",
+                "Identifying settings or time frames in narrative or informational scenarios read aloud"
+              ]
+            },
+            {
+              "keyUse": "Explain",
+              "action": "Process explanations by",
+              "canDo": [
+                "Classifying content-related visuals per oral descriptions (e.g., environmental v. genetic factors)",
+                "Matching oral sentences of cause and effect to illustrations (e.g., weather or climate conditions)"
+              ]
+            },
+            {
+              "keyUse": "Argue",
+              "action": "Process arguments by",
+              "canDo": [
+                "Identifying claims from a series of oral statements",
+                "Identifying evidence to support claims from charts and tables"
+              ]
+            }
+          ]
+        },
+        {
+          "domain": "SPEAKING",
+          "keyUses": [
+            {
+              "keyUse": "Recount",
+              "action": "Recount by",
+              "canDo": [
+                "Stating main ideas or points of classroom conversations",
+                "Restating details of content-related topics (in home language and English) in small groups"
+              ]
+            },
+            {
+              "keyUse": "Explain",
+              "action": "Explain by",
+              "canDo": [
+                "Describing situations from modeled sentences",
+                "Connecting two content-related ideas that define \"how\" or \"why\""
+              ]
+            },
+            {
+              "keyUse": "Argue",
+              "action": "Argue by",
+              "canDo": [
+                "Answering simple questions related to claims",
+                "Stating evidence to support claims (in home language and English)"
+              ]
+            }
+          ]
+        },
+        {
+          "domain": "READING",
+          "keyUses": [
+            {
+              "keyUse": "Recount",
+              "action": "Process recounts by",
+              "canDo": [
+                "Sequencing illustrated text of narrative or informational events",
+                "Locating main ideas in a series of simple sentences"
+              ]
+            },
+            {
+              "keyUse": "Explain",
+              "action": "Process explanations by",
+              "canDo": [
+                "Comparing ideas on the same topic in a series of simple sentences",
+                "Identifying how content-related phenomena relate to one another in illustrated text or media"
+              ]
+            },
+            {
+              "keyUse": "Argue",
+              "action": "Process arguments by",
+              "canDo": [
+                "Distinguishing facts from opinions in text",
+                "Identifying features associated with content-related claims"
+              ]
+            }
+          ]
+        },
+        {
+          "domain": "WRITING",
+          "keyUses": [
+            {
+              "keyUse": "Recount",
+              "action": "Recount by",
+              "canDo": [
+                "Completing sentences using word banks",
+                "Producing statements related to main ideas on familiar topics in home language and English"
+              ]
+            },
+            {
+              "keyUse": "Explain",
+              "action": "Explain by",
+              "canDo": [
+                "Connecting short sentences",
+                "Comparing illustrated descriptions of content-related concepts (e.g., mitosis v. meiosis)"
+              ]
+            },
+            {
+              "keyUse": "Argue",
+              "action": "Argue by",
+              "canDo": [
+                "Stating opinions using evaluative language related to content (e.g., \"I agree. Metric is better.\")",
+                "Connecting simple sentences to form content-related ideas"
+              ]
+            }
+          ]
+        },
+        {
+          "domain": "ORAL LANGUAGE",
+          "keyUses": [
+            {
+              "keyUse": "Discuss",
+              "action": "Discuss by",
+              "canDo": [
+                "Inviting others to participate",
+                "Answering Wh-questions in conversations",
+                "Connecting ideas to one’s experiences"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "elpLevel": "ELP Level 3",
+      "proficiencyLevel": "Developing",
+      "domains": [
+        {
+          "domain": "LISTENING",
+          "keyUses": [
+            {
+              "keyUse": "Recount",
+              "action": "Process recounts by",
+              "canDo": [
+                "Matching main ideas of familiar text read aloud to visuals",
+                "Stating the next event in a series based on clues from narrative or informational oral texts"
+              ]
+            },
+            {
+              "keyUse": "Explain",
+              "action": "Process explanations by",
+              "canDo": [
+                "Matching main ideas of familiar text read aloud with visuals",
+                "Showing differences between or among content-related phenomena described orally (e.g., descriptive statistics)"
+              ]
+            },
+            {
+              "keyUse": "Argue",
+              "action": "Process arguments by",
+              "canDo": [
+                "Illustrating claims or reasons from oral narratives",
+                "Identifying opposing perspectives from oral text (e.g., sides in wars, regimes, or revolutions)"
+              ]
+            }
+          ]
+        },
+        {
+          "domain": "SPEAKING",
+          "keyUses": [
+            {
+              "keyUse": "Recount",
+              "action": "Recount by",
+              "canDo": [
+                "Relating a series of events by expressing time in multiple tenses",
+                "Connecting ideas in content-related discourse using transitions"
+              ]
+            },
+            {
+              "keyUse": "Explain",
+              "action": "Explain by",
+              "canDo": [
+                "Demonstrating how to conduct experiments, engage in processes, or solve problems with supports",
+                "Stating why events occur, phenomena exist, or some things happen"
+              ]
+            },
+            {
+              "keyUse": "Argue",
+              "action": "Argue by",
+              "canDo": [
+                "Critiquing opposing claims",
+                "Evaluating the value of options in content-based situations"
+              ]
+            }
+          ]
+        },
+        {
+          "domain": "READING",
+          "keyUses": [
+            {
+              "keyUse": "Recount",
+              "action": "Process recounts by",
+              "canDo": [
+                "Identifying topic sentences, main ideas, and details in paragraphs",
+                "Connecting people to actions based on oral descriptions with details"
+              ]
+            },
+            {
+              "keyUse": "Explain",
+              "action": "Process explanations by",
+              "canDo": [
+                "Illustrating relationships between main ideas and details in paragraphs",
+                "Sequencing steps or events to describe processes (e.g., solving math problems)"
+              ]
+            },
+            {
+              "keyUse": "Argue",
+              "action": "Process arguments by",
+              "canDo": [
+                "Identifying claims and the reasons for each claim",
+                "Identifying opposing points of view"
+              ]
+            }
+          ]
+        },
+        {
+          "domain": "WRITING",
+          "keyUses": [
+            {
+              "keyUse": "Recount",
+              "action": "Recount by",
+              "canDo": [
+                "Producing short paragraphs with main ideas and some details",
+                "Composing dialogues or blogs based on personal experiences"
+              ]
+            },
+            {
+              "keyUse": "Explain",
+              "action": "Explain by",
+              "canDo": [
+                "Comparing and contrasting information, events, or characters",
+                "Producing descriptive paragraphs around a central idea"
+              ]
+            },
+            {
+              "keyUse": "Argue",
+              "action": "Argue by",
+              "canDo": [
+                "Substantiating opinions with content-related examples and evidence",
+                "Providing feedback to peers on language used for claims and evidence"
+              ]
+            }
+          ]
+        },
+        {
+          "domain": "ORAL LANGUAGE",
+          "keyUses": [
+            {
+              "keyUse": "Discuss",
+              "action": "Discuss by",
+              "canDo": [
+                "Supporting ideas with examples",
+                "Asking clarifying questions to demonstrate engagement",
+                "Generating new questions to maintain conversations"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "elpLevel": "ELP Level 4",
+      "proficiencyLevel": "Expanding",
+      "domains": [
+        {
+          "domain": "LISTENING",
+          "keyUses": [
+            {
+              "keyUse": "Recount",
+              "action": "Process recounts by",
+              "canDo": [
+                "Identifying main ideas and details in oral discourse",
+                "Evaluating oral presentations of peers based on criteria for success"
+              ]
+            },
+            {
+              "keyUse": "Explain",
+              "action": "Process explanations by",
+              "canDo": [
+                "Identifying relationships between people, ideas, or events in oral discourse",
+                "Matching complex oral descriptions to images, graphs, or formulas"
+              ]
+            },
+            {
+              "keyUse": "Argue",
+              "action": "Process arguments by",
+              "canDo": [
+                "Matching evidence to claims in oral discourse",
+                "Formulating opinions based on evidence presented within oral discourse"
+              ]
+            }
+          ]
+        },
+        {
+          "domain": "SPEAKING",
+          "keyUses": [
+            {
+              "keyUse": "Recount",
+              "action": "Recount by",
+              "canDo": [
+                "Paraphrasing and summarizing content-related ideas presented orally",
+                "Connecting ideas with supporting details in a variety of oral venues"
+              ]
+            },
+            {
+              "keyUse": "Explain",
+              "action": "Explain by",
+              "canDo": [
+                "Comparing content-related concepts",
+                "Connecting ideas with supporting details to show relationships (e.g., characters’ actions to their feelings)"
+              ]
+            },
+            {
+              "keyUse": "Argue",
+              "action": "Argue by",
+              "canDo": [
+                "Connecting ideas with supporting details or evidence",
+                "Taking stances and summarizing ideas supporting them"
+              ]
+            }
+          ]
+        },
+        {
+          "domain": "READING",
+          "keyUses": [
+            {
+              "keyUse": "Recount",
+              "action": "Process recounts by",
+              "canDo": [
+                "Ordering paragraphs in narrative and informational text",
+                "Identifying summaries of passages in a variety of genres"
+              ]
+            },
+            {
+              "keyUse": "Explain",
+              "action": "Process explanations by",
+              "canDo": [
+                "Matching content-related cause to effect in graphically-supported text",
+                "Highlighting text evidence that points to how systems function (e.g., different forms of government)"
+              ]
+            },
+            {
+              "keyUse": "Argue",
+              "action": "Process arguments by",
+              "canDo": [
+                "Identifying evidence to support analysis of what texts say (e.g., position papers)",
+                "Classifying pros and cons of claims and evidence presented within written texts"
+              ]
+            }
+          ]
+        },
+        {
+          "domain": "WRITING",
+          "keyUses": [
+            {
+              "keyUse": "Recount",
+              "action": "Recount by",
+              "canDo": [
+                "Producing content-related reports",
+                "Reproducing a sequence of events or experiences using transitional words"
+              ]
+            },
+            {
+              "keyUse": "Explain",
+              "action": "Explain by",
+              "canDo": [
+                "Describing relationships between details or examples and supporting ideas",
+                "Connecting content-related themes or topics to main ideas"
+              ]
+            },
+            {
+              "keyUse": "Argue",
+              "action": "Argue by",
+              "canDo": [
+                "Crafting persuasive pieces (e.g., editorials) with a series of substantiated content-related claims",
+                "Composing scripts with protagonists and antagonists"
+              ]
+            }
+          ]
+        },
+        {
+          "domain": "ORAL LANGUAGE",
+          "keyUses": [
+            {
+              "keyUse": "Discuss",
+              "action": "Discuss by",
+              "canDo": [
+                "Recognizing purposes of contributions in conversations",
+                "Demonstrating awareness of personal bias when defending one’s point of view"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "elpLevel": "ELP Level 5",
+      "proficiencyLevel": "Bridging",
+      "domains": [
+        {
+          "domain": "LISTENING",
+          "keyUses": [
+            {
+              "keyUse": "Recount",
+              "action": "Process recounts by",
+              "canDo": [
+                "Categorizing details of content-related main ideas seen and heard in videos or other technologies",
+                "Sequencing a series of illustrated events from oral passages (e.g., historical recaps)"
+              ]
+            },
+            {
+              "keyUse": "Explain",
+              "action": "Process explanations by",
+              "canDo": [
+                "Carrying out a series of oral directions to construct mathematical or scientific models",
+                "Connecting details to main ideas based on extended oral discourse"
+              ]
+            },
+            {
+              "keyUse": "Argue",
+              "action": "Process arguments by",
+              "canDo": [
+                "Establishing connections among claims, arguments, and supporting evidence within oral discourse",
+                "Comparing opposing points-of-view presented within oral discourse"
+              ]
+            }
+          ]
+        },
+        {
+          "domain": "SPEAKING",
+          "keyUses": [
+            {
+              "keyUse": "Recount",
+              "action": "Recount by",
+              "canDo": [
+                "Producing oral multimedia, content-related reports based on research from multiple sources",
+                "Tracing the evolution of literary characters, themes, and plots from different venues (e.g., digital text or video)"
+              ]
+            },
+            {
+              "keyUse": "Explain",
+              "action": "Explain by",
+              "canDo": [
+                "Giving demonstrations with step-by-step details (e.g., converting Fahrenheit to Celsius)",
+                "Evaluating the significance of events, people, or phenomena in oral presentations"
+              ]
+            },
+            {
+              "keyUse": "Argue",
+              "action": "Argue by",
+              "canDo": [
+                "Engaging in debates on content-related topics with claims and counterclaims along with reasonable evidence",
+                "Defending points of view with specific claims"
+              ]
+            }
+          ]
+        },
+        {
+          "domain": "READING",
+          "keyUses": [
+            {
+              "keyUse": "Recount",
+              "action": "Process recounts by",
+              "canDo": [
+                "Sequencing main ideas, events, and conclusions in narrative and informational text",
+                "Matching details of content-related topics to main ideas"
+              ]
+            },
+            {
+              "keyUse": "Explain",
+              "action": "Process explanations by",
+              "canDo": [
+                "Sorting grade-level text by highlighting elements of the genre (e.g., differentiating the \"how\" from the \"why\")",
+                "Sequencing events based on cause and effect (e.g., how machines operate)"
+              ]
+            },
+            {
+              "keyUse": "Argue",
+              "action": "Process arguments by",
+              "canDo": [
+                "Evaluating evidence presented in support of claims",
+                "Developing a stance in favor of or against claims presented within content-related text"
+              ]
+            }
+          ]
+        },
+        {
+          "domain": "WRITING",
+          "keyUses": [
+            {
+              "keyUse": "Recount",
+              "action": "Recount by",
+              "canDo": [
+                "Producing research reports using multiple sources",
+                "Summarizing conclusions reached from steps in problem-solving or conducting experiments"
+              ]
+            },
+            {
+              "keyUse": "Explain",
+              "action": "Explain by",
+              "canDo": [
+                "Producing informational text around graphs and charts",
+                "Comparing content-related ideas from multiple sources in essays, reports, and narratives"
+              ]
+            },
+            {
+              "keyUse": "Argue",
+              "action": "Argue by",
+              "canDo": [
+                "Presenting opinions in persuasive essays or reports backed by content-related research",
+                "Justifying ideas using multiple sources"
+              ]
+            }
+          ]
+        },
+        {
+          "domain": "ORAL LANGUAGE",
+          "keyUses": [
+            {
+              "keyUse": "Discuss",
+              "action": "Discuss by",
+              "canDo": [
+                "Building on the ideas of others",
+                "Listening to others with a purpose (e.g., to challenge own or others’ ideas)"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "elpLevel": "ELP Level 6",
+      "proficiencyLevel": "Reaching",
+      "domains": [
+        {
+          "domain": "LISTENING",
+          "keyUses": [
+            {
+              "keyUse": "Recount",
+              "action": "Process recounts by",
+              "canDo": [
+                "Identifying key ideas expressed orally",
+                "Identifying new information expressed by others"
+              ]
+            },
+            {
+              "keyUse": "Explain",
+              "action": "Process explanations by",
+              "canDo": [
+                "Evaluating main ideas and supporting details presented in diverse media and oral formats",
+                "Developing models from oral discourse and multimedia (e.g., YouTube videos)"
+              ]
+            },
+            {
+              "keyUse": "Argue",
+              "action": "Process arguments by",
+              "canDo": [
+                "Evaluating the soundness of opposing claims presented orally",
+                "Identifying bias within claims in oral discourse"
+              ]
+            }
+          ]
+        },
+        {
+          "domain": "SPEAKING",
+          "keyUses": [
+            {
+              "keyUse": "Recount",
+              "action": "Recount by",
+              "canDo": [
+                "Restating new information expressed by others in extended speech",
+                "Posing questions that elicit elaboration and responding to others’ questions and comments"
+              ]
+            },
+            {
+              "keyUse": "Explain",
+              "action": "Explain by",
+              "canDo": [
+                "Adapting speech to a variety of contexts and tasks (e.g., use of register)",
+                "Posing questions that connect several speakers’ ideas and responding to others’ ideas"
+              ]
+            },
+            {
+              "keyUse": "Argue",
+              "action": "Argue by",
+              "canDo": [
+                "Paraphrasing new information expressed by others and, when warranted, modifying views or positions",
+                "Making presentations with multimedia components to clarify claims and emphasize salient points"
+              ]
+            }
+          ]
+        },
+        {
+          "domain": "READING",
+          "keyUses": [
+            {
+              "keyUse": "Recount",
+              "action": "Process recounts by",
+              "canDo": [
+                "Identifying a central idea of a text and how it is conveyed through particular details; summarizing text absent personal opinions or judgments",
+                "Evaluating how a central event is introduced, illustrated, and elaborated in text (e.g., through examples or anecdotes)"
+              ]
+            },
+            {
+              "keyUse": "Explain",
+              "action": "Process explanations by",
+              "canDo": [
+                "Comparing and contrasting information from experiments, simulations, videos, or multimedia sources with that of text on the same topics",
+                "Identifying factors that contribute to phenomena in explanations"
+              ]
+            },
+            {
+              "keyUse": "Argue",
+              "action": "Process arguments by",
+              "canDo": [
+                "Identifying specific evidence to support analyses of content area text",
+                "Distinguishing among facts, reasoned judgment, and speculation in text"
+              ]
+            }
+          ]
+        },
+        {
+          "domain": "WRITING",
+          "keyUses": [
+            {
+              "keyUse": "Recount",
+              "action": "Recount by",
+              "canDo": [
+                "Providing a concluding statement or section that follows from and supports the information presented",
+                "Conveying sequence, signaling shifts from one time frame to another, and showing the relationships among experiences and events"
+              ]
+            },
+            {
+              "keyUse": "Explain",
+              "action": "Explain by",
+              "canDo": [
+                "Determining two or more central ideas in text and tracing their development",
+                "Evaluating the interactions between individuals, events, and ideas in text (e.g., how ideas influence individuals or events and the converse)"
+              ]
+            },
+            {
+              "keyUse": "Argue",
+              "action": "Argue by",
+              "canDo": [
+                "Introducing claims and opposing claims, along with their associated reasons and evidence",
+                "Closing with concluding statements or paragraphs that support claims"
+              ]
+            }
+          ]
+        },
+        {
+          "domain": "ORAL LANGUAGE",
+          "keyUses": [
+            {
+              "keyUse": "Discuss",
+              "action": "Discuss by",
+              "canDo": [
+                "Presenting organized ideas and information on content topics including the use of graphics and multimedia",
+                "Synthesizing ideas of several speakers, posing questions, and responding with evidence, examples, and ideas"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+{
+  "name": "api-server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "nodemon",
+    "build": "node ./build.mjs",
+    "start": "node --enable-source-maps ./dist/index.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "codegen": "orval --config ./api-spec/orval.config.ts",
+    "db:push": "drizzle-kit push --config=db/drizzle.config.ts",
+    "db:push:aws": "drizzle-kit push --config=db/drizzle.aws.config.ts",
+    "db:sync": "npm run db:push && npm run db:push:aws",
+    "db:generate": "drizzle-kit generate --config=db/drizzle.config.ts",
+    "db:studio": "drizzle-kit studio --config=db/drizzle.config.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.88.0",
+    "@aws-sdk/client-s3": "^3.1097.0",
+    "@aws-sdk/s3-request-presigner": "^3.1097.0",
+    "@types/sharp": "^0.32.0",
+    "bcryptjs": "^3.0.3",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2",
+    "dotenv": "^17.4.2",
+    "drizzle-orm": "^0.45.1",
+    "drizzle-zod": "^0.8.3",
+    "express": "^5",
+    "node-cron": "^4.5.0",
+    "nodemailer": "^9.0.1",
+    "pg": "^8.20.0",
+    "pino": "^9",
+    "pino-http": "^10",
+    "pino-roll": "^4.0.0",
+    "sharp": "^0.35.3",
+    "stripe": "^22.3.0",
+    "stripe-replit-sync": "^1.0.0",
+    "xlsx": "^0.18.5",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^3.0.0",
+    "@types/cookie-parser": "^1.4.10",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.3.3",
+    "@types/nodemailer": "^8.0.1",
+    "@types/pg": "^8.18.0",
+    "drizzle-kit": "^0.31.9",
+    "esbuild": "^0.27.3",
+    "esbuild-plugin-pino": "^2.3.3",
+    "nodemon": "^3.1.14",
+    "orval": "^8.5.2",
+    "pino-pretty": "^13",
+    "thread-stream": "3.1.0",
+    "typescript": "~5.9.2"
+  }
+}

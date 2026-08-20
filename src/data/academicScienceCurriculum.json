@@ -1,0 +1,216 @@
+{
+  "subject": "science",
+  "gradeBand": "6-8",
+  "description": "Grade 6-8 science units — organized by strand. Each unit includes listening scenario seeds (a teacher or scientist narrating a concept or phenomenon) and Tier-3 vocabulary scaled to WIDA levels 3-6.",
+  "units": [
+    {
+      "id": "ls_cells",
+      "strand": "Life Science",
+      "unit": "Cells",
+      "topics": "Cell structure, function, and processes",
+      "tier3ByLevel": {
+        "3": ["cell", "membrane", "nucleus", "oxygen", "energy"],
+        "4": ["cell membrane", "nucleus", "organelle", "photosynthesis", "respiration"],
+        "5": ["cell membrane", "nucleus", "organelle", "photosynthesis", "cellular respiration", "diffusion"],
+        "6": ["cell membrane", "nucleus", "organelle", "photosynthesis", "cellular respiration", "diffusion", "osmosis", "mitosis"]
+      },
+      "scenarios": [
+        "A biology teacher explains how a plant cell captures sunlight and turns it into food the plant can use.",
+        "A science teacher describes what happens inside an animal cell when it needs to get energy from food.",
+        "A teacher explains the job of the cell membrane and why cells need it to survive.",
+        "A scientist describes how cells divide to help a cut on your skin heal over time.",
+        "A teacher explains the difference between a plant cell and an animal cell and what structures each one has."
+      ]
+    },
+    {
+      "id": "ls_genetics",
+      "strand": "Life Science",
+      "unit": "Genetics",
+      "topics": "DNA, heredity, traits, and reproduction",
+      "tier3ByLevel": {
+        "3": ["trait", "parent", "inherit", "gene", "DNA"],
+        "4": ["trait", "heredity", "gene", "chromosome", "inherit", "dominant"],
+        "5": ["trait", "heredity", "gene", "chromosome", "dominant", "recessive", "DNA", "allele"],
+        "6": ["heredity", "gene", "chromosome", "dominant", "recessive", "allele", "genotype", "phenotype", "mutation"]
+      },
+      "scenarios": [
+        "A genetics teacher explains how traits like eye color are passed from parents to their children.",
+        "A science teacher describes the difference between a dominant and a recessive trait using flower color as an example.",
+        "A teacher explains what DNA is and where it is found inside a living cell.",
+        "A scientist describes how two parents who both have dark hair can sometimes have a child with red hair.",
+        "A teacher explains why identical twins look exactly alike but fraternal twins may look very different."
+      ]
+    },
+    {
+      "id": "ls_ecosystems",
+      "strand": "Life Science",
+      "unit": "Ecosystems",
+      "topics": "Food webs, populations, and matter cycling",
+      "tier3ByLevel": {
+        "3": ["food chain", "producer", "consumer", "prey", "predator"],
+        "4": ["food web", "producer", "consumer", "decomposer", "population", "habitat"],
+        "5": ["food web", "producer", "consumer", "decomposer", "ecosystem", "population", "nutrient cycle"],
+        "6": ["food web", "producer", "consumer", "decomposer", "ecosystem", "nutrient cycle", "trophic level", "biomass", "carrying capacity"]
+      },
+      "scenarios": [
+        "A science teacher explains how energy moves from the sun through grass, rabbits, and wolves in a meadow.",
+        "A teacher describes what happens to the rabbit population in a field when wolves are removed.",
+        "A teacher explains the role of decomposers like fungi and bacteria in returning nutrients to the soil.",
+        "An ecologist describes how matter cycles through a forest ecosystem from living things back to the soil and air.",
+        "A teacher explains how removing one species from a food web can affect many other species."
+      ]
+    },
+    {
+      "id": "ls_evolution",
+      "strand": "Life Science",
+      "unit": "Evolution",
+      "topics": "Natural selection and the fossil record",
+      "tier3ByLevel": {
+        "3": ["fossil", "survive", "adapt", "environment", "species"],
+        "4": ["fossil", "adaptation", "natural selection", "survive", "variation", "species"],
+        "5": ["fossil", "adaptation", "natural selection", "variation", "species", "extinct", "evolution"],
+        "6": ["fossil", "adaptation", "natural selection", "variation", "species", "extinct", "evolution", "common ancestor", "genetic variation"]
+      },
+      "scenarios": [
+        "A teacher explains how fossils found in rock layers give scientists clues about animals that lived millions of years ago.",
+        "A science teacher describes how darker-colored moths survived better than lighter moths when trees turned dark from pollution.",
+        "A teacher explains why animals in cold climates often have thick fur and how this trait developed over many generations.",
+        "A scientist describes what scientists discovered by studying the bones of a whale and comparing them to land mammal bones.",
+        "A teacher explains how bacteria can become resistant to antibiotics through natural selection."
+      ]
+    },
+    {
+      "id": "ps_matter",
+      "strand": "Physical Science",
+      "unit": "Matter",
+      "topics": "Atoms, molecules, states of matter, and the periodic table",
+      "tier3ByLevel": {
+        "3": ["atom", "solid", "liquid", "gas", "element"],
+        "4": ["atom", "molecule", "element", "compound", "solid", "liquid", "gas", "periodic table"],
+        "5": ["atom", "molecule", "element", "compound", "periodic table", "density", "phase change", "chemical property"],
+        "6": ["atom", "molecule", "element", "compound", "periodic table", "density", "phase change", "chemical property", "atomic number", "isotope"]
+      },
+      "scenarios": [
+        "A chemistry teacher explains how water changes from liquid to gas when it is heated and why this is called evaporation.",
+        "A teacher describes what happens to the particles inside a metal rod when it is heated and begins to expand.",
+        "A science teacher explains how table salt is made of two different elements — sodium and chlorine — bonded together.",
+        "A teacher explains how scientists organize all the known elements on the periodic table by their properties.",
+        "A teacher describes the difference between a physical change and a chemical change using examples like melting ice and burning wood."
+      ]
+    },
+    {
+      "id": "ps_energy",
+      "strand": "Physical Science",
+      "unit": "Energy",
+      "topics": "Kinetic and potential energy, heat, light, and sound",
+      "tier3ByLevel": {
+        "3": ["energy", "heat", "light", "sound", "move"],
+        "4": ["kinetic energy", "potential energy", "heat", "light", "transfer", "temperature"],
+        "5": ["kinetic energy", "potential energy", "thermal energy", "light", "transfer", "conduction", "radiation"],
+        "6": ["kinetic energy", "potential energy", "thermal energy", "transfer", "conduction", "convection", "radiation", "electromagnetic spectrum"]
+      },
+      "scenarios": [
+        "A teacher explains how a roller coaster converts potential energy at the top of the hill into kinetic energy as it races down.",
+        "A science teacher describes how heat moves through a metal spoon sitting in a hot bowl of soup.",
+        "A teacher explains why a dark-colored shirt feels hotter in sunlight than a white shirt.",
+        "A teacher describes how sound energy travels through air as vibrations and why you can hear a bell even far away.",
+        "An engineer explains how a solar panel converts light energy from the sun into electrical energy for a house."
+      ]
+    },
+    {
+      "id": "ps_forces",
+      "strand": "Physical Science",
+      "unit": "Forces and Motion",
+      "topics": "Gravity, magnetism, and Newton's laws",
+      "tier3ByLevel": {
+        "3": ["force", "push", "pull", "gravity", "speed"],
+        "4": ["force", "gravity", "friction", "acceleration", "Newton's law", "mass"],
+        "5": ["force", "gravity", "friction", "acceleration", "inertia", "Newton's law", "net force"],
+        "6": ["force", "gravity", "friction", "acceleration", "inertia", "Newton's law", "net force", "velocity", "momentum"]
+      },
+      "scenarios": [
+        "A teacher explains why a heavy bowling ball and a tennis ball dropped from the same height hit the ground at the same time.",
+        "A science teacher describes how friction between a car's tires and the road allows a car to slow down when the brakes are applied.",
+        "A teacher explains Newton's first law using an example of a hockey puck sliding on ice with almost no friction.",
+        "A teacher describes what happens to the speed of a soccer ball when a player kicks it harder versus more softly.",
+        "An engineer explains how a rocket pushes gas downward to propel itself upward, illustrating Newton's third law."
+      ]
+    },
+    {
+      "id": "ps_waves",
+      "strand": "Physical Science",
+      "unit": "Waves",
+      "topics": "Wave properties, light waves, and sound transmission",
+      "tier3ByLevel": {
+        "3": ["wave", "sound", "light", "travel", "vibrate"],
+        "4": ["wave", "wavelength", "frequency", "amplitude", "sound wave", "light wave"],
+        "5": ["wavelength", "frequency", "amplitude", "sound wave", "light wave", "reflection", "refraction"],
+        "6": ["wavelength", "frequency", "amplitude", "sound wave", "light wave", "reflection", "refraction", "electromagnetic wave", "transverse wave"]
+      },
+      "scenarios": [
+        "A teacher explains how a guitar string vibrates to create a sound wave that travels through the air to your ears.",
+        "A science teacher describes how light bends — or refracts — when it moves from air into water, making a straw look bent.",
+        "A teacher explains why high-pitched sounds have a higher frequency than low-pitched sounds.",
+        "A teacher describes how sonar equipment on a boat sends sound waves to the ocean floor and measures how long they take to return.",
+        "A teacher explains how a prism separates white light into a rainbow of colors by bending different wavelengths differently."
+      ]
+    },
+    {
+      "id": "ess_earth_systems",
+      "strand": "Earth and Space Science",
+      "unit": "Earth's Systems",
+      "topics": "Plate tectonics, the rock cycle, and the water cycle",
+      "tier3ByLevel": {
+        "3": ["rock", "volcano", "earthquake", "erosion", "cycle"],
+        "4": ["tectonic plate", "volcano", "earthquake", "erosion", "rock cycle", "water cycle"],
+        "5": ["tectonic plate", "volcano", "earthquake", "erosion", "rock cycle", "water cycle", "weathering", "sediment"],
+        "6": ["tectonic plate", "volcano", "earthquake", "erosion", "rock cycle", "water cycle", "weathering", "sediment", "subduction", "igneous", "metamorphic", "sedimentary"]
+      },
+      "scenarios": [
+        "A geology teacher explains how two tectonic plates colliding over millions of years built the Rocky Mountains.",
+        "A science teacher describes how an igneous rock can eventually become a sedimentary rock through the rock cycle.",
+        "A teacher explains how water evaporates from the ocean, forms clouds, falls as rain, and eventually returns to the ocean.",
+        "A teacher describes what happens deep underground when a tectonic plate slides under another plate at a subduction zone.",
+        "A geologist explains how erosion from a river slowly cuts through rock to form a canyon like the Grand Canyon."
+      ]
+    },
+    {
+      "id": "ess_weather",
+      "strand": "Earth and Space Science",
+      "unit": "Weather and Climate",
+      "topics": "Atmosphere, climate change, and ocean currents",
+      "tier3ByLevel": {
+        "3": ["weather", "temperature", "rain", "wind", "climate"],
+        "4": ["atmosphere", "climate", "greenhouse gas", "ocean current", "precipitation"],
+        "5": ["atmosphere", "climate", "greenhouse gas", "ocean current", "precipitation", "air pressure", "humidity"],
+        "6": ["atmosphere", "climate change", "greenhouse gas", "ocean current", "air pressure", "humidity", "convection", "global warming", "carbon dioxide"]
+      },
+      "scenarios": [
+        "A meteorologist explains how warm, moist air rising over the Gulf of Mexico creates the conditions for a hurricane.",
+        "A climate scientist explains how greenhouse gases like carbon dioxide trap heat in the atmosphere and cause temperatures to rise.",
+        "A teacher describes how ocean currents like the Gulf Stream carry warm water from the tropics toward Europe, affecting its climate.",
+        "A science teacher explains why deserts are so dry by describing how mountains block moisture from reaching inland areas.",
+        "A teacher describes the difference between weather and climate and why climate scientists look at data over many decades."
+      ]
+    },
+    {
+      "id": "ess_space",
+      "strand": "Earth and Space Science",
+      "unit": "Space Systems",
+      "topics": "The solar system, gravity in space, and moon phases",
+      "tier3ByLevel": {
+        "3": ["planet", "moon", "orbit", "sun", "gravity"],
+        "4": ["planet", "orbit", "gravity", "moon phase", "solar system", "axis"],
+        "5": ["planet", "orbit", "gravity", "moon phase", "solar system", "axis", "rotation", "revolution"],
+        "6": ["planet", "orbit", "gravity", "moon phase", "solar system", "axis", "rotation", "revolution", "eclipse", "astronomical unit", "elliptical orbit"]
+      },
+      "scenarios": [
+        "An astronomer explains why the moon appears to change shape each night as it orbits Earth and different portions are lit by the sun.",
+        "A teacher describes how the force of gravity keeps all eight planets in their orbits around the sun.",
+        "A space scientist explains why a day on Mercury lasts longer than a year on Mercury due to its slow rotation and fast orbit.",
+        "A teacher explains what causes a solar eclipse and why it is safe to look at one only with special glasses.",
+        "A teacher describes the difference between inner rocky planets and outer gas giant planets in our solar system."
+      ]
+    }
+  ]
+}

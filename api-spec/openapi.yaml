@@ -1,0 +1,2659 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: ACCESS Ready API - Adaptive ELL exit prep for K-12 students
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: teachers
+    description: Teacher operations
+  - name: students
+    description: Student operations
+  - name: sessions
+    description: Practice session operations
+  - name: content
+    description: AI content generation
+  - name: dashboard
+    description: Teacher dashboard
+  - name: billing
+    description: Plans, subscriptions, and payment operations
+  - name: Storage
+    description: Object storage upload and serving endpoints.
+  - name: contact
+    description: Contact form submissions
+  - name: speech
+    description: Server-side speech-to-text and text-to-speech (Azure Speech)
+  - name: districts
+    description: District management
+  - name: schools
+    description: School management
+  - name: admin
+    description: Super admin platform management
+  - name: media
+    description: Media library — images, videos, audio files, and documents stored in S3
+paths:
+  /contact:
+    post:
+      tags: [contact]
+      operationId: submitContactMessage
+      summary: Submit a contact form message
+      description: |
+        Sends a message from the public Contact Us page to the ACCESS Ready team.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContactBody"
+      responses:
+        "200":
+          description: Message received.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContactResponse"
+        "400":
+          description: Missing or invalid required fields.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "500":
+          description: Failed to send message.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /speech/status:
+    get:
+      tags: [speech]
+      operationId: getSpeechStatus
+      summary: Check whether server-side (Azure) speech is configured
+      description: |
+        Lets the client decide whether to use server-side Azure speech or fall
+        back to the browser's built-in Web Speech API.
+      responses:
+        "200":
+          description: Speech configuration status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SpeechStatusResponse"
+  /speech/text-to-speech:
+    post:
+      tags: [speech]
+      operationId: synthesizeSpeech
+      summary: Synthesize speech from text (Azure neural TTS)
+      description: |
+        Converts text into spoken audio using Azure Cognitive Services. Returns
+        raw MP3 bytes to be played directly by the client.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TextToSpeechBody"
+      responses:
+        "200":
+          description: Synthesized speech audio (audio/mpeg).
+          content:
+            audio/mpeg:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: Missing or invalid required fields.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: Server speech synthesis is not configured.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: Speech synthesis failed upstream.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /speech/speech-to-text:
+    post:
+      tags: [speech]
+      operationId: transcribeSpeech
+      summary: Transcribe a short spoken-answer audio clip (Azure STT)
+      description: |
+        Accepts raw audio bytes (e.g. "audio/webm;codecs=opus", "audio/wav") in
+        the request body and returns the recognized text.
+      requestBody:
+        required: true
+        content:
+          audio/webm:
+            schema:
+              type: string
+              format: binary
+          audio/wav:
+            schema:
+              type: string
+              format: binary
+          audio/ogg:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "200":
+          description: Transcription result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SpeechToTextResponse"
+        "400":
+          description: Missing audio body or Content-Type header.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: Server speech transcription is not configured.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: Speech transcription failed upstream.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /storage/uploads/request-url:
+    post:
+      tags: [Storage]
+      operationId: requestUploadUrl
+      summary: Request a presigned URL for file upload
+      description: |
+        Returns a presigned GCS URL for direct upload. The client sends JSON
+        metadata here, then uploads the file directly to the returned URL.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadUrlRequest"
+      responses:
+        "200":
+          description: Presigned upload URL generated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadUrlResponse"
+        "400":
+          description: Missing or invalid required fields.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "500":
+          description: Failed to generate upload URL.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /storage/public-objects/{filePath}:
+    get:
+      tags: [Storage]
+      operationId: getPublicObject
+      summary: Serve a public asset from PUBLIC_OBJECT_SEARCH_PATHS
+      description: |
+        Unconditionally public — no authentication or ACL checks.
+        Searches PUBLIC_OBJECT_SEARCH_PATHS for the given file path.
+      parameters:
+        - name: filePath
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Relative file path within the public search paths.
+      responses:
+        "200":
+          description: Object content streamed with correct Content-Type.
+          content:
+            "*/*":
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: File not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "500":
+          description: Failed to serve public object.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /storage/objects/{objectPath}:
+    get:
+      tags: [Storage]
+      operationId: getStorageObject
+      summary: Serve an object entity from PRIVATE_OBJECT_DIR
+      description: |
+        Serves object entities uploaded via presigned URLs. These can optionally
+        be protected with authentication or ACL checks based on the use case.
+      parameters:
+        - name: objectPath
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Object path within the private object dir (e.g. `uploads/some-uuid`).
+      responses:
+        "200":
+          description: Object content streamed with correct Content-Type.
+          content:
+            "*/*":
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Object not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "500":
+          description: Failed to serve object.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /teachers/{teacherId}:
+    get:
+      operationId: getTeacher
+      tags: [teachers]
+      summary: Get teacher by ID
+      parameters:
+        - name: teacherId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Teacher
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Teacher"
+    patch:
+      operationId: updateTeacher
+      tags: [teachers]
+      summary: Update teacher profile
+      parameters:
+        - name: teacherId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTeacherBody"
+      responses:
+        "200":
+          description: Updated teacher
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Teacher"
+        "404":
+          description: Teacher not found
+
+  /teachers/{teacherId}/students:
+    get:
+      operationId: listStudents
+      tags: [teachers]
+      summary: List all students for a teacher
+      parameters:
+        - name: teacherId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of students with current levels
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StudentWithProgress"
+
+  /teachers/{teacherId}/dashboard:
+    get:
+      operationId: getTeacherDashboard
+      tags: [dashboard]
+      summary: Get teacher dashboard summary
+      parameters:
+        - name: teacherId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Dashboard summary with alerts and watch lists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeacherDashboard"
+
+  /teachers/{teacherId}/export:
+    get:
+      operationId: exportStudentsCsv
+      tags: [dashboard]
+      summary: Export student data as CSV
+      parameters:
+        - name: teacherId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: CSV file
+          content:
+            text/csv:
+              schema:
+                type: string
+
+  /students:
+    post:
+      operationId: createStudent
+      tags: [students]
+      summary: Create a new student
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateStudentBody"
+      responses:
+        "201":
+          description: Student created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Student"
+
+  /students/{studentId}:
+    get:
+      operationId: getStudent
+      tags: [students]
+      summary: Get student by ID with full progress
+      parameters:
+        - name: studentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Student with progress data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudentDetail"
+    patch:
+      operationId: updateStudent
+      tags: [students]
+      summary: Update student info
+      parameters:
+        - name: studentId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateStudentBody"
+      responses:
+        "200":
+          description: Updated student
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Student"
+    delete:
+      operationId: deleteStudent
+      tags: [students]
+      summary: Delete a student and all related records
+      parameters:
+        - name: studentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Student deleted
+        "404":
+          description: Student not found
+
+  /students/{studentId}/scores:
+    post:
+      operationId: enterStudentScores
+      tags: [students]
+      summary: Teacher enters official test scores for a student
+      parameters:
+        - name: studentId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnterScoresBody"
+      responses:
+        "201":
+          description: Scores entered and pathway recalculated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudentProgress"
+
+  /students/{studentId}/progress:
+    get:
+      operationId: getStudentProgress
+      tags: [students]
+      summary: Get student current progress, levels, gaps, and exit projection
+      parameters:
+        - name: studentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Student progress with gap analysis and exit projection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudentProgress"
+
+  /students/{studentId}/sessions:
+    get:
+      operationId: listStudentSessions
+      tags: [sessions]
+      summary: List sessions for a student
+      parameters:
+        - name: studentId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: domain
+          in: query
+          schema:
+            type: string
+            enum: [listening, speaking, reading, writing, all]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Session list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Session"
+
+  /students/{studentId}/sessions/start:
+    post:
+      operationId: startSession
+      tags: [sessions]
+      summary: Start a new practice session
+      parameters:
+        - name: studentId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StartSessionBody"
+      responses:
+        "201":
+          description: Session started with AI-generated content
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionWithContent"
+
+  /students/{studentId}/sessions/{sessionId}/complete:
+    post:
+      operationId: completeSession
+      tags: [sessions]
+      summary: Complete a session and update student level
+      parameters:
+        - name: studentId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompleteSessionBody"
+      responses:
+        "200":
+          description: Session completed with level update and feedback
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionResult"
+
+  /students/{studentId}/sessions/{sessionId}/answers:
+    get:
+      operationId: listSessionAnswers
+      tags: [sessions]
+      summary: List per-question answers recorded for a completed session
+      parameters:
+        - name: studentId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Per-question answer list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SessionAnswer"
+
+  /students/{studentId}/writing/feedback:
+    post:
+      operationId: getWritingFeedback
+      tags: [content]
+      summary: Get AI writing feedback for a student response
+      parameters:
+        - name: studentId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WritingFeedbackBody"
+      responses:
+        "200":
+          description: Writing feedback with scores
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WritingFeedback"
+
+  /students/{studentId}/streak:
+    get:
+      operationId: getStudentStreak
+      tags: [students]
+      summary: Get student streak data
+      parameters:
+        - name: studentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Streak info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StreakInfo"
+
+  /students/{studentId}/pathway:
+    get:
+      operationId: getStudentPathway
+      tags: [students]
+      summary: Get recommended session pathway for today
+      parameters:
+        - name: studentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Domain priority ranking and time allocation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pathway"
+
+  /billing/plans:
+    get:
+      operationId: getBillingPlans
+      tags: [billing]
+      summary: Get the real Stripe prices for the solo and organization plans (queried from stripe.products/stripe.prices)
+      responses:
+        "200":
+          description: Plans backed by live Stripe products/prices
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Plan"
+
+  /billing/subscription:
+    get:
+      operationId: getSubscription
+      tags: [billing]
+      summary: Get the Stripe subscription for a given owner (studentId for solo, teacherId for organization)
+      parameters:
+        - name: ownerId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: ownerType
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [solo, organization]
+      responses:
+        "200":
+          description: Subscription, if one exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subscription"
+        "404":
+          description: No subscription found
+
+  /billing/checkout:
+    post:
+      operationId: createCheckoutSession
+      tags: [billing]
+      summary: Create a real Stripe Checkout Session for a plan; client redirects to the returned URL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckoutBody"
+      responses:
+        "200":
+          description: Stripe-hosted checkout URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckoutSession"
+
+  /billing/config:
+    get:
+      operationId: getBillingConfig
+      tags: [billing]
+      summary: Public Stripe config needed to mount an embedded (in-app) payment form
+      responses:
+        "200":
+          description: Stripe publishable key (safe to expose to the client)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BillingConfig"
+
+  /billing/checkout-intent:
+    post:
+      operationId: createCheckoutIntent
+      tags: [billing]
+      summary: Create a Stripe subscription in incomplete state and return a client secret for an embedded (in-app) payment form
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckoutBody"
+      responses:
+        "200":
+          description: Client secret for confirming the subscription's initial payment with Stripe.js
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckoutIntent"
+
+  /billing/portal:
+    post:
+      operationId: createBillingPortalSession
+      tags: [billing]
+      summary: Create a Stripe Billing Portal session for managing/canceling a subscription and payment methods
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PortalBody"
+      responses:
+        "200":
+          description: Stripe-hosted billing portal URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckoutSession"
+        "404":
+          description: No Stripe customer found for this owner
+
+  /billing/admin/summary/{teacherId}:
+    get:
+      operationId: getBillingAdminSummary
+      tags: [billing]
+      summary: Seat count and estimated monthly cost for a teacher/district admin's roster
+      parameters:
+        - name: teacherId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: seatCount
+          in: query
+          required: false
+          description: Override the seat count used for the estimated-cost calculation (e.g. a not-yet-submitted seat count the user is previewing before checkout). Defaults to the teacher's actual roster size.
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Seat and cost summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BillingAdminSummary"
+
+  /billing/payment-methods:
+    get:
+      operationId: listPaymentMethods
+      tags: [billing]
+      summary: List saved payment methods (cards) for an owner's Stripe customer
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: ownerId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: ownerType
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [solo, organization]
+      responses:
+        "200":
+          description: Saved payment methods
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedPaymentMethodsResponse"
+
+  /billing/checkout-with-saved-card:
+    post:
+      operationId: checkoutWithSavedCard
+      tags: [billing]
+      summary: >
+        Create and immediately confirm a new subscription using a previously
+        saved payment method (off-session, no Elements form required).
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckoutWithSavedCardBody"
+      responses:
+        "200":
+          description: Subscription created and payment confirmed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckoutWithSavedCardResponse"
+
+  /districts:
+    get:
+      tags: [districts]
+      operationId: listDistricts
+      summary: List all districts
+      responses:
+        "200":
+          description: List of districts with school counts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/District"
+    post:
+      tags: [districts]
+      operationId: createDistrict
+      summary: Create a district
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDistrictBody"
+      responses:
+        "201":
+          description: Created district
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/District"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /districts/{districtId}:
+    get:
+      tags: [districts]
+      operationId: getDistrict
+      summary: Get a district by ID
+      parameters:
+        - name: districtId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: District
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/District"
+        "404":
+          description: District not found
+    patch:
+      tags: [districts]
+      operationId: updateDistrict
+      summary: Update a district
+      parameters:
+        - name: districtId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDistrictBody"
+      responses:
+        "200":
+          description: Updated district
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/District"
+        "404":
+          description: District not found
+
+  /districts/{districtId}/schools:
+    get:
+      tags: [districts]
+      operationId: listDistrictSchools
+      summary: List schools in a district
+      parameters:
+        - name: districtId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Schools in this district
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/School"
+
+  /schools:
+    get:
+      tags: [schools]
+      operationId: listSchools
+      summary: List all schools
+      parameters:
+        - name: districtId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter by district ID
+      responses:
+        "200":
+          description: List of schools with teacher counts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/School"
+    post:
+      tags: [schools]
+      operationId: createSchool
+      summary: Create a school
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSchoolBody"
+      responses:
+        "201":
+          description: Created school
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/School"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /schools/{schoolId}:
+    get:
+      tags: [schools]
+      operationId: getSchool
+      summary: Get a school by ID
+      parameters:
+        - name: schoolId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: School
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/School"
+        "404":
+          description: School not found
+    patch:
+      tags: [schools]
+      operationId: updateSchool
+      summary: Update a school
+      parameters:
+        - name: schoolId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSchoolBody"
+      responses:
+        "200":
+          description: Updated school
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/School"
+        "404":
+          description: School not found
+
+  /schools/{schoolId}/teachers:
+    get:
+      tags: [schools]
+      operationId: listSchoolTeachers
+      summary: List teachers assigned to a school
+      parameters:
+        - name: schoolId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Teachers in this school
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Teacher"
+
+  /schools/{schoolId}/teachers/{teacherId}:
+    put:
+      tags: [schools]
+      operationId: linkTeacherToSchool
+      summary: Assign a teacher to a school
+      parameters:
+        - name: schoolId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: teacherId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Teacher linked to school
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  schoolId:
+                    type: string
+        "404":
+          description: School or teacher not found
+    delete:
+      tags: [schools]
+      operationId: unlinkTeacherFromSchool
+      summary: Remove a teacher from a school
+      parameters:
+        - name: schoolId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: teacherId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Teacher unlinked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+        "404":
+          description: Teacher not found
+
+  /admin/stats:
+    get:
+      tags: [admin]
+      operationId: getAdminStats
+      summary: Platform-wide statistics
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Platform stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminStats"
+
+  /admin/users:
+    get:
+      tags: [admin]
+      operationId: listAdminUsers
+      summary: List all users (paginated)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: role
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: Paginated user list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUserList"
+
+  /admin/districts/{districtId}:
+    delete:
+      tags: [admin]
+      operationId: deleteAdminDistrict
+      summary: Delete a district (super admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: districtId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: District deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [deleted]
+                properties:
+                  deleted:
+                    type: boolean
+        "404":
+          description: District not found
+
+  /admin/subscriptions:
+    get:
+      tags: [admin]
+      operationId: listAdminSubscriptions
+      summary: List all Stripe subscriptions across the platform
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: All subscriptions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSubscriptionList"
+
+  /admin/pricing:
+    patch:
+      tags: [admin]
+      operationId: updateAdminPricing
+      summary: Update a plan's price in Stripe
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePricingBody"
+      responses:
+        "200":
+          description: Pricing updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdatePricingResponse"
+        "404":
+          description: Plan not found in Stripe
+
+  /media:
+    get:
+      tags: [media]
+      summary: List media assets
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Paginated list of media assets
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MediaAssetList"
+    post:
+      tags: [media]
+      summary: Register a media asset after S3 upload
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMediaAssetBody"
+      responses:
+        "200":
+          description: Registered media asset
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MediaAsset"
+
+  /media/{id}:
+    get:
+      tags: [media]
+      summary: Get a media asset with a presigned download URL
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Media asset with presigned URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MediaAssetWithUrl"
+        "404":
+          description: Asset not found
+    delete:
+      tags: [media]
+      summary: Delete a media asset
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+        "404":
+          description: Asset not found
+
+components:
+  schemas:
+    SpeechStatusResponse:
+      type: object
+      properties:
+        configured:
+          type: boolean
+      required:
+        - configured
+
+    TextToSpeechBody:
+      type: object
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 4000
+        voice:
+          type: string
+      required:
+        - text
+
+    SpeechToTextResponse:
+      type: object
+      properties:
+        text:
+          type: string
+      required:
+        - text
+
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    UpdateTeacherBody:
+      type: object
+      properties:
+        name:
+          type: string
+        school:
+          type: ["string", "null"]
+          description: Free-text school name (legacy). Prefer schoolId when linking to a structured school record.
+        schoolId:
+          type: ["string", "null"]
+          description: UUID of a school in the schools table. Setting this links the teacher to that school.
+        avatarUrl:
+          type: ["string", "null"]
+
+    Teacher:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        school:
+          type: ["string", "null"]
+          description: Legacy free-text school name.
+        schoolId:
+          type: ["string", "null"]
+          description: FK to the schools table. Null if teacher is not linked to a school.
+        schoolName:
+          type: ["string", "null"]
+          description: Resolved school name from the schools table (joined).
+        districtId:
+          type: ["string", "null"]
+          description: District ID via the linked school. Null if no school linked.
+        isSolo:
+          type: boolean
+          description: >
+            True when the teacher is independent (no schoolId).
+            Solo teachers manage billing and their own student roster.
+            School-managed teachers are under a principal and cannot add students.
+        avatarUrl:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - name
+        - email
+        - isSolo
+        - createdAt
+
+    District:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        state:
+          type: ["string", "null"]
+        districtCode:
+          type: ["string", "null"]
+        adminId:
+          type: ["string", "null"]
+        schoolCount:
+          type: integer
+          description: Number of schools in this district.
+        createdAt:
+          type: string
+      required:
+        - id
+        - name
+        - createdAt
+
+    CreateDistrictBody:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        state:
+          type: string
+        districtCode:
+          type: string
+      required:
+        - name
+
+    School:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        state:
+          type: ["string", "null"]
+        schoolCode:
+          type: ["string", "null"]
+        districtId:
+          type: ["string", "null"]
+        districtName:
+          type: ["string", "null"]
+          description: Resolved district name (joined from districts table).
+        teacherCount:
+          type: integer
+          description: Number of teachers linked to this school.
+        createdAt:
+          type: string
+      required:
+        - id
+        - name
+        - createdAt
+
+    CreateSchoolBody:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        districtId:
+          type: string
+          description: UUID of the parent district. Omit for independent schools.
+        state:
+          type: string
+        schoolCode:
+          type: string
+      required:
+        - name
+
+    CreateStudentBody:
+      type: object
+      properties:
+        teacherId:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        gradeBand:
+          type: string
+          enum: [K-2, 3-5, 6-8, 9-12]
+        stateAssessment:
+          type: string
+          enum: [WIDA, OELPA, TELPAS, ELPAC, ELPA21, NYSESLAT]
+        homeLanguage:
+          type: string
+        initialScores:
+          description: >-
+            Optional initial per-domain score entered by the registering guardian
+            (teacher/parent/admin). If omitted, the student starts at the assessment's
+            minimum level (a placement test to auto-detect the starting level is planned
+            for later). Same shape as EnterScoresBody minus assessmentYear.
+          allOf:
+            - $ref: "#/components/schemas/EnterScoresBody"
+      required:
+        - teacherId
+        - name
+        - gradeBand
+        - stateAssessment
+
+    UpdateStudentBody:
+      type: object
+      properties:
+        name:
+          type: string
+        gradeBand:
+          type: string
+          enum: [K-2, 3-5, 6-8, 9-12]
+        homeLanguage:
+          type: string
+        avatarUrl:
+          type: ["string", "null"]
+        assignedTeacherId:
+          type: ["string", "null"]
+          description: >
+            Principal-only. Reassigns the student to a different teacher at the
+            same school. Null to remove the assignment (sets guardianId to the
+            principal themselves as fallback).
+
+    Student:
+      type: object
+      properties:
+        id:
+          type: string
+        teacherId:
+          type: string
+        name:
+          type: string
+        gradeBand:
+          type: string
+        stateAssessment:
+          type: string
+        homeLanguage:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        avatarUrl:
+          type: ["string", "null"]
+        currentStreak:
+          type: integer
+        streakShieldAvailable:
+          type: boolean
+        createdAt:
+          type: string
+      required:
+        - id
+        - teacherId
+        - name
+        - gradeBand
+        - stateAssessment
+        - currentStreak
+        - streakShieldAvailable
+        - createdAt
+
+    DomainLevel:
+      type: object
+      properties:
+        domain:
+          type: string
+          enum: [listening, speaking, reading, writing]
+        currentLevel:
+          type: number
+        exitThreshold:
+          type: number
+        gap:
+          type: number
+        normalizedLevel:
+          type: number
+        levelLabel:
+          type: string
+        atExit:
+          type: boolean
+        lastSessionScore:
+          type: ["integer", "null"]
+        lastPracticed:
+          type: ["string", "null"]
+      required:
+        - domain
+        - currentLevel
+        - exitThreshold
+        - gap
+        - normalizedLevel
+        - levelLabel
+        - atExit
+
+    GrowthRate:
+      type: object
+      properties:
+        domain:
+          type: string
+        perSession:
+          type: ["number", "null"]
+        weekly:
+          type: ["number", "null"]
+        sessionsPerWeek:
+          type: ["number", "null"]
+        isStalled:
+          type: boolean
+        stalledSessionCount:
+          type: integer
+      required:
+        - domain
+        - isStalled
+        - stalledSessionCount
+
+    ExitProjection:
+      type: object
+      properties:
+        domain:
+          type: string
+        weeksToExit:
+          type: ["number", "null"]
+        projectedDate:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [at_exit, on_track, stalled, insufficient_data]
+      required:
+        - domain
+        - status
+
+    StudentProgress:
+      type: object
+      properties:
+        studentId:
+          type: string
+        domains:
+          type: array
+          items:
+            $ref: "#/components/schemas/DomainLevel"
+        growthRates:
+          type: array
+          items:
+            $ref: "#/components/schemas/GrowthRate"
+        exitProjections:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExitProjection"
+        overallProjectedDate:
+          type: ["string", "null"]
+      required:
+        - studentId
+        - domains
+        - growthRates
+        - exitProjections
+
+    StudentWithProgress:
+      type: object
+      properties:
+        student:
+          $ref: "#/components/schemas/Student"
+        domains:
+          type: array
+          items:
+            $ref: "#/components/schemas/DomainLevel"
+        lastSessionDate:
+          type: ["string", "null"]
+        isInactive:
+          type: boolean
+        isActive:
+          type: boolean
+        isNearExit:
+          type: boolean
+        isStalled:
+          type: boolean
+        stalledDomain:
+          type: ["string", "null"]
+        teacherRecommendation:
+          type: ["string", "null"]
+      required:
+        - student
+        - domains
+        - isInactive
+        - isActive
+        - isNearExit
+        - isStalled
+
+    StudentDetail:
+      type: object
+      properties:
+        student:
+          $ref: "#/components/schemas/Student"
+        progress:
+          $ref: "#/components/schemas/StudentProgress"
+        recentSessions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Session"
+        canPractice:
+          type: boolean
+          description: >
+            True when the student is covered by an active subscription
+            (own solo plan, or the guardian who registered them has an
+            active organization plan).
+        accessReason:
+          type: string
+          enum: [solo_active, guardian_active, no_plan, plan_inactive]
+          description: >
+            Why the student can or cannot practice.
+            solo_active — own active plan.
+            guardian_active — guardian's org plan covers them.
+            no_plan — no subscription exists at all.
+            plan_inactive — subscription exists but is cancelled / past-due.
+      required:
+        - student
+        - progress
+        - recentSessions
+        - canPractice
+        - accessReason
+
+    EnterScoresBody:
+      type: object
+      properties:
+        assessmentYear:
+          type: integer
+        listening:
+          type: number
+        speaking:
+          type: number
+        reading:
+          type: number
+        writing:
+          type: number
+        composite:
+          type: ["number", "null"]
+        telpasListening:
+          type: ["string", "null"]
+        telpasSpeaking:
+          type: ["string", "null"]
+        telpasReading:
+          type: ["string", "null"]
+        telpasWriting:
+          type: ["string", "null"]
+
+    StartSessionBody:
+      type: object
+      properties:
+        domain:
+          type: string
+          enum: [listening, speaking, reading, writing]
+        sessionType:
+          type: string
+          enum: [single, all_four]
+      required:
+        - domain
+        - sessionType
+
+    SessionContent:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [listening, speaking, reading, writing]
+        data:
+          type: object
+          additionalProperties: true
+      required:
+        - type
+        - data
+
+    SessionWithContent:
+      type: object
+      properties:
+        sessionId:
+          type: string
+        domain:
+          type: string
+        levelStart:
+          type: number
+        content:
+          $ref: "#/components/schemas/SessionContent"
+        mode:
+          type: string
+          enum: [standard, exit_proximity]
+        telpasTimerRequired:
+          type: boolean
+      required:
+        - sessionId
+        - domain
+        - levelStart
+        - content
+        - mode
+        - telpasTimerRequired
+
+    CompleteSessionBody:
+      type: object
+      properties:
+        scorePct:
+          type: integer
+        durationSeconds:
+          type: integer
+        weakTypes:
+          type: array
+          items:
+            type: string
+        answers:
+          type: array
+          items:
+            $ref: "#/components/schemas/SessionAnswerInput"
+      required:
+        - scorePct
+        - durationSeconds
+
+    SessionAnswerInput:
+      type: object
+      properties:
+        question:
+          type: string
+        content:
+          type: object
+          additionalProperties: true
+        submittedAnswer: {}
+        correct:
+          type: boolean
+      required:
+        - question
+        - correct
+
+    SessionAnswer:
+      type: object
+      properties:
+        id:
+          type: string
+        sessionId:
+          type: string
+        questionIndex:
+          type: integer
+        question:
+          type: string
+        content:
+          type: object
+          additionalProperties: true
+          nullable: true
+        submittedAnswer: {}
+        correct:
+          type: boolean
+        createdAt:
+          type: string
+      required:
+        - id
+        - sessionId
+        - questionIndex
+        - question
+        - correct
+        - createdAt
+
+    SessionResult:
+      type: object
+      properties:
+        sessionId:
+          type: string
+        scorePct:
+          type: integer
+        levelBefore:
+          type: number
+        levelAfter:
+          type: number
+        levelChanged:
+          type: boolean
+        levelDelta:
+          type: number
+        message:
+          type: string
+        streakUpdated:
+          type: boolean
+        newStreak:
+          type: integer
+        domainAtExit:
+          type: boolean
+      required:
+        - sessionId
+        - scorePct
+        - levelBefore
+        - levelAfter
+        - levelChanged
+        - levelDelta
+        - message
+        - streakUpdated
+        - newStreak
+        - domainAtExit
+
+    Session:
+      type: object
+      properties:
+        id:
+          type: string
+        studentId:
+          type: string
+        domain:
+          type: string
+        sessionType:
+          type: string
+        levelStart:
+          type: number
+        levelEnd:
+          type: ["number", "null"]
+        scorePct:
+          type: ["integer", "null"]
+        completed:
+          type: boolean
+        durationSeconds:
+          type: ["integer", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - studentId
+        - domain
+        - sessionType
+        - levelStart
+        - completed
+        - createdAt
+
+    WritingFeedbackBody:
+      type: object
+      properties:
+        sessionId:
+          type: string
+        prompt:
+          type: string
+        response:
+          type: string
+        level:
+          type: number
+        gradeBand:
+          type: string
+        stateAssessment:
+          type: string
+      required:
+        - prompt
+        - response
+        - level
+        - gradeBand
+        - stateAssessment
+
+    WritingFeedback:
+      type: object
+      properties:
+        scores:
+          type: object
+          properties:
+            organization:
+              type: integer
+            language_use:
+              type: integer
+            development:
+              type: integer
+          required:
+            - organization
+            - language_use
+            - development
+        overallLevel:
+          type: number
+        levelDelta:
+          type: number
+        feedback:
+          type: array
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+                enum: [strength, next_step]
+              text:
+                type: string
+            required:
+              - type
+              - text
+        encouragement:
+          type: string
+        microGapDetected:
+          type: ["string", "null"]
+      required:
+        - scores
+        - overallLevel
+        - levelDelta
+        - feedback
+        - encouragement
+
+    StreakInfo:
+      type: object
+      properties:
+        currentStreak:
+          type: integer
+        longestStreak:
+          type: integer
+        streakShieldAvailable:
+          type: boolean
+        lastSessionDate:
+          type: ["string", "null"]
+        sessionDates:
+          type: array
+          items:
+            type: string
+        totalXp:
+          type: integer
+        rank:
+          type: string
+        rankEmoji:
+          type: string
+        nextRankXp:
+          type: integer
+        totalSessions:
+          type: integer
+      required:
+        - currentStreak
+        - longestStreak
+        - streakShieldAvailable
+        - sessionDates
+        - totalXp
+        - rank
+        - rankEmoji
+        - nextRankXp
+        - totalSessions
+
+    DomainAllocation:
+      type: object
+      properties:
+        domain:
+          type: string
+        priority:
+          type: number
+        gap:
+          type: number
+        allocatedMinutes:
+          type: integer
+        recommendedFirst:
+          type: boolean
+      required:
+        - domain
+        - priority
+        - gap
+        - allocatedMinutes
+        - recommendedFirst
+
+    Pathway:
+      type: object
+      properties:
+        studentId:
+          type: string
+        domains:
+          type: array
+          items:
+            $ref: "#/components/schemas/DomainAllocation"
+        suggestedMode:
+          type: string
+          enum: [single, all_four]
+        nudgeMessage:
+          type: string
+      required:
+        - studentId
+        - domains
+        - suggestedMode
+        - nudgeMessage
+
+    TeacherDashboard:
+      type: object
+      properties:
+        teacherId:
+          type: string
+        totalStudents:
+          type: integer
+        activeToday:
+          type: integer
+        exitWatchList:
+          type: array
+          items:
+            $ref: "#/components/schemas/StudentWithProgress"
+        stalledStudents:
+          type: array
+          items:
+            $ref: "#/components/schemas/StudentWithProgress"
+        inactiveStudents:
+          type: array
+          items:
+            $ref: "#/components/schemas/StudentWithProgress"
+        allStudents:
+          type: array
+          items:
+            $ref: "#/components/schemas/StudentWithProgress"
+      required:
+        - teacherId
+        - totalStudents
+        - activeToday
+        - exitWatchList
+        - stalledStudents
+        - inactiveStudents
+        - allStudents
+
+    Plan:
+      type: object
+      description: A real Stripe product/price pair, queried live from stripe.products/stripe.prices.
+      properties:
+        planId:
+          type: string
+          enum: [solo, organization]
+        stripeProductId:
+          type: string
+        stripePriceId:
+          type: string
+        name:
+          type: string
+        priceCents:
+          type: integer
+        currency:
+          type: string
+        unit:
+          type: string
+          description: Human-readable billing unit, e.g. "month" or "seat/month"
+        displayPrice:
+          type: string
+          description: Server-formatted price string ready to render as-is, e.g. "$20". Frontend must never derive this from priceCents.
+        displayPeriod:
+          type: string
+          description: Server-formatted billing period string ready to render as-is, e.g. "/ month" or "/ seat / month".
+      required:
+        - planId
+        - stripeProductId
+        - stripePriceId
+        - name
+        - priceCents
+        - currency
+        - unit
+        - displayPrice
+        - displayPeriod
+
+    Subscription:
+      type: object
+      description: Sourced live from stripe.subscriptions for the owner's Stripe customer.
+      properties:
+        id:
+          type: string
+        ownerId:
+          type: string
+        ownerType:
+          type: string
+          enum: [solo, organization]
+        planId:
+          type: string
+          enum: [solo, organization]
+        status:
+          type: string
+          enum: [active, trialing, past_due, canceled, incomplete, incomplete_expired, unpaid, paused]
+        seatCount:
+          type: integer
+        currentPeriodEnd:
+          type: string
+          nullable: true
+        cancelAtPeriodEnd:
+          type: boolean
+        createdAt:
+          type: string
+      required:
+        - id
+        - ownerId
+        - ownerType
+        - planId
+        - status
+        - seatCount
+        - cancelAtPeriodEnd
+        - createdAt
+
+    CheckoutBody:
+      type: object
+      properties:
+        ownerId:
+          type: string
+        ownerType:
+          type: string
+          enum: [solo, organization]
+        planId:
+          type: string
+          enum: [solo, organization]
+        seatCount:
+          type: integer
+          default: 1
+      required:
+        - ownerId
+        - ownerType
+        - planId
+
+    PortalBody:
+      type: object
+      properties:
+        ownerId:
+          type: string
+        ownerType:
+          type: string
+          enum: [solo, organization]
+      required:
+        - ownerId
+        - ownerType
+
+    CheckoutSession:
+      type: object
+      properties:
+        url:
+          type: string
+      required:
+        - url
+
+    BillingConfig:
+      type: object
+      properties:
+        publishableKey:
+          type: string
+          description: Stripe publishable key — safe to expose to the client, used to mount Stripe.js.
+      required:
+        - publishableKey
+
+    CheckoutIntent:
+      type: object
+      properties:
+        clientSecret:
+          type: string
+          description: PaymentIntent client secret for confirming the subscription's initial payment with an embedded Stripe Elements form.
+        subscriptionId:
+          type: string
+      required:
+        - clientSecret
+        - subscriptionId
+
+    SavedPaymentMethod:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Stripe PaymentMethod ID (pm_…)
+        brand:
+          type: string
+          description: Card brand, e.g. "visa", "mastercard"
+        last4:
+          type: string
+        expMonth:
+          type: integer
+        expYear:
+          type: integer
+        isDefault:
+          type: boolean
+          description: True if this is the customer's default payment method
+      required:
+        - id
+        - brand
+        - last4
+        - expMonth
+        - expYear
+        - isDefault
+
+    SavedPaymentMethodsResponse:
+      type: object
+      properties:
+        paymentMethods:
+          type: array
+          items:
+            $ref: "#/components/schemas/SavedPaymentMethod"
+      required:
+        - paymentMethods
+
+    CheckoutWithSavedCardResponse:
+      type: object
+      properties:
+        subscriptionId:
+          type: string
+        status:
+          type: string
+      required:
+        - subscriptionId
+        - status
+
+    CheckoutWithSavedCardBody:
+      type: object
+      properties:
+        ownerId:
+          type: string
+        ownerType:
+          type: string
+          enum: [solo, organization]
+        planId:
+          type: string
+          enum: [solo, organization]
+        seatCount:
+          type: integer
+          minimum: 1
+        paymentMethodId:
+          type: string
+          description: Stripe PaymentMethod ID to charge off-session
+      required:
+        - ownerId
+        - ownerType
+        - planId
+        - paymentMethodId
+
+    BillingAdminSummary:
+      type: object
+      properties:
+        teacherId:
+          type: string
+        seatCount:
+          type: integer
+        pricePerSeatCents:
+          type: integer
+        estimatedMonthlyCostCents:
+          type: integer
+        currency:
+          type: string
+        displayPricePerSeat:
+          type: string
+          description: Server-formatted price-per-seat string ready to render as-is, e.g. "$20 / seat / month". Frontend must never derive this from pricePerSeatCents.
+        displayEstimatedMonthlyCost:
+          type: string
+          description: Server-formatted estimated monthly cost string ready to render as-is, e.g. "$60 / month", already computed for the given (or requested) seat count.
+        subscription:
+          $ref: "#/components/schemas/Subscription"
+      required:
+        - teacherId
+        - seatCount
+        - pricePerSeatCents
+        - estimatedMonthlyCostCents
+        - currency
+        - displayPricePerSeat
+        - displayEstimatedMonthlyCost
+
+    UploadUrlRequest:
+      type: object
+      required: [name, size, contentType]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          description: Original file name.
+        size:
+          type: integer
+          minimum: 1
+          description: File size in bytes.
+        contentType:
+          type: string
+          minLength: 1
+          description: MIME type of the file (e.g. `image/jpeg`).
+    UploadUrlResponse:
+      type: object
+      required: [uploadURL, objectPath]
+      properties:
+        uploadURL:
+          type: string
+          format: uri
+          description: Presigned GCS URL for PUT upload.
+        objectPath:
+          type: string
+          description: Normalized object path (e.g. `/objects/uploads/uuid`). Store this in your database.
+        metadata:
+          $ref: "#/components/schemas/UploadUrlRequest"
+    ErrorEnvelope:
+      type: object
+      required: [success, error]
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        error:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+
+    ContactBody:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        message:
+          type: string
+      required:
+        - name
+        - email
+        - message
+
+    ContactResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+      required:
+        - ok
+
+    AdminStats:
+      type: object
+      required: [users, districts, schools, students, guardians, activeSubscriptions]
+      properties:
+        users:
+          type: object
+          required: [total, byRole]
+          properties:
+            total:
+              type: integer
+            byRole:
+              type: object
+              additionalProperties:
+                type: integer
+        districts:
+          type: integer
+        schools:
+          type: integer
+        students:
+          type: integer
+        guardians:
+          type: integer
+        activeSubscriptions:
+          type: integer
+
+    AdminUserRow:
+      type: object
+      required: [id, email, name, role, email_verified, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        name:
+          type: string
+        role:
+          type: string
+        email_verified:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    AdminUserList:
+      type: object
+      required: [users, pagination]
+      properties:
+        users:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminUserRow"
+        pagination:
+          type: object
+          required: [page, limit, total, totalPages]
+          properties:
+            page:
+              type: integer
+            limit:
+              type: integer
+            total:
+              type: integer
+            totalPages:
+              type: integer
+
+    AdminSubscriptionRow:
+      type: object
+      properties:
+        subscription_id:
+          type: string
+        status:
+          type: string
+        created:
+          type: integer
+        cancel_at_period_end:
+          type: boolean
+        quantity:
+          type: integer
+        unit_amount:
+          type: integer
+        currency:
+          type: string
+        plan_name:
+          type: string
+        plan_id:
+          type: string
+        customer_email:
+          type: string
+        customer_name:
+          type: string
+        owner_id:
+          type: string
+        owner_type:
+          type: string
+
+    AdminSubscriptionList:
+      type: object
+      required: [subscriptions]
+      properties:
+        subscriptions:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminSubscriptionRow"
+
+    UpdatePricingBody:
+      type: object
+      required: [planId, priceCents]
+      properties:
+        planId:
+          type: string
+          enum: [solo, organization]
+        priceCents:
+          type: integer
+          minimum: 100
+
+    UpdatePricingResponse:
+      type: object
+      required: [planId, newPriceId, priceCents, currency]
+      properties:
+        planId:
+          type: string
+        newPriceId:
+          type: string
+        priceCents:
+          type: integer
+        currency:
+          type: string
+
+    MediaAsset:
+      type: object
+      required: [id, name, s3Key, contentType, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        s3Key:
+          type: string
+        contentType:
+          type: string
+        size:
+          type: integer
+          nullable: true
+        metadata:
+          type: object
+          additionalProperties: true
+          nullable: true
+        uploadedBy:
+          type: string
+          format: uuid
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    MediaAssetWithUrl:
+      allOf:
+        - $ref: "#/components/schemas/MediaAsset"
+        - type: object
+          required: [presignedUrl]
+          properties:
+            presignedUrl:
+              type: string
+              format: uri
+
+    CreateMediaAssetBody:
+      type: object
+      required: [name, s3Key, contentType]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        description:
+          type: string
+          maxLength: 1000
+        s3Key:
+          type: string
+        contentType:
+          type: string
+        size:
+          type: integer
+        metadata:
+          type: object
+          additionalProperties: true
+
+    MediaAssetList:
+      type: object
+      required: [assets, pagination]
+      properties:
+        assets:
+          type: array
+          items:
+            $ref: "#/components/schemas/MediaAsset"
+        pagination:
+          type: object
+          required: [page, limit, total, totalPages]
+          properties:
+            page:
+              type: integer
+            limit:
+              type: integer
+            total:
+              type: integer
+            totalPages:
+              type: integer
