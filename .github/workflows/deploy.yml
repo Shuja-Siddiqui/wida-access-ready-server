@@ -1,0 +1,45 @@
+name: Deploy API
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-api
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Typecheck
+        run: |
+          npm ci --legacy-peer-deps
+          npm run typecheck
+
+      - name: Prepare SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts
+          printf 'Host deploy-target\n  HostName %s\n  User %s\n  IdentityFile ~/.ssh/deploy_key\n  IdentitiesOnly yes\n' \
+            "${{ secrets.EC2_HOST }}" "${{ secrets.EC2_SSH_USER }}" >> ~/.ssh/config
+
+      - name: Sync and restart
+        run: |
+          rsync -az --delete \
+            --exclude node_modules --exclude dist --exclude .env --exclude .env.local \
+            --exclude logs --exclude .git \
+            ./ deploy-target:/opt/api-server/
+          scp deploy/remote-deploy.sh deploy/api-server.service deploy-target:/tmp/
+          ssh deploy-target "sudo cp /tmp/api-server.service /etc/systemd/system/api-server.service && bash /tmp/remote-deploy.sh /opt/api-server api-server"

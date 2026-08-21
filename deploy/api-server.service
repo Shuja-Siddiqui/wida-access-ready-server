@@ -1,0 +1,16 @@
+[Unit]
+Description=ACCESS Ready API
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/opt/api-server
+Environment=NODE_ENV=production
+EnvironmentFile=-/opt/api-server/.env
+ExecStart=/usr/bin/npm start
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
