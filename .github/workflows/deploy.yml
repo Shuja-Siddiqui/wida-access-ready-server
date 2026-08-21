@@ -12,6 +12,7 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: production
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
@@ -25,6 +26,21 @@ jobs:
         run: |
           npm ci --legacy-peer-deps
           npm run typecheck
+
+      - name: Check deploy secrets
+        env:
+          HOST: ${{ secrets.EC2_HOST }}
+          SSH_USER: ${{ secrets.EC2_SSH_USER }}
+          KEY: ${{ secrets.EC2_SSH_KEY }}
+        run: |
+          missing=0
+          [ -n "$HOST" ] || { echo "Missing secret EC2_HOST"; missing=1; }
+          [ -n "$SSH_USER" ] || { echo "Missing secret EC2_SSH_USER"; missing=1; }
+          [ -n "$KEY" ] || { echo "Missing secret EC2_SSH_KEY"; missing=1; }
+          if [ "$missing" -ne 0 ]; then
+            echo "Add them on this repo: Settings → Secrets and variables → Actions"
+            exit 1
+          fi
 
       - name: Prepare SSH
         run: |
