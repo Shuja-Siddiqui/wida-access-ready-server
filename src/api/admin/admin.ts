@@ -516,7 +516,8 @@ router.post("/admin/library/analyze", async (req, res): Promise<void> => {
     });
   } catch (err) {
     logger.error({ err }, "admin/library: analyze failed");
-    sendError(res, 500, "AI analysis failed — is the Grounding DINO sidecar running?");
+    const message = err instanceof Error ? err.message : "AI analysis failed";
+    sendError(res, 500, message);
   }
 });
 
@@ -548,6 +549,8 @@ const UploadSchema = z.object({
   image:       z.string().min(10),     // base64 data URI e.g. data:image/jpeg;base64,…
   description: z.string().max(1000).optional(),
   tags:        z.array(z.string()).max(50).optional(),
+  /** Claude vision nouns from Auto-detect — stored so edit/annotate can offer them later. */
+  visionTags:  z.array(z.string()).max(50).optional(),
   topicIds:    z.array(z.string().uuid()).max(50).optional(),
   /** Usage contexts — which session types may use this image. */
   contexts:    z.array(z.enum(VALID_CONTEXTS)).max(10).optional().default([]),
@@ -564,7 +567,7 @@ router.post("/admin/library/upload", async (req, res): Promise<void> => {
     return;
   }
 
-  const { image, description: userDescription, tags: userTags, topicIds: userTopicIds, detections: userDetections, contexts: userContexts, imageConcept: userImageConcept } = parsed.data;
+  const { image, description: userDescription, tags: userTags, visionTags: userVisionTags, topicIds: userTopicIds, detections: userDetections, contexts: userContexts, imageConcept: userImageConcept } = parsed.data;
 
   // Parse data URI
   const match = image.match(/^data:([^;]+);base64,(.+)$/s);
@@ -641,11 +644,18 @@ router.post("/admin/library/upload", async (req, res): Promise<void> => {
     const uploaderId = (req as any).auth?.userId ?? null;
     const finalTags        = manualDetectionResult?.tags ?? pipelineResult?.confirmedTags ?? userTags ?? [];
     const finalDescription = pipelineResult?.description ?? userDescription ?? null;
+    const persistedVisionTags = [...new Set(
+      [...(userVisionTags ?? []), ...(pipelineResult?.candidates ?? [])]
+        .map((t) => t.trim().toLowerCase())
+        .filter(Boolean),
+    )];
     const finalDetections  = manualDetectionResult
-      ? { detections: manualDetectionResult.detections, model: "manual" }
+      ? { detections: manualDetectionResult.detections, model: "manual", visionTags: persistedVisionTags }
       : pipelineResult
-        ? (pipelineResult.detectionResults as Record<string, unknown>)
-        : null;
+        ? { ...(pipelineResult.detectionResults as Record<string, unknown>), visionTags: persistedVisionTags }
+        : persistedVisionTags.length > 0
+          ? { detections: [], model: "vision", visionTags: persistedVisionTags }
+          : null;
 
     const [row] = await db
       .insert(libraryTable)
@@ -726,10 +736,20 @@ router.put("/admin/library/:id/detections", async (req, res): Promise<void> => {
     const detections = body.detections as { label: string; score: number; box: Record<string, number> }[];
     const tags = [...new Set(detections.map((d) => d.label))];
 
+    const [existing] = await db
+      .select({ detectionResults: libraryTable.detectionResults })
+      .from(libraryTable)
+      .where(eq(libraryTable.id, id))
+      .limit(1);
+    const prev = (existing?.detectionResults ?? {}) as { visionTags?: unknown };
+    const visionTags = Array.isArray(prev.visionTags)
+      ? prev.visionTags.filter((t): t is string => typeof t === "string" && t.trim().length > 0)
+      : [];
+
     const [row] = await db
       .update(libraryTable)
       .set({
-        detectionResults: { detections, model: "manual" } as Record<string, unknown>,
+        detectionResults: { detections, model: "manual", visionTags } as Record<string, unknown>,
         tags,
       })
       .where(eq(libraryTable.id, id))

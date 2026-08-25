@@ -7,6 +7,7 @@
 
 export { BASE_BLOCK }                                               from "./base";
 export { LISTENING_CORE_BLOCK }                                     from "./listening-core";
+export { OPTIONAL_LINE_VISUALS_BLOCK, LIBRARY_IMAGE_GROUNDS_CONTENT } from "./optional-line-visuals";
 export { buildSystemPrompt, blockIf }                               from "./compose";
 export { ACADEMIC_IMAGE_ANCHOR_BLOCK, buildImageAnchorPromptFields } from "./academic-image-anchor";
 

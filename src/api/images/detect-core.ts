@@ -27,26 +27,13 @@ function sidecarHeaders(extra: Record<string, string> = {}): Record<string, stri
 async function isSidecarReady(): Promise<boolean> {
   try {
     const res = await fetch(`${sidecarUrl()}/health`, {
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(2000),
     });
     const json = (await res.json()) as { ready?: boolean };
     return json.ready === true;
   } catch {
     return false;
   }
-}
-
-/**
- * Wait up to `maxWaitMs` for the sidecar to become ready.
- * Returns true if ready, false if timed out.
- */
-async function waitForSidecar(maxWaitMs = 90_000): Promise<boolean> {
-  const deadline = Date.now() + maxWaitMs;
-  while (Date.now() < deadline) {
-    if (await isSidecarReady()) return true;
-    await new Promise((r) => setTimeout(r, 500));
-  }
-  return false;
 }
 
 // ── Grounding DINO sidecar ────────────────────────────────────────────────────
@@ -86,35 +73,26 @@ export interface DetectionResult {
   model: DetectionModel;
 }
 
-let _sidecarReady: boolean | null = null;
-
 /**
  * Detect objects in a base64 data-URI image using Grounding DINO.
- * Throws if the sidecar is not running.
+ * Probes health on every call so the sidecar can start or stop without
+ * restarting this process.
  */
 export async function runDetection(
   imageDataUri: string,
   labels: string[],
 ): Promise<DetectionResult> {
-  const ready = _sidecarReady ?? await waitForSidecar();
-  _sidecarReady = ready;
-
-  if (!ready) {
+  if (!(await isSidecarReady())) {
     throw new Error(
-      `Grounding DINO sidecar is not ready at ${sidecarUrl()}. Start or deploy the sidecar and retry.`,
+      `Grounding DINO sidecar is not ready at ${sidecarUrl()}. Start it and retry — no API restart needed.`,
     );
   }
 
-  try {
-    logger.info({ labels }, "detect: using Grounding DINO sidecar");
-    const raw = await detectViaSidecar(imageDataUri, labels);
-    logger.info({ found: raw.map((d) => d.label) }, "detect: DINO done, running Claude verification");
+  logger.info({ labels }, "detect: using Grounding DINO sidecar");
+  const raw = await detectViaSidecar(imageDataUri, labels);
+  logger.info({ found: raw.map((d) => d.label) }, "detect: DINO done, running Claude verification");
 
-    const detections = await verifyDetections(imageDataUri, raw);
-    logger.info({ found: detections.map((d) => d.label) }, "detect: done");
-    return { detections, model: "grounding_dino" };
-  } catch (err) {
-    _sidecarReady = null; // re-check next call
-    throw err;
-  }
+  const detections = await verifyDetections(imageDataUri, raw);
+  logger.info({ found: detections.map((d) => d.label) }, "detect: done");
+  return { detections, model: "grounding_dino" };
 }

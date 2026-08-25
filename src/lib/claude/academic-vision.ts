@@ -46,15 +46,17 @@ export async function analyzeImageForSubject(
 ): Promise<AcademicVisionResult> {
   const claude = getClient();
 
-  const userPrompt = `Look carefully at every detail in this image. Describe exactly what you see happening — who is doing what, what objects people are holding or using, specific actions, and the setting.
+  const userPrompt = `Identify the academic idea this educational image is meant to teach. Use visible objects only as anchors for that idea.
 
 ${SUBJECT_INSTRUCTIONS[subject]}
+
+Do NOT narrate the photograph. Do NOT say who is in the picture, who is holding an object, poses, gestures, or "a child/student is using X".
 
 Return exactly this JSON:
 {
   "topic": "1–4 word Title Case label of the academic topic (e.g. Chromosomes, Cell Membrane, Water Cycle, Oregon Trail). Not a sentence. Not object names like poster or laptop.",
   "concept": "One sentence naming the main academic concept this image illustrates.",
-  "description": "2–3 sentences describing the SPECIFIC SCENE in the image — name the people, what they are holding, what they are doing, and how those actions relate to the academic concept. Be specific: if a woman is holding a clipboard, say 'a woman is holding a clipboard'. If someone is pointing at a diagram, say exactly that. The listener cannot see the image — your description must paint the exact scene so the passage can mirror it faithfully."
+  "description": "2–3 sentences that TEACH the concept in simple present tense for Grade 6–8 ELL students. Name the concept first. Then explain it using generic classroom language (scientists, students, people). You may mention object types that appear (beaker, diagram, map) as tools of the concept — never as a photo caption. Example: 'Laboratory safety means protecting your eyes and skin during experiments. Scientists wear goggles and use beakers to hold liquids.'"
 }`;
 
   const response = await claude.messages.create({

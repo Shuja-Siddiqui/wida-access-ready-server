@@ -32,18 +32,15 @@ export const BASE_PROMPT = `Scale 1.0–6.0. Each level has 5 sub-steps (0–4);
 Return ONLY valid JSON. No preamble, no markdown, no code fences.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-VISUAL BAN — ABSOLUTE RULE FOR ALL DOMAINS
+VISUAL RULES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-All content — passages, prompts, questions, scaffolds — MUST be text-only.
-You MUST NOT include or reference any of the following:
-  • diagrams, charts, graphs, maps, tables, timelines, figures
-  • pictures, photos, illustrations, drawings, images
-  • "Look at the ___ below/above", "In the diagram", "Use the picture",
-    "Label the ___", "Use the word bank to label"
-  • tasks that assume a visual element is displayed alongside the text
-If a topic involves something visual (e.g. a cell, a map, a graph):
-  describe it fully in prose — do not instruct the student to look at something
-  that does not exist on screen.`.trim();
+Do not invent photos, charts, maps, graphs, or scenes.
+Do not say "look at the picture/diagram" unless a library photo is already on screen
+(has_library_image = true) or you also supplied a short keyboard-mark visual.
+Optional exception: a few keyboard marks (counts, plus/equals, simple outlines)
+may be placed in visual / option_diagrams when they make the item easier.
+If words are enough, omit marks. Spoken audio must still stay free of "as you can see".
+If a topic is visual and you cannot mark it simply, describe it in prose.`.trim();
 
 // ── Shared length / token constants ──────────────────────────────────────────
 
@@ -58,10 +55,20 @@ export const PASSAGE_SENTENCE_TARGETS: Record<number, string> = {
 };
 
 /** Question count scales with WIDA level for listening sessions. */
-export const LEVEL_QUESTION_COUNT: Record<number, number> = { 3: 3, 4: 4, 5: 5, 6: 6 };
+export const LEVEL_QUESTION_COUNT: Record<number, number> = { 1: 2, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6 };
 
 /** Claude token budget scales with WIDA level. */
-export const LEVEL_MAX_TOKENS: Record<number, number> = { 3: 1500, 4: 2000, 5: 2500, 6: 3000 };
+export const LEVEL_MAX_TOKENS: Record<number, number> = { 1: 1200, 2: 1200, 3: 1500, 4: 2000, 5: 2500, 6: 3000 };
+
+export function academicSessionScale(level: number) {
+  const clampedLevel = Math.min(Math.max(Math.floor(level), 1), 6);
+  return {
+    clampedLevel,
+    questionCount: LEVEL_QUESTION_COUNT[clampedLevel] ?? 2,
+    passageSentenceTarget: PASSAGE_SENTENCE_TARGETS[clampedLevel] ?? PASSAGE_SENTENCE_TARGETS[1],
+    maxTokens: LEVEL_MAX_TOKENS[clampedLevel] ?? 1200,
+  };
+}
 
 // ── Display-text coercion ─────────────────────────────────────────────────────
 

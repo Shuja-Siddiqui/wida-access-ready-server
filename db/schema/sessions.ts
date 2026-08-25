@@ -26,7 +26,7 @@ export const sessionsTable = pgTable("sessions", {
   imageTags: jsonb("image_tags"),            // string[] — labels that were active question targets this session
 
   // Academic-tier sessions — subject area targeted (math/science/social_studies/ela).
-  // Null for general-tier sessions and all non-listening domains.
+  // Null for general-tier sessions.
   subject: text("subject"),
 
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
