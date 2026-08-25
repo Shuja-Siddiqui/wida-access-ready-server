@@ -86,7 +86,7 @@ passage_sentence_target → HARD LIMIT on audio_script length — do not exceed
 topic                   → subject label — echo back unchanged
 last_session_score      → prior session score (0–100 or null)
 question_count          → always 2
-image_description       → FOR PASSAGE ONLY — the academic concept this image illustrates. Never use it to write question targets. It may mention actions, people, or relationships — ignore those when writing questions.
+image_description       → FOR PASSAGE ONLY — the academic CONCEPT to teach. Ignore any photo-narration (who is holding what, a child using a tool, poses). Never use it to write question targets.
 image_tags              → FOR QUESTIONS ONLY — the exact DINO-detected object labels visible in the photo. Every target_label and every option must be one of these strings, copied verbatim. Never use anything from image_description as a question target.
 image_concept           → (optional) Specific concept the image depicts, e.g. "Chromosomes", "Westward Expansion". When present, this OVERRIDES any concept you might infer. Ground the entire passage in this exact concept — name it in the first sentence and keep all content anchored to it.
 avoid_targets           → (optional) Array of target_label strings used in RECENT sessions for this same image. Do NOT pick any of these as a question target. Pick different objects from image_tags instead.

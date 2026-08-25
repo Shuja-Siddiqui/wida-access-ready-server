@@ -12,23 +12,24 @@
 import {
   callClaude,
   toDisplayText,
-  PASSAGE_SENTENCE_TARGETS,
-  LEVEL_QUESTION_COUNT,
-  LEVEL_MAX_TOKENS,
+  academicSessionScale,
 } from "./client";
 import {
   buildSystemPrompt,
   BASE_BLOCK,
   LISTENING_CORE_BLOCK,
+  OPTIONAL_LINE_VISUALS_BLOCK,
   SCIENCE_SUBJECT_BLOCK,
   SCIENCE_OUTPUT_SCHEMA,
 } from "./prompts";
+import { parseOptionDiagrams, parseVisual } from "./prompts/optional-line-visuals";
 import type { ListeningContent } from "./listening";
 
 const SYSTEM_PROMPT = buildSystemPrompt(
   "You are an academic listening content generator for Grade 6–8 English Language Learners. Generate a science passage presented as a teacher or scientist narrating a phenomenon to the class, plus comprehension questions that test whether the student understood the scientific language and reasoning — not whether they have memorized science facts.",
   BASE_BLOCK,
   LISTENING_CORE_BLOCK,
+  OPTIONAL_LINE_VISUALS_BLOCK,
   SCIENCE_SUBJECT_BLOCK,
   SCIENCE_OUTPUT_SCHEMA,
 );
@@ -95,12 +96,9 @@ export async function generateAcademicScienceListeningContent(params: {
   topic: string;
   isRetry?: boolean;
   lastSessionScore?: number | null;
+  hasLibraryImage?: boolean;
 }): Promise<ListeningContent> {
-  const clampedLevel = Math.min(Math.max(params.level, 3), 6);
-  const questionCount = LEVEL_QUESTION_COUNT[clampedLevel] ?? 3;
-  const passageSentenceTarget =
-    PASSAGE_SENTENCE_TARGETS[clampedLevel] ?? PASSAGE_SENTENCE_TARGETS[3];
-  const maxTokens = LEVEL_MAX_TOKENS[clampedLevel] ?? 1500;
+  const { questionCount, passageSentenceTarget, maxTokens } = academicSessionScale(params.level);
 
   const prompt = JSON.stringify({
     integer_level:          params.level,
@@ -121,6 +119,7 @@ export async function generateAcademicScienceListeningContent(params: {
     last_session_score:      params.lastSessionScore ?? null,
     question_count:          questionCount,
     passage_sentence_target: passageSentenceTarget,
+    has_library_image:       params.hasLibraryImage ?? false,
   });
 
   try {
@@ -142,6 +141,7 @@ export async function generateAcademicScienceListeningContent(params: {
       audioScript: toDisplayText(result.audio_script),
       topic:       result.topic ?? params.topic,
       context:     result.context ?? "Teacher explaining a science concept to the class",
+      visual:      parseVisual((result as { visual?: unknown }).visual),
       questions: (result.questions || []).map((q) => ({
         id:          q.id,
         type:        q.type,
@@ -149,6 +149,8 @@ export async function generateAcademicScienceListeningContent(params: {
         options:     q.options,
         correct:     q.correct,
         explanation: q.explanation,
+        optionDiagrams: parseOptionDiagrams((q as { option_diagrams?: unknown }).option_diagrams),
+        visual:      parseVisual((q as { visual?: unknown }).visual),
       })),
     };
   } catch {

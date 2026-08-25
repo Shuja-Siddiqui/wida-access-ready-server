@@ -846,14 +846,14 @@ router.get("/students/:studentId/streak", requireStudentAccess("studentId"), asy
   // XP rank tiers
   const xp = student.totalXp;
   let rank = "Newcomer";
-  let rankEmoji = "🌱";
+  let rankEmoji = "";
   let nextRankXp = 100;
-  if (xp >= 2000) { rank = "Language Master"; rankEmoji = "👑"; nextRankXp = xp; }
-  else if (xp >= 1200) { rank = "Expert Speaker"; rankEmoji = "🏆"; nextRankXp = 2000; }
-  else if (xp >= 700) { rank = "Word Wizard"; rankEmoji = "⚡"; nextRankXp = 1200; }
-  else if (xp >= 400) { rank = "Rising Star"; rankEmoji = "⭐"; nextRankXp = 700; }
-  else if (xp >= 200) { rank = "Explorer"; rankEmoji = "🧭"; nextRankXp = 400; }
-  else if (xp >= 100) { rank = "Learner"; rankEmoji = "📚"; nextRankXp = 200; }
+  if (xp >= 2000) { rank = "Language Master"; nextRankXp = xp; }
+  else if (xp >= 1200) { rank = "Expert Speaker"; nextRankXp = 2000; }
+  else if (xp >= 700) { rank = "Word Wizard"; nextRankXp = 1200; }
+  else if (xp >= 400) { rank = "Rising Star"; nextRankXp = 700; }
+  else if (xp >= 200) { rank = "Explorer"; nextRankXp = 400; }
+  else if (xp >= 100) { rank = "Learner"; nextRankXp = 200; }
 
   sendSuccess(res, {
     currentStreak: student.currentStreak,

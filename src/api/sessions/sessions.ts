@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, sql, desc, inArray, gt } from "drizzle-orm";
+import { eq, and, sql, desc, inArray, gt, or } from "drizzle-orm";
 import {
   db,
   studentsTable,
@@ -22,6 +22,11 @@ import {
 import { buildReadingContext } from "../../lib/readingContentEngine";
 import { buildSpeakingContext } from "../../lib/speakingContentEngine";
 import { buildWritingContext } from "../../lib/writingContentEngine";
+import {
+  nextSubject,
+  buildAcademicContentLayer,
+  pickAcademicTopicLabel,
+} from "../../lib/academicSubjectContent";
 import {
   buildMathSessionContext,
   MATH_PERMITTED_FORMATS,
@@ -78,6 +83,69 @@ import { requireAuth, requireStudentAccess } from "../../middlewares/auth";
 import { resolveStudentAccess } from "../../lib/subscription";
 
 const storage = new ObjectStorageService();
+
+function writingImageTags(row: {
+  tags: unknown;
+  detectionResults: unknown;
+}): string[] {
+  const official = Array.isArray(row.tags) ? row.tags.filter((t): t is string => typeof t === "string") : [];
+  const detections = ((row.detectionResults as { detections?: { label?: string }[] } | null)?.detections ?? [])
+    .map((d) => d.label)
+    .filter((t): t is string => typeof t === "string" && t.trim().length > 0);
+  return [...new Set([...official, ...detections])];
+}
+
+const TOPIC_STOP_WORDS = new Set([
+  "this", "that", "with", "from", "about", "show", "shows", "what", "does",
+  "have", "into", "and", "the", "for", "are", "your", "their", "them",
+]);
+
+function topicSearchTerms(topic: string): string[] {
+  return topic
+    .replace(/[\[\]]/g, " ")
+    .split(/[^a-zA-Z0-9]+/)
+    .map((w) => w.toLowerCase())
+    .filter((w) => w.length >= 4 && !TOPIC_STOP_WORDS.has(w));
+}
+
+function topicFromAnchor(anchor: {
+  tags: string[];
+  description?: string | null;
+  imageConcept?: string | null;
+}): string {
+  if (anchor.imageConcept?.trim()) return anchor.imageConcept.trim();
+  if (anchor.tags.length) return anchor.tags.slice(0, 5).join(", ");
+  if (anchor.description?.trim()) return anchor.description.trim().slice(0, 80);
+  return "the picture";
+}
+
+type LibraryAnchorRow = {
+  id: string;
+  tags: unknown;
+  s3Key: string;
+  description: string | null;
+  imageConcept: string | null;
+  detectionResults: unknown;
+};
+
+function toDomainAnchor(row: LibraryAnchorRow) {
+  return {
+    id: row.id,
+    tags: writingImageTags(row),
+    s3Key: row.s3Key,
+    description: row.description,
+    imageConcept: row.imageConcept,
+  };
+}
+
+const LIBRARY_ANCHOR_COLS = {
+  id:               libraryTable.id,
+  tags:             libraryTable.tags,
+  s3Key:            libraryTable.s3Key,
+  description:      libraryTable.description,
+  imageConcept:     libraryTable.imageConcept,
+  detectionResults: libraryTable.detectionResults,
+};
 
 // ── Object-mastery helpers ─────────────────────────────────────────────────────
 
@@ -668,30 +736,13 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
       lastAcademicSession && lastScore < 70 ? lastAcademicSession.topic : null;
 
     // Build academic context — extends ListeningContext with subject + subjectLabel
-    const academicCtxBase = buildAcademicListeningContext(
+    const academicCtx = buildAcademicListeningContext(
       currentLevel,
       topicsUsedToday,
       persistedTopic,
       lastKeyUse,
       lastSubject,
     );
-
-    // ── TEMPORARY: levels 1–2 only rotate subjects that have library images ──
-    // Remove this block once images exist for all four subjects (math + ela).
-    // Currently: science (2 images) and social_studies (8 images) are available.
-    const LEVEL_1_2_IMAGE_SUBJECTS = ["science", "social_studies"] as const;
-    const academicCtx = (Math.floor(currentLevel) <= 2 && !LEVEL_1_2_IMAGE_SUBJECTS.includes(academicCtxBase.subject as any))
-      ? (() => {
-          const lastIndex = LEVEL_1_2_IMAGE_SUBJECTS.indexOf(lastSubject as any);
-          const restrictedSubject = LEVEL_1_2_IMAGE_SUBJECTS[(lastIndex + 1) % LEVEL_1_2_IMAGE_SUBJECTS.length];
-          return {
-            ...academicCtxBase,
-            subject:      restrictedSubject,
-            subjectLabel: ACADEMIC_SUBJECT_LABELS[restrictedSubject],
-          };
-        })()
-      : academicCtxBase;
-    // ── END TEMPORARY ────────────────────────────────────────────────────────
 
     // ── Levels 1–2: academic image-tap ───────────────────────────────────────
     // At WIDA levels 1–2 the student needs visual support.  Look for a library
@@ -767,10 +818,14 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
             throw new Error("Insufficient tags after mastery filter");
           }
 
-          // Vision description gives the academic concept story; fall back to DB description then tag list.
-          const imageDescription = visionResult?.description
-            ?? (acImage.description as string | null)
-            ?? cleanTags.join(", ");
+          // Concept first, then vision prose. Never feed a photo caption as the lesson.
+          const imageDescription = [
+            visionResult?.concept,
+            visionResult?.description,
+          ].filter((s): s is string => typeof s === "string" && s.trim().length > 0).join(" ")
+            || (acImage.imageConcept as string | null)
+            || (acImage.description as string | null)
+            || cleanTags.join(", ");
 
           // ── Variation: shuffle tags + collect recently-used targets ────────────
           // Shuffle so Claude doesn't always pick the same "first" objects.
@@ -1018,6 +1073,7 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
           topic:                 mathCtx.topicLabel,
           isRetry:               persistedTopic !== null,
           lastSessionScore:      lastScore,
+          hasLibraryImage:       Boolean(anchorImage),
         });
       } else if (sciCtx) {
         // ── Science ──────────────────────────────────────────────────────────
@@ -1036,6 +1092,7 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
           topic:                 sciCtx.topicLabel,
           isRetry:               persistedTopic !== null,
           lastSessionScore:      lastScore,
+          hasLibraryImage:       Boolean(anchorImage),
         });
       } else if (ssCtx) {
         // ── Social Studies ────────────────────────────────────────────────────
@@ -1054,6 +1111,7 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
           topic:                 ssCtx.topicLabel,
           isRetry:               persistedTopic !== null,
           lastSessionScore:      lastScore,
+          hasLibraryImage:       Boolean(anchorImage),
         });
       } else if (elaCtx) {
         // ── English Language Arts ─────────────────────────────────────────────
@@ -1072,6 +1130,7 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
           topic:                 elaCtx.topicLabel,
           isRetry:               persistedTopic !== null,
           lastSessionScore:      lastScore,
+          hasLibraryImage:       Boolean(anchorImage),
         });
       } else {
         // ── Fallback (unexpected subject) → general listening ─────────────────
@@ -1086,6 +1145,7 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
           topic:                 academicTopicLabel,
           isRetry:               persistedTopic !== null,
           lastSessionScore:      lastScore,
+          hasLibraryImage:       Boolean(anchorImage),
         });
       }
     } catch (err) {
@@ -1098,7 +1158,12 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
       levelStart:   currentLevel,
       subject:      academicCtx.subject,
       subjectLabel: academicCtx.subjectLabel,
-      content:      { type: "listening", data: academicContent },
+      content:      {
+        type: "listening",
+        data: academicContent && typeof academicContent === "object"
+          ? { ...academicContent as object, illustrationUrl: anchorImageUrl }
+          : academicContent,
+      },
       // Anchor image included when a topic-relevant library image was found.
       // The frontend can display it as visual context while the student listens.
       anchorImage:  anchorImageUrl
@@ -1118,6 +1183,7 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
       topic:    sessionsTable.topic,
       scorePct: sessionsTable.scorePct,
       keyUse:   sessionsTable.keyUse,
+      subject:  sessionsTable.subject,
     })
     .from(sessionsTable)
     .where(and(
@@ -1137,7 +1203,150 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
   // Variables set inside the switch so the DB insert can store them.
   let sessionTopic:  string | null = null;
   let sessionKeyUse: string | null = null;
+  let sessionSubject: string | null = null;
   let contentData: unknown;
+
+  const academicDomain = tier === "academic" && (domain === "reading" || domain === "speaking" || domain === "writing")
+    ? (domain as "reading" | "speaking" | "writing")
+    : null;
+  const academicSubject = academicDomain
+    ? nextSubject(lastDomainSession?.subject ?? null)
+    : null;
+  const academicTopic = academicSubject
+    ? pickAcademicTopicLabel(academicSubject, currentLevel, domainPersistedTopic, topicsUsedToday)
+    : null;
+  const academicLayer = academicSubject && academicDomain
+    ? buildAcademicContentLayer({
+        subject: academicSubject,
+        subjectLabel: ACADEMIC_SUBJECT_LABELS[academicSubject],
+        domain: academicDomain,
+      })
+    : undefined;
+
+  let preferredTopic = academicTopic;
+  if (!preferredTopic) {
+    if (domain === "reading") {
+      preferredTopic = buildReadingContext(
+        currentLevel,
+        topicsUsedToday,
+        domainPersistedTopic,
+        lastDomainKeyUse,
+      ).selectedTopic;
+    } else if (domain === "speaking") {
+      preferredTopic = buildSpeakingContext(
+        currentLevel,
+        topicsUsedToday,
+        domainPersistedTopic,
+        lastDomainKeyUse,
+        isTelpas,
+      ).selectedTopic;
+    } else if (domain === "writing") {
+      preferredTopic = buildWritingContext(
+        currentLevel,
+        topicsUsedToday,
+        domainPersistedTopic,
+        lastDomainKeyUse,
+      ).selectedTopic;
+    }
+  }
+
+  let domainAnchor: {
+    id: string;
+    tags: string[];
+    s3Key: string;
+    description?: string | null;
+    imageConcept?: string | null;
+  } | null = null;
+  let domainAnchorUrl: string | null = null;
+  try {
+    const terms = preferredTopic ? topicSearchTerms(preferredTopic) : [];
+    const metaMatch = terms.length
+      ? or(
+          ...terms.map((t) => sql`(
+            COALESCE(${libraryTable.description}, '') ILIKE ${"%" + t + "%"}
+            OR COALESCE(${libraryTable.imageConcept}, '') ILIKE ${"%" + t + "%"}
+            OR COALESCE(${libraryTable.tags}::text, '') ILIKE ${"%" + t + "%"}
+          )`),
+        )
+      : undefined;
+
+    if (terms.length) {
+      const [byLinkedTopic] = await db
+        .select(LIBRARY_ANCHOR_COLS)
+        .from(libraryTable)
+        .innerJoin(libraryTopicsTable, eq(libraryTopicsTable.libraryId, libraryTable.id))
+        .innerJoin(topicsTable, eq(topicsTable.id, libraryTopicsTable.topicId))
+        .where(
+          or(
+            ...terms.map((t) =>
+              sql`LOWER(${topicsTable.name}) LIKE LOWER(${"%" + t + "%"})`,
+            ),
+          ),
+        )
+        .orderBy(sql`RANDOM()`)
+        .limit(1);
+      if (byLinkedTopic?.s3Key) domainAnchor = toDomainAnchor(byLinkedTopic);
+    }
+
+    if (!domainAnchor && metaMatch) {
+      const [byMeta] = await db
+        .select(LIBRARY_ANCHOR_COLS)
+        .from(libraryTable)
+        .where(metaMatch)
+        .orderBy(sql`RANDOM()`)
+        .limit(1);
+      if (byMeta?.s3Key) domainAnchor = toDomainAnchor(byMeta);
+    }
+
+    const subjectAnchorTags = academicSubject
+      ? (SUBJECT_VISUAL_ANCHOR_TAGS[academicSubject] ?? [])
+      : [];
+    if (!domainAnchor && academicSubject && subjectAnchorTags.length > 0) {
+      const [row] = await db
+        .select(LIBRARY_ANCHOR_COLS)
+        .from(libraryTable)
+        .where(
+          and(
+            sql`${libraryTable.tags} IS NOT NULL`,
+            sql`ARRAY(SELECT jsonb_array_elements_text(${libraryTable.tags})) && ARRAY[${sql.raw(
+              subjectAnchorTags.map((t) => `'${t.replace(/'/g, "''")}'`).join(","),
+            )}]::text[]`,
+            sql`(${libraryTable.contexts} = '{}' OR ${libraryTable.contexts} && ARRAY[${`academic:${academicSubject}`}]::text[])`,
+          ),
+        )
+        .orderBy(sql`RANDOM()`)
+        .limit(1);
+      if (row?.s3Key) domainAnchor = toDomainAnchor(row);
+    }
+
+    // Writing always needs a photo when the library has one. Other domains only
+    // fall back to any image at levels 1–2 — then the passage must follow the photo.
+    if (!domainAnchor && (domain === "writing" || Math.floor(currentLevel) <= 2)) {
+      const [row] = await db
+        .select(LIBRARY_ANCHOR_COLS)
+        .from(libraryTable)
+        .where(
+          sql`jsonb_array_length(COALESCE(${libraryTable.detectionResults}->'detections', '[]'::jsonb)) >= 1
+              OR jsonb_array_length(COALESCE(${libraryTable.tags}, '[]'::jsonb)) >= 1`,
+        )
+        .orderBy(sql`RANDOM()`)
+        .limit(1);
+      if (row?.s3Key) domainAnchor = toDomainAnchor(row);
+    }
+    if (domainAnchor) {
+      if (domain !== "writing") {
+        preferredTopic = topicFromAnchor(domainAnchor);
+      }
+      req.log.info(
+        { imageId: domainAnchor.id, tags: domainAnchor.tags, topic: preferredTopic, domain },
+        "Domain library image selected",
+      );
+      domainAnchorUrl = await storage.getPresignedGetUrl(domainAnchor.s3Key, 3600).catch(() => null);
+    }
+  } catch (err) {
+    req.log.warn({ err }, "Domain library image lookup failed, continuing without photo");
+  }
+  const hasLibraryImage = Boolean(domainAnchorUrl);
 
   try {
     switch (domain as Domain) {
@@ -1148,8 +1357,9 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
           domainPersistedTopic,
           lastDomainKeyUse,
         );
-        sessionTopic  = readingCtx.selectedTopic;
+        sessionTopic  = preferredTopic ?? academicTopic ?? readingCtx.selectedTopic;
         sessionKeyUse = readingCtx.canDo.keyUse;
+        sessionSubject = academicSubject;
         contentData   = await generateReadingContent({
           assessment,
           level:                  readingCtx.elpLevel,
@@ -1159,10 +1369,18 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
           textFormat:             readingCtx.textFormat,
           permittedFormats:       readingCtx.permittedFormats,
           canDo:                  readingCtx.canDo,
-          topic:                  readingCtx.selectedTopic,
+          topic:                  sessionTopic,
           gradeBand:              student.gradeBand,
           homeLanguage:           student.homeLanguage ?? undefined,
           mode,
+          academicContentLayer:   academicLayer,
+          academicSubject:        academicSubject ?? undefined,
+          questionCount:          readingCtx.questionCount,
+          passageWordMax:         readingCtx.passageWordMax,
+          hasLibraryImage,
+          imageTags:              domainAnchor?.tags,
+          imageDescription:       domainAnchor?.description ?? undefined,
+          imageConcept:           domainAnchor?.imageConcept ?? undefined,
         });
         break;
       }
@@ -1174,8 +1392,9 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
           lastDomainKeyUse,
           isTelpas,
         );
-        sessionTopic  = speakingCtx.selectedTopic;
+        sessionTopic  = preferredTopic ?? academicTopic ?? speakingCtx.selectedTopic;
         sessionKeyUse = speakingCtx.canDo.keyUse;
+        sessionSubject = academicSubject;
         contentData   = await generateSpeakingContent({
           assessment,
           level:                  speakingCtx.elpLevel,
@@ -1188,10 +1407,16 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
           allowedPromptTypes:     speakingCtx.allowedPromptTypes,
           targetSeconds:          speakingCtx.targetSeconds,
           canDo:                  speakingCtx.canDo,
-          topic:                  speakingCtx.selectedTopic,
+          topic:                  sessionTopic,
           gradeBand:              student.gradeBand,
           mode,
           isTelpas,
+          academicContentLayer:   academicLayer,
+          academicSubject:        academicSubject ?? undefined,
+          hasLibraryImage,
+          imageTags:              domainAnchor?.tags,
+          imageDescription:       domainAnchor?.description ?? undefined,
+          imageConcept:           domainAnchor?.imageConcept ?? undefined,
         });
         break;
       }
@@ -1202,8 +1427,9 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
           domainPersistedTopic,
           lastDomainKeyUse,
         );
-        sessionTopic  = writingCtx.selectedTopic;
+        sessionTopic  = academicTopic ?? writingCtx.selectedTopic;
         sessionKeyUse = writingCtx.canDo.keyUse;
+        sessionSubject = academicSubject;
         contentData   = await generateWritingContent({
           assessment,
           level:                  writingCtx.elpLevel,
@@ -1216,9 +1442,15 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
           sentenceFrameRequired:  writingCtx.sentenceFrameRequired,
           wordBankRequired:       writingCtx.wordBankRequired,
           canDo:                  writingCtx.canDo,
-          topic:                  writingCtx.selectedTopic,
+          topic:                  sessionTopic,
           gradeBand:              student.gradeBand,
           mode,
+          academicContentLayer:   academicLayer,
+          academicSubject:        academicSubject ?? undefined,
+          hasLibraryImage,
+          imageTags:              domainAnchor?.tags,
+          imageDescription:       domainAnchor?.description ?? undefined,
+          imageConcept:           domainAnchor?.imageConcept ?? undefined,
         });
         break;
       }
@@ -1242,8 +1474,15 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
       mode,
       topic:       sessionTopic,
       keyUse:      sessionKeyUse,
+      subject:     sessionSubject,
+      libraryImageId: domainAnchor?.id ?? null,
+      imageTags:      domainAnchor?.tags ?? null,
     })
     .returning();
+
+  if (contentData && typeof contentData === "object" && domainAnchorUrl) {
+    (contentData as Record<string, unknown>).illustrationUrl = domainAnchorUrl;
+  }
 
   sendSuccess(res, {
     sessionId: session.id,
@@ -1253,6 +1492,9 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
       type: domain,
       data: contentData,
     },
+    anchorImage: domainAnchorUrl
+      ? { url: domainAnchorUrl, tags: domainAnchor?.tags ?? [] }
+      : null,
     mode,
     telpasTimerRequired: isTelpas && domain === "speaking",
   }, 201);

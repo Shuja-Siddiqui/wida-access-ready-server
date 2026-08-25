@@ -16,6 +16,7 @@ import {
   LEVEL_QUESTION_COUNT,
   LEVEL_MAX_TOKENS,
 } from "./client";
+import { OPTIONAL_LINE_VISUALS_BLOCK, parseOptionDiagrams, parseVisual } from "./prompts/optional-line-visuals";
 
 // ── Per-level schema tables ───────────────────────────────────────────────────
 
@@ -105,6 +106,7 @@ function buildListeningOutputSchema(
       "type": "multiple_choice",
       "question": "<question that tests the Can Do skill directly from the audio>",
       "options": ["<A>", "<B>", "<C>", "<D>"],
+      "option_diagrams": [null, null, null, null],
       "correct": 0,
       /* 0-based index of the correct option */
       "explanation": "<max 8 words stating why>"
@@ -261,7 +263,9 @@ BUILD ORDER
 4. QUESTIONS
    Each question tests the chosen Can Do directly.
    Wrong options are realistic mistakes from plausible misreadings of the audio, not random.
-   Use only the formats listed in OUTPUT SCHEMA.`;
+   Use only the formats listed in OUTPUT SCHEMA.
+
+${OPTIONAL_LINE_VISUALS_BLOCK}`;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -269,10 +273,13 @@ export interface ListeningContent {
   audioScript: string;
   topic: string;
   context: string;
+  visual?: string;
   questions: Array<{
     id: string;
     type: string;
     question: string;
+    visual?: string;
+    optionDiagrams?: (string | null)[];
     /** multiple_choice / image_grid */
     options?: string[];
     /** Populated for image_grid questions — one Pixabay URL per option */
@@ -353,6 +360,7 @@ export async function generateListeningContent(params: {
   topic: string;
   isRetry?: boolean;
   lastSessionScore?: number | null;
+  hasLibraryImage?: boolean;
 }): Promise<ListeningContent> {
   // Levels 0–2 use image_library sessions; levels 3–6 scale question count with level.
   const clampedLevel          = Math.min(Math.max(params.level, 3), 6);
@@ -381,6 +389,7 @@ export async function generateListeningContent(params: {
     last_session_score:       params.lastSessionScore ?? null,
     question_count:           questionCount,
     passage_sentence_target:  passageSentenceTarget,
+    has_library_image:        params.hasLibraryImage ?? false,
   });
 
   try {
@@ -397,6 +406,8 @@ export async function generateListeningContent(params: {
       id:                 q.id          as string,
       type:               q.type        as string,
       question:           toDisplayText((q.question as string) ?? ""),
+      visual:             parseVisual(q.visual),
+      optionDiagrams:     parseOptionDiagrams(q.option_diagrams),
       // multiple_choice / image_grid
       options:            q.options     as string[] | undefined,
       correct:            q.correct     as number   | undefined,
@@ -419,6 +430,7 @@ export async function generateListeningContent(params: {
       audioScript: toDisplayText(result.audio_script),
       topic:       result.topic,
       context:     result.context,
+      visual:      parseVisual((result as { visual?: unknown }).visual),
       questions,
     };
   } catch {

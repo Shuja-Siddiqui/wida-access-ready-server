@@ -301,17 +301,22 @@ export async function runImagePipeline(
   );
 
   const [dinoResult, suggestedTopicIds] = await Promise.all([
-    // Step 2: Grounding DINO
-    runDetection(image, dinoLabels).then((result) => {
-      logger.info(
-        {
-          confirmedTags: [...new Set(result.detections.map((d) => d.label))],
-          model: result.model,
-        },
-        "image-pipeline: step 2 done",
-      );
-      return result;
-    }),
+    // Step 2: Grounding DINO — optional; sidecar can be down or started later
+    runDetection(image, dinoLabels)
+      .then((result) => {
+        logger.info(
+          {
+            confirmedTags: [...new Set(result.detections.map((d) => d.label))],
+            model: result.model,
+          },
+          "image-pipeline: step 2 done",
+        );
+        return result;
+      })
+      .catch((err: unknown) => {
+        logger.warn({ err }, "image-pipeline: step 2 DINO skipped (sidecar unavailable)");
+        return { detections: [] as NormalisedDetection[], model: "grounding_dino" as DetectionModel };
+      }),
 
     // Step 4: topic suggestion — uses candidates (step 1 output), not confirmedTags
     (async (): Promise<string[]> => {
@@ -336,7 +341,9 @@ export async function runImagePipeline(
   ]);
 
   const { detections, model } = dinoResult;
-  const confirmedTags = [...new Set(detections.map((d) => d.label))];
+  const confirmedTags = detections.length > 0
+    ? [...new Set(detections.map((d) => d.label))]
+    : [...candidates];
 
   return {
     candidates,

@@ -46,6 +46,10 @@ export interface ReadingContext {
   canDo: CanDoEntry;
   /** Single pre-selected topic — persisted from a failed session or randomly chosen */
   selectedTopic: string;
+  /** How many comprehension questions to generate */
+  questionCount: number;
+  /** Hard max words for the passage */
+  passageWordMax: number;
 }
 
 // ── Level metadata ────────────────────────────────────────────────────────────
@@ -82,12 +86,30 @@ export const READING_PERMITTED_FORMATS: Record<number, string[]> = {
 
 /** Text format and length by WIDA level — what students READ at each level */
 const READING_TEXT_FORMAT: Record<number, string> = {
-  1: "illustrated text: 1–3 labeled pictures with captions or icons; environmental print. Visual support is essential.",
-  2: "simple illustrated passage: 2–4 simple sentences per section with diagrams or graphic organizers. One idea per sentence.",
-  3: "leveled paragraph: 4–6 sentences with subject-area vocabulary and context clues. One clear main idea with 2–3 supporting details.",
-  4: "multi-paragraph text: 2–3 paragraphs with moderate Tier-2 academic vocabulary. Clear paragraph structure with topic sentences.",
-  5: "extended text: 3–5 paragraphs from multiple perspectives. Higher-register academic vocabulary; complex sentence structures; some inference required.",
-  6: "complex grade-level text: 4+ paragraphs with nuanced vocabulary, diverse text types (charts, tables, multimedia). Inference, evaluation, and synthesis required.",
+  1: "HARD LIMIT: 2–4 sentences, at most 40 words total. One idea only. Subject-verb-object. No example lists, no number lines printed out, no 'Example 1/2/3'. High-frequency words only.",
+  2: "HARD LIMIT: 3–5 sentences, at most 60 words. One idea per sentence. No multi-example walkthroughs.",
+  3: "HARD LIMIT: 4–6 sentences, at most 90 words. One clear main idea with 2 supporting details.",
+  4: "HARD LIMIT: 2 short paragraphs, at most 140 words. Topic sentence plus details.",
+  5: "HARD LIMIT: 3 paragraphs, at most 200 words. Some inference allowed.",
+  6: "HARD LIMIT: 3–4 paragraphs, at most 280 words. Grade-level academic text.",
+};
+
+export const READING_QUESTION_COUNT: Record<number, number> = {
+  1: 2,
+  2: 3,
+  3: 3,
+  4: 4,
+  5: 5,
+  6: 5,
+};
+
+export const READING_PASSAGE_WORD_MAX: Record<number, number> = {
+  1: 40,
+  2: 60,
+  3: 90,
+  4: 140,
+  5: 200,
+  6: 280,
 };
 
 // ── Sub-step helpers (same logic as listeningContentEngine.ts — keep in sync) ──
@@ -211,5 +233,7 @@ export function buildReadingContext(
     permittedFormats:      READING_PERMITTED_FORMATS[elpLevel]   ?? ["multiple_choice"],
     canDo:                 getReadingCanDoForKeyUse(elpLevel, keyUse),
     selectedTopic:         selectReadingTopic(elpLevel, persistedTopic, topicsUsedToday),
+    questionCount:         READING_QUESTION_COUNT[elpLevel]      ?? 3,
+    passageWordMax:        READING_PASSAGE_WORD_MAX[elpLevel]    ?? 90,
   };
 }

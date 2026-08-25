@@ -7,6 +7,7 @@
  */
 
 import { callClaude, BASE_PROMPT, toDisplayText, toDisplayTextOrNull } from "./client";
+import { LIBRARY_IMAGE_GROUNDS_CONTENT, OPTIONAL_LINE_VISUALS_BLOCK, parseVisual } from "./prompts/optional-line-visuals";
 import type { CanDoEntry } from "../listeningContentEngine";
 
 // ── Per-level schema tables ───────────────────────────────────────────────────
@@ -65,6 +66,7 @@ function buildSpeakingOutputSchema(params: {
     ``,
     `  "prompt": "<the speaking task the student sees — sized to response_length>",`,
     `  /* Task must be answerable in: ${responseLength.replace(/_/g, " ")} */`,
+    `  "visual": null,`,
     ``,
     `  "prompt_type": "${allowedPromptTypes[0]}",`,
     `  /* MUST be exactly one of: ${allowedPromptTypes.join(" | ")} */`,
@@ -126,8 +128,14 @@ assessment              → assessment type (WIDA ACCESS, TELPAS, etc.)
 level                   → WIDA ELP level (1–6)
 grade_band              → student's grade band
 mode                    → "standard" | "exit_proximity" (exit = push harder toward next level)
-topic                   → pre-selected speaking topic — design the prompt around this
+topic                   → pre-selected speaking topic — use only when has_library_image is false
+has_library_image       → true: a real photo is on screen; talk about THAT photo
+image_tags              → objects / labels in the photo
+image_description       → what the photo shows
+image_concept           → optional academic idea in the photo
 can_do                  → key_use (Recount|Explain|Argue), action (WIDA framing), items (sub-skills at this level)
+
+${LIBRARY_IMAGE_GROUNDS_CONTENT}
 complexity_instruction  → vocabulary, sentence complexity, scaffolding level — follow exactly
 discourse_type          → oral production length and register expected at this level
 scaffold_required       → true = sentence frame required; false = scaffold must be null
@@ -147,9 +155,10 @@ BUILD ORDER
    The prompt type constrains how the student will respond.
 
 3. PROMPT
-   Write one clear, engaging speaking task on the given topic.
+   If has_library_image is true: ask the student to look at the picture and speak about what is in it.
+   If has_library_image is false: write one clear speaking task on the given topic.
    Size the task precisely to response_length — do not ask for more language than the student can produce.
-   Match discourse_type exactly. topic is the subject; the prompt is the task text students see.
+   Match discourse_type exactly.
 
 4. SCAFFOLD
    If scaffold_required is true (see OUTPUT SCHEMA): write a sentence frame that opens the response
@@ -168,13 +177,16 @@ BUILD ORDER
 RULES
 - mode = "exit_proximity" → push complexity toward the next level's discourse type.
 - Do NOT set scaffold to null when scaffold_required is true.
-- Do NOT provide a scaffold when scaffold_required is false.`;
+- Do NOT provide a scaffold when scaffold_required is false.
+
+${OPTIONAL_LINE_VISUALS_BLOCK}`;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface SpeakingContent {
   canDoDescriptor: string;
   prompt: string;
+  visual?: string;
   /** One of: wh_answer | yes_no | descriptive | narrative | explanatory | summary | argumentative | extended_report */
   promptType: string;
   /** One of: word_or_phrase | 1_2_sentences | 3_5_sentences | paragraph | extended */
@@ -216,6 +228,12 @@ export async function generateSpeakingContent(params: {
   gradeBand: string;
   mode: "standard" | "exit_proximity";
   isTelpas?: boolean;
+  academicContentLayer?: string;
+  academicSubject?: string;
+  hasLibraryImage?: boolean;
+  imageTags?: string[];
+  imageDescription?: string;
+  imageConcept?: string;
 }): Promise<SpeakingContent> {
   // Build a level-specific output schema and combine with the static base prompt
   const schemaSection = buildSpeakingOutputSchema({
@@ -225,7 +243,8 @@ export async function generateSpeakingContent(params: {
     scaffoldRequired:   params.scaffoldRequired,
     targetSeconds:      params.targetSeconds,
   });
-  const systemPrompt = `${BASE_SYSTEM}\n\n${schemaSection}`;
+  const academicLayer = params.academicContentLayer ? `\n\n${params.academicContentLayer}` : "";
+  const systemPrompt = `${BASE_SYSTEM}${academicLayer}\n\n${schemaSection}`;
 
   const userPrompt = JSON.stringify({
     domain:                 "speaking",
@@ -243,6 +262,11 @@ export async function generateSpeakingContent(params: {
     response_length:        params.responseLength,
     allowed_prompt_types:   params.allowedPromptTypes,
     target_seconds:         params.targetSeconds,
+    has_library_image:      params.hasLibraryImage ?? false,
+    image_tags:             params.imageTags ?? [],
+    image_description:      params.imageDescription ?? null,
+    image_concept:          params.imageConcept ?? null,
+    ...(params.academicSubject ? { academic_subject: params.academicSubject } : {}),
   });
 
   try {
@@ -260,6 +284,7 @@ export async function generateSpeakingContent(params: {
     return {
       canDoDescriptor:   result.can_do_descriptor ?? "",
       prompt:            toDisplayText(result.prompt),
+      visual:            parseVisual((result as { visual?: unknown }).visual),
       promptType:        result.prompt_type ?? params.allowedPromptTypes[0] ?? "descriptive",
       responseLength:    result.response_length ?? params.responseLength,
       scaffold:          toDisplayTextOrNull(result.scaffold),

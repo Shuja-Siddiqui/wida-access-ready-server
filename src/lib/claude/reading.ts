@@ -6,6 +6,7 @@
  */
 
 import { callClaude, BASE_PROMPT, toDisplayText } from "./client";
+import { LIBRARY_IMAGE_GROUNDS_CONTENT, OPTIONAL_LINE_VISUALS_BLOCK } from "./prompts/optional-line-visuals";
 import type { CanDoEntry } from "../listeningContentEngine";
 
 // ── Per-level schema tables ───────────────────────────────────────────────────
@@ -70,7 +71,7 @@ const CLASSIFY_CATEGORIES: Record<string, string[]> = {
  * Shows only the question types permitted at this level, with valid enum values
  * and concrete structural examples.
  */
-function buildReadingOutputSchema(level: number, permittedFormats: string[]): string {
+function buildReadingOutputSchema(level: number, permittedFormats: string[], questionCount: number): string {
   const mcSkills    = READING_MC_SKILLS[level]      ?? ["main_idea", "detail", "vocabulary"];
   const seqSkills   = READING_SEQ_SKILLS[level]     ?? ["sequence"];
   const matchSkills = READING_MATCH_SKILLS[level]   ?? ["cause_effect"];
@@ -82,7 +83,7 @@ function buildReadingOutputSchema(level: number, permittedFormats: string[]): st
     `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
     `OUTPUT SCHEMA — LEVEL ${level}`,
     `Permitted question types this session: ${permittedFormats.join(" | ")}`,
-    `You MUST produce exactly 5 questions using ONLY the types listed above.`,
+    `You MUST produce exactly ${questionCount} questions using ONLY the types listed above.`,
     `When 2+ types are permitted, distribute them — do not use the same type for every question.`,
     `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
     ``,
@@ -106,6 +107,11 @@ function buildReadingOutputSchema(level: number, permittedFormats: string[]): st
       /* valid can_do_skill values at Level ${level}: ${mcSkills.join(" | ")} */
       "question": "<question answerable from the passage>",
       "options": ["<A>", "<B>", "<C>", "<D>"],
+      "option_diagrams": ["<optional simple line marks for A>", null, null, null],
+      /* option_diagrams is OPTIONAL. Same length as options. Use only when a
+         few keyboard marks make the choice easier to see (counts, tallies,
+         2D outlines). Use null for a choice that stays words-only. Omit the
+         whole field when no choice needs a diagram. */
       "correct": 0,
       /* 0-based index of the correct option */
       "explanation": "<max 10 words stating why the correct answer is right>"
@@ -212,12 +218,19 @@ level                   → WIDA ELP level (1–6)
 grade_band              → student's grade band (e.g. "6-8")
 home_language           → student's home language (for vocabulary hints — null if English)
 mode                    → "standard" | "exit_proximity" (exit = push toward next level)
-topic                   → pre-selected passage topic — write the passage on this topic
+topic                   → pre-selected passage topic — use only when has_library_image is false
+has_library_image       → true: a real photo is on screen; write about THAT photo
+image_tags              → objects / labels confirmed in the photo
+image_description       → what the photo shows
+image_concept           → optional academic idea in the photo (e.g. plant vs animal cells)
 can_do                  → key_use (Recount|Explain|Argue), action (WIDA framing), items (sub-skills at this level)
 complexity_instruction  → vocabulary, sentence complexity, scaffolding level — follow exactly
-text_format             → passage length and text type — follow precisely; hard limit
+text_format             → passage length and text type — HARD LIMIT; do not exceed
+passage_word_max        → maximum word count for the passage — do not exceed
 permitted_formats       → ONLY use question formats listed in the OUTPUT SCHEMA below; no others
 question_count          → generate exactly this many questions
+
+${LIBRARY_IMAGE_GROUNDS_CONTENT}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 BUILD ORDER
@@ -227,8 +240,13 @@ BUILD ORDER
    All passage and question decisions follow from this.
 
 2. PASSAGE
-   Write a passage on the given topic so the Can Do skill is directly demonstrable from the text.
-   Match text_format and complexity_instruction exactly.
+   If has_library_image is true: write about the photo (cells, maps, whatever is actually shown). The student can see it — name what is in the picture.
+   If has_library_image is false: write a passage on the given topic.
+   The Can Do skill must be demonstrable from the text.
+   Match text_format, passage_word_max, and complexity_instruction exactly.
+   If the topic is academic, still stay inside the word cap — teach ONE idea, not a full lesson.
+
+${OPTIONAL_LINE_VISUALS_BLOCK}
    • Recount → clear sequence of events or narrative; main idea unmistakable
    • Explain  → cause-effect or process; the "how" or "why" is explicit in the text
    • Argue    → a clear position supported by stated evidence; student can evaluate it
@@ -253,6 +271,8 @@ export interface ReadingQuestionMC {
   canDoSkill: string;
   question: string;
   options: string[];
+  /** Optional line marks aligned with options (null = words only). */
+  optionDiagrams?: (string | null)[];
   correct: number;
   explanation: string;
 }
@@ -301,6 +321,7 @@ export interface ReadingContent {
   canDoDescriptor: string;
   passage: string;
   topic: string;
+  visual?: string;
   questions: ReadingQuestion[];
   vocabulary: Array<{ word: string; definition: string; homeLangHint?: string }>;
 }
@@ -366,10 +387,20 @@ export async function generateReadingContent(params: {
   gradeBand: string;
   homeLanguage?: string;
   mode: "standard" | "exit_proximity";
+  academicContentLayer?: string;
+  academicSubject?: string;
+  questionCount?: number;
+  passageWordMax?: number;
+  hasLibraryImage?: boolean;
+  imageTags?: string[];
+  imageDescription?: string;
+  imageConcept?: string;
 }): Promise<ReadingContent> {
   // Build a level-specific output schema and combine with the static base prompt
-  const schemaSection = buildReadingOutputSchema(params.level, params.permittedFormats);
-  const systemPrompt  = `${BASE_SYSTEM}\n\n${schemaSection}`;
+  const questionCount = params.questionCount ?? (params.level <= 1 ? 2 : params.level <= 3 ? 3 : 5);
+  const schemaSection = buildReadingOutputSchema(params.level, params.permittedFormats, questionCount);
+  const academicLayer = params.academicContentLayer ? `\n\n${params.academicContentLayer}` : "";
+  const systemPrompt  = `${BASE_SYSTEM}${academicLayer}\n\n${schemaSection}`;
 
   const userPrompt = JSON.stringify({
     domain:                 "reading",
@@ -385,7 +416,13 @@ export async function generateReadingContent(params: {
     complexity_instruction: params.complexityInstruction,
     text_format:            params.textFormat,
     permitted_formats:      params.permittedFormats,
-    question_count:         5,
+    question_count:         questionCount,
+    passage_word_max:       params.passageWordMax ?? (params.level <= 1 ? 40 : 90),
+    has_library_image:      params.hasLibraryImage ?? false,
+    image_tags:             params.imageTags ?? [],
+    image_description:      params.imageDescription ?? null,
+    image_concept:          params.imageConcept ?? null,
+    ...(params.academicSubject ? { academic_subject: params.academicSubject } : {}),
   });
 
   try {
@@ -393,6 +430,7 @@ export async function generateReadingContent(params: {
       can_do_descriptor: string;
       passage: string;
       topic: string;
+      visual?: string;
       questions: Array<{
         id: string;
         type: string;
@@ -400,6 +438,7 @@ export async function generateReadingContent(params: {
         // multiple_choice
         question?: string;
         options?: string[];
+        option_diagrams?: (string | null)[];
         correct?: number | number[];
         explanation?: string;
         // sequence_order
@@ -456,6 +495,7 @@ export async function generateReadingContent(params: {
             canDoSkill: q.can_do_skill ?? "detail",
             question: toDisplayText(q.question ?? ""),
             options: q.options ?? [],
+            optionDiagrams: Array.isArray(q.option_diagrams) ? q.option_diagrams : undefined,
             correct: typeof q.correct === "number" ? q.correct : 0,
             explanation: q.explanation ?? "",
           } satisfies ReadingQuestionMC;
@@ -465,6 +505,7 @@ export async function generateReadingContent(params: {
     return {
       canDoDescriptor: result.can_do_descriptor ?? "",
       passage:         toDisplayText(result.passage),
+      visual:          typeof result.visual === "string" ? result.visual : undefined,
       topic:           result.topic,
       questions,
       vocabulary:      (result.vocabulary ?? []).map((v) => ({
@@ -474,6 +515,30 @@ export async function generateReadingContent(params: {
       })),
     };
   } catch {
+    if (params.hasLibraryImage && (params.imageTags?.length || params.imageDescription || params.imageConcept)) {
+      const label = (params.imageConcept || params.imageTags?.slice(0, 3).join(", ") || "the picture").trim();
+      const about = (params.imageDescription || `This picture shows ${label}.`).trim();
+      return {
+        canDoDescriptor: "Identify details in informational text about a picture",
+        passage: `${about} Look at the picture. Find what the words name.`,
+        topic: label,
+        questions: [
+          {
+            id: "1",
+            type: "multiple_choice",
+            canDoSkill: "detail",
+            question: "What does the picture show?",
+            options: [label, "A city map", "Only water", "A classroom of desks"],
+            correct: 0,
+            explanation: "The text and picture are about this scene.",
+          },
+        ],
+        vocabulary: (params.imageTags ?? []).slice(0, 2).map((word) => ({
+          word,
+          definition: `A word from the picture: ${word}.`,
+        })),
+      };
+    }
     return FALLBACK_READING;
   }
 }
