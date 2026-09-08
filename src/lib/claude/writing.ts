@@ -8,9 +8,13 @@
  * structure for this session.
  */
 
-import { callClaude, BASE_PROMPT, toDisplayText, toDisplayTextOrNull } from "./client";
-import { LIBRARY_IMAGE_GROUNDS_CONTENT, OPTIONAL_LINE_VISUALS_BLOCK, parseVisual } from "./prompts/optional-line-visuals";
+import { callClaude, toDisplayText, toDisplayTextOrNull } from "./client";
+import { OPTIONAL_LINE_VISUALS_BLOCK, parseVisual } from "./prompts/optional-line-visuals";
+import { buildSystemPrompt } from "./prompts/compose";
+import { contentGenPrompt } from "./prompts/content";
+import { feedbackCoachPrompt } from "./prompts/wida-feedback-guide";
 import type { CanDoEntry } from "../listeningContentEngine";
+import { serializeCanDoForPrompt } from "../listeningContentEngine";
 
 // ── Per-level schema tables ───────────────────────────────────────────────────
 
@@ -82,19 +86,19 @@ function buildWritingOutputSchema(params: {
     `  /* Genre for this session: ${TASK_TYPE_DESCRIPTIONS[taskType] ?? taskType} */`,
     `  /* Full task_type reference (key_use × level):`,
     `       L1 all key uses   → word_phrase`,
-    `       L2 Recount        → sentence_completion`,
+    `       L2 Inform/Narrate → sentence_completion`,
     `       L2 Explain        → connected_sentences`,
     `       L2 Argue          → opinion_sentence`,
-    `       L3 Recount        → paragraph`,
+    `       L3 Inform/Narrate → paragraph`,
     `       L3 Explain        → comparison_paragraph`,
     `       L3 Argue          → opinion_paragraph`,
-    `       L4 Recount        → report`,
+    `       L4 Inform/Narrate → report`,
     `       L4 Explain        → explanatory_paragraphs`,
     `       L4 Argue          → persuasive`,
-    `       L5 Recount        → research_report`,
+    `       L5 Inform/Narrate → research_report`,
     `       L5 Explain        → informational_essay`,
     `       L5 Argue          → persuasive_essay`,
-    `       L6 Recount        → analytical_essay`,
+    `       L6 Inform/Narrate → analytical_essay`,
     `       L6 Explain        → critical_essay`,
     `       L6 Argue          → argumentative_essay */`,
     ``,
@@ -128,70 +132,6 @@ function buildWritingOutputSchema(params: {
     `• prompt must NOT mention the word bank, sentence frame, or their absence.`,
   ].join("\n");
 }
-
-// ── Base system prompt (static) ───────────────────────────────────────────────
-
-const WRITING_PROMPT_BASE = `You are a WIDA ACCESS Writing prompt generator for Grade 6–8 ELL students.
-Your task: write one writing task calibrated to the student's WIDA ELP level and targeted Can Do descriptor.
-
-${BASE_PROMPT}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-PER-CALL INPUT FIELDS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-assessment              → assessment type
-level                   → WIDA ELP level (1–6)
-grade_band              → student's grade band
-mode                    → "standard" | "exit_proximity"
-topic                   → pre-selected writing topic — design the prompt around this
-can_do                  → key_use (Recount|Explain|Argue), action (WIDA framing), items (sub-skills at this level)
-complexity_instruction  → vocabulary, sentence complexity, scaffolding level — follow exactly
-writing_format          → genre and length description — hard limit; follow precisely
-task_type               → the exact writing genre for this session — see OUTPUT SCHEMA
-min_sentences           → minimum sentences expected; echo in output
-sentence_frame_required → see OUTPUT SCHEMA for whether to provide or null-out sentence_frame
-word_bank_required      → see OUTPUT SCHEMA for whether to provide or null-out word_bank
-has_library_image       → true: a real photo is on screen; write about THAT photo
-image_tags              → objects confirmed in the photo — use these in the word bank
-image_description       → short scene context for you only; do not narrate it as if the student cannot see the photo
-image_concept           → optional academic concept shown in the photo
-
-${LIBRARY_IMAGE_GROUNDS_CONTENT}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-BUILD ORDER
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. SKILL TARGET
-   Pick the item from can_do.items that best fits the picture (if present) or the topic.
-   Write action + item as can_do_descriptor.
-
-2. PROMPT
-   If has_library_image is true:
-     The student can see the photograph. Ask them to look at the picture and write about it.
-     Align with key_use using what is in the photo:
-       Recount  → tell what you see / what is happening in the picture
-       Explain  → explain how or why something in the picture works or matters
-       Argue    → give an opinion about something in the picture
-     Do not invent objects that are not in image_tags.
-     Do not replace the photo with a text-only topic.
-   If has_library_image is false:
-     Write one clear writing task on the given topic.
-   Structure it according to task_type. Match writing_format exactly.
-   NEVER mention the word bank or sentence frame inside the prompt text.
-
-3. WORD BANK
-   Follow the OUTPUT SCHEMA exactly — provide array or null as shown.
-   If a photo is present: word bank MUST be grounded in image_tags (visible nouns first), then useful verbs/connectors.
-
-4. SENTENCE FRAME
-   Follow the OUTPUT SCHEMA exactly — provide starter string or null as shown.
-   Frame should model the genre (not fill-in-the-blank; starter only).
-
-RULES
-- mode = "exit_proximity" → increase prompt complexity; push toward the next level's genre.
-- min_sentences is a floor, not a limit — echo the exact input value.
-
-${OPTIONAL_LINE_VISUALS_BLOCK}`;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -267,8 +207,12 @@ export async function generateWritingContent(params: {
     minSentences:          params.minSentences,
     hasLibraryImage,
   });
-  const academicLayer = params.academicContentLayer ? `\n\n${params.academicContentLayer}` : "";
-  const systemPrompt = `${WRITING_PROMPT_BASE}${academicLayer}\n\n${schemaSection}`;
+  const systemPrompt = buildSystemPrompt(
+    contentGenPrompt("writing", params.level),
+    OPTIONAL_LINE_VISUALS_BLOCK,
+    params.academicContentLayer ?? "",
+    schemaSection,
+  );
 
   const userPrompt = JSON.stringify({
     domain:                  "writing",
@@ -279,13 +223,14 @@ export async function generateWritingContent(params: {
     grade_band:              params.gradeBand,
     mode:                    params.mode,
     topic:                   params.topic,
-    can_do:                  params.canDo,
+    can_do:                  serializeCanDoForPrompt(params.canDo, { level: params.level, domain: "WRITING" }),
     complexity_instruction:  params.complexityInstruction,
     writing_format:          params.writingFormat,
     task_type:               params.taskType,
     min_sentences:           params.minSentences,
     sentence_frame_required: params.sentenceFrameRequired,
     word_bank_required:      wordBankRequired,
+    required_key_use:        params.canDo.keyUse,
     has_library_image:        hasLibraryImage,
     image_tags:              params.imageTags ?? [],
     image_description:       params.imageDescription ?? "",
@@ -311,56 +256,12 @@ export async function generateWritingContent(params: {
       sentenceFrame:   toDisplayTextOrNull(result.sentence_frame),
       minSentences:    result.min_sentences || params.minSentences,
     };
-  } catch {
-    if (hasLibraryImage) {
-      return {
-        canDoDescriptor: params.canDo.action,
-        taskType:        params.taskType,
-        prompt:          "Look at the picture. Write about what you see.",
-        wordBank:        mergeWritingWordBank(null, params.imageTags, true),
-        sentenceFrame:   params.sentenceFrameRequired ? "I see..." : null,
-        minSentences:    params.minSentences,
-      };
-    }
-    return FALLBACK_WRITING;
+  } catch (err) {
+    throw err;
   }
 }
 
 // ── Writing feedback scorer ───────────────────────────────────────────────────
-
-const FEEDBACK_SYSTEM_PROMPT = `You are a WIDA ACCESS Writing feedback specialist for Grade 6–8 ELL students.
-Score a student's written response on a 0–100 scale and provide specific, actionable coaching.
-
-${BASE_PROMPT}
-
-INPUT FIELDS
-can_do_descriptor → the WIDA Can Do the prompt targeted
-prompt            → the writing task the student was given
-student_response  → the student's actual written text
-level             → WIDA ELP level (1–6)
-task_type         → writing genre (word_phrase | sentence_completion | paragraph | argumentative_essay | etc.)
-min_sentences     → minimum sentence floor for this level/genre
-
-SCORING RUBRIC (apply all criteria)
-- Can Do alignment    (30 pts): Does the response demonstrate the targeted Can Do skill?
-- Task completion     (25 pts): Does the response address the prompt fully?
-- Language production (25 pts): Does vocabulary, grammar, and sentence structure match the expected level?
-- Length/format       (20 pts): Does the response meet min_sentences and match the genre?
-
-SCORE THRESHOLDS
-- ≥80 → mastery; student is ready to advance
-- 70–79 → approaching mastery; minor skill gaps
-- 60–69 → developing; clear gaps in target skill
-- <60 → emerging; significant reteach needed
-
-OUTPUT SCHEMA
-{
-  "score": 75,              /* integer 0–100 */
-  "passed": true,           /* true if score ≥ 70 */
-  "strengths": ["<specific strength observed in the response>"],
-  "improvements": ["<specific, actionable suggestion>"],
-  "coaching_note": "<1–2 sentences: what to focus on next session>"
-}`;
 
 export interface WritingFeedback {
   score: number;
@@ -388,7 +289,15 @@ export async function getWritingFeedback(params: {
   });
 
   try {
-    const result = (await callClaude(FEEDBACK_SYSTEM_PROMPT, userPrompt, 800)) as {
+    const result = (await callClaude(
+      buildSystemPrompt(
+        feedbackCoachPrompt("writing", params.level),
+        `Score 0–100 (Can Do 30, task 25, language 25, length 20). passed if ≥ 70.
+OUTPUT: { "score": 75, "passed": true, "strengths": [], "improvements": [], "coaching_note": "" }`,
+      ),
+      userPrompt,
+      800,
+    )) as {
       score: number;
       passed: boolean;
       strengths: string[];

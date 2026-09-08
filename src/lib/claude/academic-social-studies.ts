@@ -16,19 +16,19 @@ import {
 } from "./client";
 import {
   buildSystemPrompt,
-  BASE_BLOCK,
-  LISTENING_CORE_BLOCK,
   OPTIONAL_LINE_VISUALS_BLOCK,
   SOCIAL_STUDIES_SUBJECT_BLOCK,
   SOCIAL_STUDIES_OUTPUT_SCHEMA,
+  contentGenPrompt,
 } from "./prompts";
 import { parseOptionDiagrams, parseVisual } from "./prompts/optional-line-visuals";
 import type { ListeningContent } from "./listening";
+import { serializeCanDoForPrompt } from "../listeningContentEngine";
+import { clampToThreeOptions } from "../choice-options";
 
 const SYSTEM_PROMPT = buildSystemPrompt(
-  "You are an academic listening content generator for Grade 6–8 English Language Learners. Generate a social studies passage presented as a teacher or historian narrating an event or concept, plus comprehension questions that test whether the student understood the historical and civic language — not whether they have memorized facts.",
-  BASE_BLOCK,
-  LISTENING_CORE_BLOCK,
+  contentGenPrompt("listening", 3),
+  "Academic social studies listening: test historical and civic language — not memorized facts.",
   OPTIONAL_LINE_VISUALS_BLOCK,
   SOCIAL_STUDIES_SUBJECT_BLOCK,
   SOCIAL_STUDIES_OUTPUT_SCHEMA,
@@ -50,7 +50,6 @@ export const FALLBACK_ACADEMIC_SOCIAL_STUDIES: ListeningContent = {
         "A law allowing colonists to grow tea",
         "A law requiring colonists to pay a tax on tea",
         "A trade agreement with the Mohawk Indians",
-        "A boycott of British goods",
       ],
       correct: 1,
       explanation: "The audio says the Tea Act required colonists to pay a tax on tea.",
@@ -63,7 +62,6 @@ export const FALLBACK_ACADEMIC_SOCIAL_STUDIES: ListeningContent = {
         "Colonists did not want to pay any taxes",
         "Colonists wanted to be represented in Parliament before being taxed",
         "The Mohawk Indians refused to pay taxes",
-        "Parliament wanted colonists to vote for new laws",
       ],
       correct: 1,
       explanation: "The passage explains colonists had no representatives in Parliament.",
@@ -76,7 +74,6 @@ export const FALLBACK_ACADEMIC_SOCIAL_STUDIES: ListeningContent = {
         "They attacked British soldiers",
         "They wrote a letter to the King",
         "They dumped chests of tea into the harbor",
-        "They held a vote about independence",
       ],
       correct: 2,
       explanation: "The audio says they dumped three hundred and forty-two chests of tea.",
@@ -109,11 +106,7 @@ export async function generateAcademicSocialStudiesListeningContent(params: {
     integer_level:          params.level,
     step_within_level:      params.stepWithinLevel,
     complexity_instruction: params.complexityInstruction,
-    can_do: {
-      key_use: params.canDo.keyUse,
-      action:  params.canDo.action,
-      items:   params.canDo.items,
-    },
+    can_do: serializeCanDoForPrompt(params.canDo, { level: params.level, domain: "LISTENING" }),
     oral_format:             params.oralFormat,
     ss_unit:                 params.ssUnit,
     ss_strand:               params.ssStrand,
@@ -147,18 +140,21 @@ export async function generateAcademicSocialStudiesListeningContent(params: {
       topic:       result.topic ?? params.topic,
       context:     result.context ?? "Teacher narrating a historical event or social studies concept to the class",
       visual:      parseVisual((result as { visual?: unknown }).visual),
-      questions: (result.questions || []).map((q) => ({
+      questions: (result.questions || []).map((q) => {
+        const three = clampToThreeOptions(q.options, q.correct);
+        return {
         id:          q.id,
         type:        q.type,
         question:    toDisplayText(q.question),
-        options:     q.options,
-        correct:     q.correct,
+        options:     three.options,
+        correct:     three.correct,
         explanation: q.explanation,
-        optionDiagrams: parseOptionDiagrams((q as { option_diagrams?: unknown }).option_diagrams),
+        optionDiagrams: parseOptionDiagrams((q as { option_diagrams?: unknown }).option_diagrams)?.slice(0, 3),
         visual:      parseVisual((q as { visual?: unknown }).visual),
-      })),
+      };
+      }),
     };
-  } catch {
-    return FALLBACK_ACADEMIC_SOCIAL_STUDIES;
+  } catch (err) {
+    throw err;
   }
 }

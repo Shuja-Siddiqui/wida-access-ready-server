@@ -15,7 +15,7 @@ A teacher or scientist narrates a phenomenon, process, or discovery to the class
 • is_retry: use a different analogy, species, or example; same science_unit and concept
 
 PERMITTED FORMATS (use all four — vary them)
-  multiple_choice    → 4 options; wrong options are realistic misreadings of the passage
+  multiple_choice    → 3 options (1 correct + 2 distractors); wrong options are realistic misreadings of the passage
   sequence_ordering  → 3–4 steps of a described process (rock cycle, cell division, etc.)
   pair_matching      → 3–4 pairs; match terms to definitions or causes to effects as stated
   agree_disagree     → a scientific claim; student decides if the passage supports or contradicts it
@@ -48,7 +48,7 @@ export const SCIENCE_OUTPUT_SCHEMA = `OUTPUT
       "id": "1",
       "type": "<multiple_choice|sequence_ordering|pair_matching|agree_disagree>",
       "question": "<tests comprehension of scientific language — no memorized-fact recall>",
-      "options": ["A", "B", "C", "D"],
+      "options": ["A", "B", "C"],
       "correct": 0,
       "explanation": "<max 8 words>"
     }

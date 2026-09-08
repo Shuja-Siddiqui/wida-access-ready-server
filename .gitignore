@@ -5,10 +5,13 @@ node_modules/
 dist/
 *.tsbuildinfo
 
-# Environment — keep .env.example tracked
+# Secrets — keep .env.example tracked
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
+*.pem
+*.ppk
+*.key
 
 # Runtime logs (pino-roll)
 logs/
@@ -28,6 +31,7 @@ pnpm-debug.log*
 .cache/
 coverage/
 *.lcov
+.npm/
 
 # Editor / OS
 .vscode/*
@@ -36,3 +40,4 @@ coverage/
 .idea/
 .DS_Store
 Thumbs.db
+desktop.ini

@@ -7,7 +7,10 @@
 
 import {
   ACADEMIC_SUBJECT_LABELS,
+  nextKeyUse,
   nextSubject,
+  pickSubjectForKeyUse,
+  prominenceForSubject,
   type AcademicSubject,
 } from "./listeningContentEngine";
 import { buildMathSessionContext } from "./academicMathEngine";
@@ -15,7 +18,7 @@ import { buildScienceSessionContext } from "./academicScienceEngine";
 import { buildSocialStudiesSessionContext } from "./academicSocialStudiesEngine";
 import { buildElaSessionContext } from "./academicElaEngine";
 
-export { ACADEMIC_SUBJECT_LABELS, nextSubject };
+export { ACADEMIC_SUBJECT_LABELS, nextKeyUse, nextSubject, pickSubjectForKeyUse };
 export type { AcademicSubject };
 
 const ACADEMIC_WORLD: Record<AcademicSubject, string> = {
@@ -31,7 +34,8 @@ Use a concrete analogy when a term is hard. Define Tier-3 terms inline.
 Stay inside the given science unit / scenario. Do not quiz memorized textbook facts.`,
 
   social_studies: `━━ ACADEMIC WORLD: Social Studies (Grade 6–8 history, civics, economics) ━━
-Content must narrate an event, system, or civic idea with specific names, places, and (when used) spoken dates.
+Content must be a real social-studies situation with specific names, places, and (when used) spoken dates.
+Match the session Key Language Use: history/story for Narrate, facts for Inform, how/why a system works for Explain, claim+evidence for Argue.
 The text supplies all context — no prior history knowledge.
 Define terms inline. Stay inside the given social studies unit / scenario.`,
 
@@ -50,15 +54,23 @@ const DOMAIN_APPLY: Record<"reading" | "speaking" | "writing", string> = {
     "DOMAIN APPLY — WRITING: The student WRITES about this academic world. The prompt is a writing task for the WIDA Writing Can Do / key use. Do not write a listening quiz.",
 };
 
+export function kluSubjectPairingLine(keyUse: string | null | undefined, subject: AcademicSubject, subjectLabel: string): string {
+  const prominence = prominenceForSubject(keyUse, subject) ?? "prominent";
+  const useName = keyUse && keyUse !== "Recount" ? keyUse : "Narrate";
+  return `WIDA 6–8 Table 3-11: ${useName} is ${prominence.replaceAll("_", " ")} in ${subjectLabel}. Keep the passage as ${useName} language inside this subject. Do not switch Key Language Use to fit a habit of the class (e.g. do not turn math Inform into a how/why Explain).`;
+}
+
 export function buildAcademicContentLayer(opts: {
   subject: AcademicSubject;
   subjectLabel: string;
   domain: "reading" | "speaking" | "writing";
+  keyUse?: string | null;
 }): string {
   return [
     "━━ ACADEMIC CONTENT LAYER ━━",
     "Can Do and key_use are the WIDA skill GOAL. They are not a subject list.",
     `Practice that skill using ${opts.subjectLabel} content only.`,
+    kluSubjectPairingLine(opts.keyUse, opts.subject, opts.subjectLabel),
     DOMAIN_APPLY[opts.domain],
     ACADEMIC_WORLD[opts.subject],
   ].join("\n");

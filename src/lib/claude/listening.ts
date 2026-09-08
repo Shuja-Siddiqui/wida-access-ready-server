@@ -10,13 +10,17 @@
 
 import {
   callClaude,
-  BASE_PROMPT,
   toDisplayText,
   PASSAGE_SENTENCE_TARGETS,
   LEVEL_QUESTION_COUNT,
   LEVEL_MAX_TOKENS,
 } from "./client";
+import { clampToThreeOptions } from "../choice-options";
 import { OPTIONAL_LINE_VISUALS_BLOCK, parseOptionDiagrams, parseVisual } from "./prompts/optional-line-visuals";
+import { buildSystemPrompt } from "./prompts/compose";
+import { contentGenPrompt } from "./prompts/content";
+import { serializeCanDoForPrompt } from "../listeningContentEngine";
+import { logger } from "../../config/logger";
 
 // ── Per-level schema tables ───────────────────────────────────────────────────
 
@@ -27,23 +31,23 @@ import { OPTIONAL_LINE_VISUALS_BLOCK, parseOptionDiagrams, parseVisual } from ".
 const FORMAT_DESCRIPTIONS: Record<string, { use: string; note: string }> = {
   multiple_choice: {
     use: "Any Can Do skill — main idea, detail, inference, vocabulary, comparison, summary, claim/evidence, opposing_view",
-    note: "4 options A–D; correct is 0-based index; explanation max 8 words.",
+    note: "3 options A–C (1 correct + 2 distractors); correct is 0-based index; explanation max 8 words.",
   },
   pair_matching: {
-    use: "Explain — matching spoken terms/concepts to their definitions or examples; Recount — matching speakers to their stated views",
-    note: "4 options A–D presented as labeled pairs; student picks the correctly matched pair.",
+    use: "Explain — matching spoken terms/concepts to their definitions or examples; Inform — matching speakers to their stated views",
+    note: "3 options A–C presented as labeled pairs; student picks the correctly matched pair.",
   },
   sequence_ordering: {
-    use: "Recount — ordering narrative events as heard; Explain — ordering process steps",
-    note: "4 options A–D each representing a different ordering of 3–4 events/steps; student picks the correct order.",
+    use: "Narrate — ordering narrative events as heard; Inform — ordering reported facts; Explain — ordering process steps",
+    note: "3 options A–C each representing a different ordering of events/steps; student picks the correct order.",
   },
   agree_disagree: {
     use: "Argue — evaluating a speaker's claim; identifying stated evidence; distinguishing claim from opinion",
-    note: "4 options A–D where A='Agree'/B='Disagree' or a nuanced claim evaluation; correct is 0-based index.",
+    note: "3 options A–C (claim evaluation); correct is 0-based index.",
   },
   category_sorting: {
-    use: "Recount/Explain — classifying spoken items into categories (e.g. cause vs effect; pros vs cons; step type)",
-    note: "4 options A–D each representing a different grouping; student picks the correct categorization.",
+    use: "Inform/Explain — classifying spoken items into categories (e.g. cause vs effect; pros vs cons; step type)",
+    note: "3 options A–C each representing a different grouping; student picks the correct categorization.",
   },
 };
 
@@ -105,8 +109,8 @@ function buildListeningOutputSchema(
       "id": "1",
       "type": "multiple_choice",
       "question": "<question that tests the Can Do skill directly from the audio>",
-      "options": ["<A>", "<B>", "<C>", "<D>"],
-      "option_diagrams": [null, null, null, null],
+      "options": ["<A>", "<B>", "<C>"],
+      "option_diagrams": [null, null, null],
       "correct": 0,
       /* 0-based index of the correct option */
       "explanation": "<max 8 words stating why>"
@@ -128,8 +132,7 @@ function buildListeningOutputSchema(
       "options": [
         "<Term A → Definition 1, Term B → Definition 2>",
         "<Term A → Definition 2, Term B → Definition 1>",
-        "<Term A → Definition 3, Term B → Definition 1>",
-        "<Term A → Definition 1, Term B → Definition 3>"
+        "<Term A → Definition 3, Term B → Definition 1>"
       ],
       "correct": 0,
       "explanation": "<max 8 words>"
@@ -150,8 +153,7 @@ function buildListeningOutputSchema(
       "options": [
         "<Step A → Step B → Step C>",
         "<Step B → Step A → Step C>",
-        "<Step C → Step A → Step B>",
-        "<Step A → Step C → Step B>"
+        "<Step C → Step A → Step B>"
       ],
       "correct": 0,
       /* 0-based index of the option that lists events in the correct order */
@@ -173,8 +175,7 @@ function buildListeningOutputSchema(
       "options": [
         "Agree — <brief reason that matches what the speaker said>",
         "Disagree — <plausible but incorrect reason>",
-        "Agree — <plausible but incorrect reason>",
-        "Disagree — <brief reason that misrepresents the speaker>"
+        "Agree — <plausible but incorrect reason>"
       ],
       "correct": 0,
       "explanation": "<max 8 words>"
@@ -195,8 +196,7 @@ function buildListeningOutputSchema(
       "options": [
         "<Category A: item1, item2 | Category B: item3, item4>  ← correct",
         "<Category A: item1, item3 | Category B: item2, item4>",
-        "<Category A: item2, item3 | Category B: item1, item4>",
-        "<Category A: item1, item4 | Category B: item2, item3>"
+        "<Category A: item2, item3 | Category B: item1, item4>"
       ],
       "correct": 0,
       "explanation": "<max 8 words>"
@@ -214,58 +214,13 @@ function buildListeningOutputSchema(
   lines.push(`• Produce exactly ${questionCount} questions.`);
   lines.push(`• The "type" field in each question MUST match one of the permitted formats.`);
   lines.push(`• "correct" is always a 0-based integer index into the "options" array.`);
+  lines.push(`• Every selected-response item has exactly 3 options (1 correct + 2 distractors).`);
   lines.push(`• "explanation" is max 8 words — a brief factual reason, not a full sentence.`);
   lines.push(`• "audio_script" must be plain spoken English — no stage directions, SSML, or image references.`);
   lines.push(`• Do NOT include image_tags, imageUrls, or target_label in any field.`);
 
   return lines.join("\n");
 }
-
-// ── Base system prompt (static) ───────────────────────────────────────────────
-
-const BASE_SYSTEM = `You are a WIDA ACCESS Listening content generator for Grade 6–8 ELL students (levels 3–6). Generate a listening passage and comprehension questions targeting the specified WIDA Can Do skill.
-
-${BASE_PROMPT}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-PER-CALL INPUT FIELDS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-can_do                  → key_use (Recount|Explain|Argue), action (WIDA framing), items (sub-skills at this level)
-complexity_instruction  → vocabulary, sentence complexity, scaffolding level — follow exactly
-oral_format             → register and length for audio_script
-permitted_formats       → use ONLY question formats listed in the OUTPUT SCHEMA below
-topic                   → scenario subject
-is_retry                → true: change speaker/setting/scenario, keep same Can Do target
-last_session_score      → prior session score (0–100 or null)
-question_count          → generate exactly this many questions
-passage_sentence_target → length and depth target for audio_script — follow precisely
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-BUILD ORDER
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. SKILL TARGET
-   Pick the item from can_do.items that best fits the topic.
-   Write action + item as can_do_descriptor. All other decisions follow from this.
-
-2. PASSAGE (audio_script)
-   Write audio_script so the Can Do skill is directly demonstrable from listening.
-   Match oral_format and passage_sentence_target exactly.
-   • Recount → clear chronological narrative; one unmistakable main idea
-   • Explain → cause-effect or process; "how/why" is explicit in the audio
-   • Argue   → clear position with stated evidence the student can evaluate
-
-3. SCAFFOLDING
-   - last_session_score null or ≥70 → standard difficulty
-   - last_session_score <70 → more explicit skill signal (clearer topic sentences, stronger transitions);
-     do NOT reduce question count or simplify the Can Do
-   - is_retry → new speaker, setting, scenario; same Can Do
-
-4. QUESTIONS
-   Each question tests the chosen Can Do directly.
-   Wrong options are realistic mistakes from plausible misreadings of the audio, not random.
-   Use only the formats listed in OUTPUT SCHEMA.
-
-${OPTIONAL_LINE_VISUALS_BLOCK}`;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -318,7 +273,6 @@ export const FALLBACK_LISTENING: ListeningContent = {
         "Sunlight, water, carbon dioxide",
         "Sunlight, oxygen, nitrogen",
         "Water, soil, fertilizer",
-        "Carbon dioxide, minerals, rain",
       ],
       correct: 0,
       explanation: "Ms. Chen said plants need sunlight, water, and carbon dioxide.",
@@ -331,7 +285,6 @@ export const FALLBACK_LISTENING: ListeningContent = {
         "They are beautiful",
         "They produce oxygen animals need",
         "They grow quickly",
-        "They store water",
       ],
       correct: 1,
       explanation: "Plants produce oxygen that animals need to breathe.",
@@ -340,7 +293,7 @@ export const FALLBACK_LISTENING: ListeningContent = {
       id: "3",
       type: "sequence",
       question: "What does photosynthesis produce?",
-      options: ["Carbon dioxide", "Water vapor", "Oxygen", "Nitrogen"],
+      options: ["Carbon dioxide", "Water vapor", "Oxygen"],
       correct: 2,
       explanation: "The audio says the process produces oxygen.",
     },
@@ -370,18 +323,18 @@ export async function generateListeningContent(params: {
 
   // Build a level-specific output schema and combine with the static base prompt
   const schemaSection = buildListeningOutputSchema(clampedLevel, params.permittedFormats, questionCount);
-  const systemPrompt  = `${BASE_SYSTEM}\n\n${schemaSection}`;
+  const systemPrompt  = buildSystemPrompt(
+    contentGenPrompt("listening", clampedLevel),
+    OPTIONAL_LINE_VISUALS_BLOCK,
+    schemaSection,
+  );
 
   const userPrompt = JSON.stringify({
     current_score:           params.fractionalLevel,
     integer_level:           params.level,
     step_within_level:       params.stepWithinLevel,
     complexity_instruction:  params.complexityInstruction,
-    can_do: {
-      key_use: params.canDo.keyUse,
-      action:  params.canDo.action,
-      items:   params.canDo.items,
-    },
+    can_do: serializeCanDoForPrompt(params.canDo, { level: params.level, domain: "LISTENING" }),
     oral_format:              params.oralFormat,
     permitted_formats:        params.permittedFormats,
     topic:                    params.topic,
@@ -402,15 +355,18 @@ export async function generateListeningContent(params: {
 
     // Preserve all question fields — different formats have different shapes.
     // Never forward image_tags, target_label, imageUrls for levels 3+.
-    const questions = (result.questions || []).map((q) => ({
+    const questions = (result.questions || []).map((q) => {
+      const three = Array.isArray(q.options)
+        ? clampToThreeOptions(q.options, q.correct)
+        : { options: undefined as string[] | undefined, correct: q.correct as number | undefined };
+      return {
       id:                 q.id          as string,
       type:               q.type        as string,
       question:           toDisplayText((q.question as string) ?? ""),
       visual:             parseVisual(q.visual),
-      optionDiagrams:     parseOptionDiagrams(q.option_diagrams),
-      // multiple_choice / image_grid
-      options:            q.options     as string[] | undefined,
-      correct:            q.correct     as number   | undefined,
+      optionDiagrams:     parseOptionDiagrams(q.option_diagrams)?.slice(0, three.options?.length ?? 3),
+      options:            three.options,
+      correct:            three.correct,
       explanation:        q.explanation as string   | undefined,
       // pair_matching
       left_items:         q.left_items  as string[] | undefined,
@@ -424,7 +380,8 @@ export async function generateListeningContent(params: {
       // category_sorting
       categories:         q.categories  as string[] | undefined,
       correct_categories: q.correct_categories as number[] | undefined,
-    }));
+      };
+    });
 
     return {
       audioScript: toDisplayText(result.audio_script),
@@ -433,7 +390,8 @@ export async function generateListeningContent(params: {
       visual:      parseVisual((result as { visual?: unknown }).visual),
       questions,
     };
-  } catch {
-    return FALLBACK_LISTENING;
+  } catch (err) {
+    logger.error({ err }, "generateListeningContent failed");
+    throw err;
   }
 }

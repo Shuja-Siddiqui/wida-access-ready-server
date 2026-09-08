@@ -5,6 +5,7 @@
 
 import { callClaude } from "./client";
 import { logger } from "../../config/logger";
+import { clampToThreeOptions } from "../choice-options";
 
 // ── System prompt ─────────────────────────────────────────────────────────────
 
@@ -12,14 +13,14 @@ const SYSTEM_PROMPT = `You are an object-detection question generator for an ELL
 Given image_description (a comma-separated list of visible objects), produce one tap question.
 
 RULES
-1. Pick exactly 4 objects from image_description as options. Never invent objects.
+1. Pick exactly 3 objects from image_description as options (1 correct + 2 distractors). Never invent objects.
 2. Ask the student to tap one specific object: "Tap the [object]."
 3. options[correct] must match the object in the question exactly.
 4. options are lowercase 1–3 word nouns taken directly from image_description.
 5. Return ONLY valid JSON — flat object, no wrapper. No preamble, no markdown, no code fences.
 
 OUTPUT SCHEMA
-{"question": "Tap the [object].", "options": ["obj1", "obj2", "obj3", "obj4"], "correct": 0}`;
+{"question": "Tap the [object].", "options": ["obj1", "obj2", "obj3"], "correct": 0}`;
 
 // ── Type ──────────────────────────────────────────────────────────────────────
 
@@ -56,8 +57,7 @@ export async function generateObjectDetectContent(
     ) {
       return {
         question: raw.question,
-        options: raw.options as string[],
-        correct: raw.correct,
+        ...clampToThreeOptions(raw.options, raw.correct),
       };
     }
 
@@ -71,8 +71,7 @@ export async function generateObjectDetectContent(
     ) {
       return {
         question: first.question,
-        options: first.options as string[],
-        correct: first.correct,
+        ...clampToThreeOptions(first.options, first.correct),
       };
     }
 

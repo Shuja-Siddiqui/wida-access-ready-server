@@ -12,6 +12,7 @@
 import { config } from "../config/index";
 import { logger } from "../config/logger";
 import canDoData from "../data/canDo.json";
+import { findKeyUseBlock } from "./listeningContentEngine";
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -39,9 +40,7 @@ export function getListeningCanDo(level: number, keyUse: string): string[] {
   );
   if (!listeningDomain) return [];
 
-  const keyUseEntry = listeningDomain.keyUses.find(
-    (k: any) => k.keyUse === keyUse,
-  );
+  const keyUseEntry = findKeyUseBlock(listeningDomain.keyUses, keyUse);
   return keyUseEntry?.canDo ?? [];
 }
 
@@ -53,7 +52,7 @@ export const OUTPUT_SCHEMAS: Record<string, string> = {
     audioScript: "string — 3-6 spoken sentences",
     audioUrl: null,
     question: "string",
-    options: ["A text", "B text", "C text", "D text"],
+    options: ["A text", "B text", "C text"],
     correctIndex: 0,
   }),
   listening_tf: JSON.stringify({
@@ -70,7 +69,6 @@ export const OUTPUT_SCHEMAS: Record<string, string> = {
     audioUrl: null,
     instruction: "string",
     images: [
-      { url: "https://upload.wikimedia.org/... (real URL)", label: "string" },
       { url: "https://upload.wikimedia.org/... (real URL)", label: "string" },
       { url: "https://upload.wikimedia.org/... (real URL)", label: "string" },
       { url: "https://upload.wikimedia.org/... (real URL)", label: "string" },
@@ -123,7 +121,7 @@ const TOOL_DEFINITION = {
       },
       keyUse: {
         type: "string",
-        enum: ["Recount", "Explain", "Argue"],
+        enum: ["Narrate", "Inform", "Explain", "Argue", "Recount"],
         description: "WIDA key use the question targets",
       },
       canDo: {
@@ -161,7 +159,7 @@ const TOOL_DEFINITION = {
 
 export interface AgentQuestionParams {
   level: number;
-  keyUse: "Recount" | "Explain" | "Argue";
+  keyUse: "Narrate" | "Inform" | "Explain" | "Argue" | "Recount";
   format: string;
   topic?: string;
 }
@@ -326,20 +324,20 @@ export async function generateListeningQuestion(
  * Picks the best format per key use for the given level.
  */
 const BEST_FORMAT: Record<number, Record<string, string>> = {
-  1: { Recount: "listening_image_grid", Explain: "listening_image_grid", Argue: "listening_tf"   },
-  2: { Recount: "listening_sequence",   Explain: "listening_classify",   Argue: "listening_mc"   },
-  3: { Recount: "listening_sequence",   Explain: "listening_match",      Argue: "listening_mc"   },
-  4: { Recount: "listening_mc",         Explain: "listening_match",      Argue: "listening_match" },
-  5: { Recount: "listening_sequence",   Explain: "listening_mc",         Argue: "listening_mc"   },
-  6: { Recount: "listening_mc",         Explain: "listening_mc",         Argue: "listening_mc"   },
+  1: { Narrate: "listening_image_grid", Inform: "listening_image_grid", Recount: "listening_image_grid", Explain: "listening_image_grid", Argue: "listening_tf"   },
+  2: { Narrate: "listening_sequence",   Inform: "listening_sequence",   Recount: "listening_sequence",   Explain: "listening_classify",   Argue: "listening_mc"   },
+  3: { Narrate: "listening_sequence",   Inform: "listening_mc",         Recount: "listening_sequence",   Explain: "listening_match",      Argue: "listening_mc"   },
+  4: { Narrate: "listening_mc",         Inform: "listening_mc",         Recount: "listening_mc",         Explain: "listening_match",      Argue: "listening_match" },
+  5: { Narrate: "listening_sequence",   Inform: "listening_mc",         Recount: "listening_sequence",   Explain: "listening_mc",         Argue: "listening_mc"   },
+  6: { Narrate: "listening_mc",         Inform: "listening_mc",         Recount: "listening_mc",         Explain: "listening_mc",         Argue: "listening_mc"   },
 };
 
 export async function generateListeningSession(params: {
   level: number;
-  keyUses?: ("Recount" | "Explain" | "Argue")[];
+  keyUses?: ("Narrate" | "Inform" | "Explain" | "Argue" | "Recount")[];
   topic?: string;
 }): Promise<AnyGeneratedQuestion[]> {
-  const keyUses = params.keyUses ?? ["Recount", "Explain", "Argue"];
+  const keyUses = params.keyUses ?? ["Narrate", "Inform", "Explain", "Argue"];
   const levelFormats = BEST_FORMAT[params.level] ?? BEST_FORMAT[3];
 
   const questions = await Promise.all(

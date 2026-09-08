@@ -14,7 +14,7 @@
 import canDoData from "../data/canDo.json";
 import curriculumData from "../data/speakingCurriculum.json";
 
-import { KEY_USE_ROTATION, nextKeyUse, clampLevel } from "./listeningContentEngine";
+import { nextKeyUse, clampLevel, findKeyUseBlock, toCanDoEntry } from "./listeningContentEngine";
 import type { CanDoEntry } from "./listeningContentEngine";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -42,7 +42,7 @@ export interface SpeakingContext {
   targetSeconds: { min: number; max: number };
   /**
    * The single WIDA Can Do targeted this session — one per key use, rotates across sessions.
-   * Contains: keyUse (Recount|Explain|Argue), action ("Recount by"), items (the sub-skill bullet points).
+   * Contains: keyUse (Narrate|Inform|Explain|Argue), action, items (official Can Do bullets).
    */
   canDo: CanDoEntry;
   /** Single pre-selected topic — persisted from a failed session or randomly chosen */
@@ -52,7 +52,7 @@ export interface SpeakingContext {
 // ── Level metadata ────────────────────────────────────────────────────────────
 
 /** What the student PRODUCES orally at each WIDA level */
-const SPEAKING_DISCOURSE_TYPE: Record<number, string> = {
+export const SPEAKING_DISCOURSE_TYPE: Record<number, string> = {
   1: "1–2 word answers, labeling, or naming; gestures and visual support expected",
   2: "2–3 word phrases or short simple sentences; familiar vocabulary with visual support",
   3: "3–5 sentences with transition words; familiar Tier-2 academic vocabulary",
@@ -78,11 +78,13 @@ export const SPEAKING_RESPONSE_LENGTH: Record<number, string> = {
  * Prompt type options allowed per key use + level — derived from CanDo production verbs.
  * Claude must pick exactly one; this steers the task design to match what the CanDo targets.
  *
- *  Recount L1 → answer Wh-questions           → wh_answer
- *  Recount L2 → state main ideas              → narrative
- *  Recount L3 → relate series of events       → narrative
- *  Recount L4 → paraphrase/summarize          → summary
- *  Recount L5-6 → oral reports from sources   → extended_report
+ *  Inform L1 → answer Wh-questions            → wh_answer
+ *  Narrate L1 → name past events from visuals → wh_answer
+ *  Narrate L2–3 → retell events               → narrative
+ *  Inform L2–3 → main ideas / connected talk  → narrative
+ *  Inform L4 → paraphrase/summarize           → summary
+ *  Inform L5-6 → oral reports from sources    → extended_report
+ *  Narrate L5 → characters/themes/plots       → extended_report
  *
  *  Explain L1 → compare attributes of objects → descriptive
  *  Explain L2 → describe from modeled sentences → descriptive
@@ -91,15 +93,19 @@ export const SPEAKING_RESPONSE_LENGTH: Record<number, string> = {
  *  Argue L1 → respond yes/no to claims        → yes_no
  *  Argue L2-6 → state evidence, critique, debate → argumentative
  */
+const RECOUNT_SPEAKING_TYPES: Record<number, string[]> = {
+  1: ["wh_answer"],
+  2: ["narrative"],
+  3: ["narrative"],
+  4: ["summary"],
+  5: ["extended_report"],
+  6: ["extended_report"],
+};
+
 export const SPEAKING_ALLOWED_PROMPT_TYPES: Record<string, Record<number, string[]>> = {
-  Recount: {
-    1: ["wh_answer"],
-    2: ["narrative"],
-    3: ["narrative"],
-    4: ["summary"],
-    5: ["extended_report"],
-    6: ["extended_report"],
-  },
+  Recount: RECOUNT_SPEAKING_TYPES,
+  Narrate: RECOUNT_SPEAKING_TYPES,
+  Inform: RECOUNT_SPEAKING_TYPES,
   Explain: {
     1: ["descriptive"],
     2: ["descriptive"],
@@ -176,14 +182,27 @@ export function getSpeakingCanDoForKeyUse(level: number, keyUse: string): CanDoE
   const speakingDomain = levelEntry.domains.find((d: any) => d.domain === "SPEAKING");
   if (!speakingDomain) return { keyUse, action: "", items: [] };
 
-  const entry = speakingDomain.keyUses.find((k: any) => k.keyUse === keyUse);
-  if (!entry) return { keyUse, action: "", items: [] };
+  return toCanDoEntry(keyUse, findKeyUseBlock(speakingDomain.keyUses, keyUse));
+}
 
-  return {
-    keyUse,
-    action: entry.action as string,
-    items:  entry.canDo  as string[],
-  };
+/** Compact WIDA speaking expectation for item coaching. */
+export function speakingCanDoCoachNote(level: number, keyUse?: string): string {
+  const elp = clampLevel(level);
+  const raw = (keyUse ?? "Narrate").trim();
+  const ku = /argue/i.test(raw)
+    ? "Argue"
+    : /explain/i.test(raw)
+      ? "Explain"
+      : /inform/i.test(raw)
+        ? "Inform"
+        : "Narrate";
+  const can = getSpeakingCanDoForKeyUse(elp, ku);
+  const disc = SPEAKING_DISCOURSE_TYPE[elp] ?? "";
+  const len = (SPEAKING_RESPONSE_LENGTH[elp] ?? "word_or_phrase").replace(/_/g, " ");
+  return [
+    `WIDA SPEAKING Level ${elp} Key Use ${ku}. Expected talk: ${disc}. Length: ${len}.`,
+    `Can Do: ${can.action} ${can.items.join("; ")}.`,
+  ].join(" ");
 }
 
 // ── Curriculum helpers ────────────────────────────────────────────────────────

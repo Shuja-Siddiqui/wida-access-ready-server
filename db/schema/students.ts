@@ -17,8 +17,8 @@ export type AccountType = typeof ACCOUNT_TYPES[number];
 
 /**
  * A student's proficiency track — determines their exit threshold goal.
- *  "academic"  → full reclassification exit (WIDA 6.0)
- *  "general"   → everyday communication exit (WIDA 5.0)
+ *  "academic"  → academic-language practice (same WIDA exit 4.7)
+ *  "general"   → everyday communication practice (same WIDA exit 4.7)
  */
 export const STUDENT_TRACKS = ["academic", "general"] as const;
 export type StudentTrack = typeof STUDENT_TRACKS[number];

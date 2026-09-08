@@ -16,7 +16,7 @@ A real school photograph is available. Use its visible objects as concrete, real
 
 image_description → overall scene context (use for atmosphere only — do not describe directly)
 image_tags        → confirmed visible objects in the photograph — use 1–2 of these as anchors
-academic_subject  → the subject framing: math | science | social_studies | ela
+academic_subject  → the subject framing: math | science | social_studies | ela (chosen to fit this session's Key Language Use per WIDA Table 3-11)
 
 HOW TO USE THE IMAGE (examples by subject)
   math:          Use countable objects (trays, chairs, bottles, apples) to set up a word problem.

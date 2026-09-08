@@ -1929,6 +1929,40 @@ components:
           type: integer
         domainAtExit:
           type: boolean
+        attemptFeedback:
+          type: object
+          nullable: true
+          properties:
+            summary:
+              type: string
+            mistakes:
+              type: array
+              items:
+                type: object
+                properties:
+                  question:
+                    type: string
+                  whatHappened:
+                    type: string
+                  howToImprove:
+                    type: string
+                required:
+                  - question
+                  - whatHappened
+                  - howToImprove
+            strengths:
+              type: array
+              items:
+                type: string
+            nextSteps:
+              type: array
+              items:
+                type: string
+          required:
+            - summary
+            - mistakes
+            - strengths
+            - nextSteps
       required:
         - sessionId
         - scorePct

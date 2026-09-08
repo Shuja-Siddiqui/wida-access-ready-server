@@ -22,7 +22,7 @@ export const studentLevelsTable = pgTable("student_levels", {
   domain: text("domain").notNull(), // listening | speaking | reading | writing
   tier: text("tier").notNull().default("general"), // 'general' | 'academic'
   currentLevel: decimal("current_level", { precision: 5, scale: 2 }).notNull().default("1.00"),
-  exitThreshold: decimal("exit_threshold", { precision: 5, scale: 2 }).notNull().default("4.00"),
+  exitThreshold: decimal("exit_threshold", { precision: 5, scale: 2 }).notNull().default("4.70"),
   atExit: boolean("at_exit").notNull().default(false),
   // How currentLevel was last set: guardian_entered (teacher/parent/admin typed it in),
   // placement_test (future — no test exists yet), or practice (adaptive engine moved it).

@@ -126,7 +126,7 @@ async function buildStudentDomainInfo(studentId: string, assessment: Assessment)
   const domainData = domains.map((domain) => {
     const levelRow = levels.find((l) => l.domain === domain);
     const currentLevel = levelRow ? parseFloat(levelRow.currentLevel) : getAssessmentConfig(assessment).scale.min;
-    const exitThreshold = levelRow ? parseFloat(levelRow.exitThreshold) : getExitThreshold(assessment, domain);
+    const exitThreshold = getExitThreshold(assessment, domain);
     const gap = Math.max(0, exitThreshold - currentLevel);
 
     const config = getAssessmentConfig(assessment);

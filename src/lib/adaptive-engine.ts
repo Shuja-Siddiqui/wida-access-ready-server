@@ -137,7 +137,7 @@ const PASS_THRESHOLD_PCT = 70; // ≥ 70% on a session = success
 
 /**
  * Simple ±0.2 model:
- *   score ≥ 70%  →  +0.2, capped at exitThreshold (6.0 for WIDA)
+ *   score ≥ 70%  →  +0.2, capped at exitThreshold (4.7 for WIDA)
  *   score < 70%  →  −0.2, floored at scale minimum (1.0)
  */
 export function calculateLevelUpdate(

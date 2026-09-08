@@ -1,6 +1,10 @@
 import dotenv from "dotenv";
 if (process.env.NODE_ENV !== "production") {
   dotenv.config({ override: true });
+  // Antivirus HTTPS inspection presents a cert Node's bundled CAs reject.
+  // npm also strips NODE_TLS_REJECT_UNAUTHORIZED from child processes, so
+  // set it here in the running API process (local only).
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 }
 import { runMigrations } from "stripe-replit-sync";
 import app from "./app";

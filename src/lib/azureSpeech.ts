@@ -34,9 +34,15 @@ export function isAzureSpeechConfigured(): boolean {
   return Boolean(config.azureSpeech.key && config.azureSpeech.region);
 }
 
-// A small, kid-friendly neural voice. Multilingual auto-select isn't needed
-// here since all AI content is authored/read in English.
-const DEFAULT_VOICE = "en-US-AriaNeural";
+// Passage = male narrator (Guy). Feedback/coaching = female teacher (Jenny).
+export const PASSAGE_VOICE = "en-US-GuyNeural";
+export const FEEDBACK_VOICE = "en-US-JennyNeural";
+
+export type SpeechDelivery = "passage" | "coaching";
+
+export function voiceForDelivery(delivery: SpeechDelivery): string {
+  return delivery === "coaching" ? FEEDBACK_VOICE : PASSAGE_VOICE;
+}
 
 function escapeSsml(text: string): string {
   return text
@@ -47,14 +53,65 @@ function escapeSsml(text: string): string {
     .replace(/'/g, "&apos;");
 }
 
+function sentenceChunks(text: string): string[] {
+  return (text.match(/[^.!?]+[.!?]+|[^.!?]+$/g) ?? [text])
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function withWordStress(escaped: string): string {
+  const fromMarks = escaped.replace(
+    /\*([^*]+)\*/g,
+    '<emphasis level="moderate">$1</emphasis>',
+  );
+  return fromMarks.replace(
+    /\b(agree|disagree|not|never|listen|look|find|tap)\b/gi,
+    (word, _capture: string, offset: number, full: string) => {
+      const before = full.slice(Math.max(0, offset - 24), offset);
+      if (before.includes("<emphasis")) return word;
+      return `<emphasis level="moderate">${word}</emphasis>`;
+    },
+  );
+}
+
+function toTeacherSsml(text: string, voice: string, delivery: SpeechDelivery): string {
+  const coaching = delivery === "coaching";
+  const chunks = sentenceChunks(text);
+  const inner = chunks
+    .map((sent, i) => {
+      const last = i === chunks.length - 1;
+      // Normal speed. Only pitch moves: low on the correction, high on the key point.
+      const pitch = coaching
+        ? i === 0
+          ? "-8%"
+          : last
+            ? "+12%"
+            : "+4%"
+        : i === 0
+          ? "-4%"
+          : last
+            ? "+8%"
+            : "+2%";
+      const pause = last ? "" : `<break time="180ms"/>`;
+      return `<prosody rate="+8%" pitch="${pitch}">${withWordStress(escapeSsml(sent))}</prosody>${pause}`;
+    })
+    .join("");
+
+  return `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US"><voice name="${escapeSsml(voice)}">${inner}</voice></speak>`;
+}
+
 /**
  * Synthesize speech from text via Azure TTS REST API.
  * Returns raw MP3 bytes ready to stream back to the client.
  */
-export async function textToSpeech(text: string, voice: string = DEFAULT_VOICE): Promise<Buffer> {
+export async function textToSpeech(
+  text: string,
+  voice?: string,
+  delivery: SpeechDelivery = "passage",
+): Promise<Buffer> {
   const { key, region, endpoint } = assertConfigured();
-
-  const ssml = `<speak version="1.0" xml:lang="en-US"><voice name="${voice}">${escapeSsml(text)}</voice></speak>`;
+  const resolvedVoice = voice?.trim() || voiceForDelivery(delivery);
+  const ssml = toTeacherSsml(text, resolvedVoice, delivery);
 
   // `api.cognitive.microsoft.com` is the generic Cognitive Services gateway —
   // it does not serve TTS requests. Ignore it and always build the correct
@@ -88,46 +145,108 @@ export async function textToSpeech(text: string, voice: string = DEFAULT_VOICE):
 
 /**
  * Transcribe a short audio clip via Azure's "short audio" STT REST API.
- * Intended for single practice-answer clips (a few seconds up to ~60s).
+ * Optionally runs pronunciation assessment when a scaffold/prompt is given.
  */
-export async function speechToText(audio: Buffer, contentType: string): Promise<string> {
+export async function speechToText(
+  audio: Buffer,
+  contentType: string,
+  referenceText?: string,
+): Promise<{ text: string; confidence?: number; uncertainWords: string[] }> {
   const { key, region, endpoint } = assertConfigured();
 
-  // If a custom endpoint is set, use it as the STT base.
-  const sttBase = endpoint
-    ? endpoint.replace(/\/$/, "") + "/speech/recognition/conversation/cognitiveservices/v1"
+  // Same rule as TTS: the generic Cognitive Services host and the TTS host
+  // do not serve short-audio STT (they 404). Use the regional STT host unless
+  // AZURE_SPEECH_ENDPOINT is already an STT endpoint.
+  const trimmed = (endpoint ?? "").replace(/\/$/, "");
+  const useCustomStt =
+    trimmed.includes(".stt.speech.microsoft.com") &&
+    !trimmed.includes("api.cognitive.microsoft.com") &&
+    !trimmed.includes("tts.speech.microsoft.com");
+  const sttBase = useCustomStt
+    ? `${trimmed}/speech/recognition/conversation/cognitiveservices/v1`
     : `https://${region}.stt.speech.microsoft.com/speech/recognition/conversation/cognitiveservices/v1`;
 
   const url = new URL(sttBase);
   url.searchParams.set("language", "en-US");
-  url.searchParams.set("format", "simple");
+  url.searchParams.set("format", "detailed");
+  url.searchParams.set("profanity", "raw");
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Ocp-Apim-Subscription-Key": key,
-      "Content-Type": contentType,
-      Accept: "application/json",
-    },
-    body: audio,
-  });
-
-  if (!response.ok) {
-    const body = await response.text().catch(() => "");
-    logger.error({ status: response.status, body }, "Azure STT request failed");
-    throw new AzureSpeechRequestError(`Azure STT failed with status ${response.status}`, response.status);
-  }
-
-  const data = (await response.json()) as {
-    RecognitionStatus?: string;
-    DisplayText?: string;
+  const mime = contentType.split(";")[0].trim().toLowerCase();
+  const headers: Record<string, string> = {
+    "Ocp-Apim-Subscription-Key": key,
+    "Content-Type": mime === "audio/wav" || mime === "audio/wave" || mime === "audio/x-wav"
+      ? "audio/wav; codecs=audio/pcm"
+      : mime === "audio/webm"
+        ? "audio/webm; codecs=opus"
+        : contentType,
+    Accept: "application/json",
   };
 
-  if (data.RecognitionStatus && data.RecognitionStatus !== "Success") {
-    // e.g. "NoMatch" (silence / unrecognizable audio) — not a hard error, just empty.
-    logger.warn({ status: data.RecognitionStatus }, "Azure STT returned non-success recognition status");
-    return "";
+  // Pronunciation assessment with a prompt as ReferenceText forces *scripted*
+  // recognition (match this sentence). Picture speaking is free dictation —
+  // only attach the header when we truly have a line the student should read.
+  const reference = referenceText?.trim() ?? "";
+  if (reference) {
+    const assessment = {
+      GradingSystem: "HundredMark",
+      Granularity: "Word",
+      Dimension: "Comprehensive",
+      EnableMiscue: "True",
+      ReferenceText: reference.slice(0, 400),
+    };
+    headers["Pronunciation-Assessment"] = Buffer.from(JSON.stringify(assessment), "utf8").toString("base64");
   }
 
-  return data.DisplayText ?? "";
+  const parse = async (response: Response) => {
+    if (!response.ok) {
+      const body = await response.text().catch(() => "");
+      logger.error({ status: response.status, body }, "Azure STT request failed");
+      throw new AzureSpeechRequestError(`Azure STT failed with status ${response.status}`, response.status);
+    }
+    const data = (await response.json()) as {
+      RecognitionStatus?: string;
+      DisplayText?: string;
+      NBest?: Array<{
+        Confidence?: number;
+        Display?: string;
+        Words?: Array<{
+          Word?: string;
+          Confidence?: number;
+          PronunciationAssessment?: { AccuracyScore?: number };
+        }>;
+      }>;
+    };
+    if (data.RecognitionStatus && data.RecognitionStatus !== "Success") {
+      logger.warn({ status: data.RecognitionStatus, bytes: audio.length }, "Azure STT returned non-success recognition status");
+      return { text: "", confidence: undefined, uncertainWords: [] as string[] };
+    }
+    const best = data.NBest?.[0];
+    let text = (data.DisplayText || best?.Display || "").trim();
+    if (/^[.\s…]*$/.test(text)) text = "";
+    logger.info(
+      { status: data.RecognitionStatus, bytes: audio.length, contentType: headers["Content-Type"], text: text.slice(0, 80) },
+      "Azure STT result",
+    );
+    const uncertainWords = (best?.Words ?? [])
+      .filter((w) => {
+        const acc = w.PronunciationAssessment?.AccuracyScore;
+        const conf = w.Confidence;
+        return (typeof acc === "number" && acc < 60) || (typeof conf === "number" && conf < 0.55);
+      })
+      .map((w) => (w.Word ?? "").trim())
+      .filter(Boolean);
+    return { text, confidence: best?.Confidence, uncertainWords: [...new Set(uncertainWords)] };
+  };
+
+  try {
+    const response = await fetch(url, { method: "POST", headers, body: audio });
+    return await parse(response);
+  } catch (err) {
+    if (err instanceof AzureSpeechRequestError) {
+      delete headers["Pronunciation-Assessment"];
+      const retry = await fetch(url, { method: "POST", headers, body: audio });
+      return await parse(retry);
+    }
+    throw err;
+  }
 }

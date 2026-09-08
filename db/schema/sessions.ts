@@ -17,7 +17,7 @@ export const sessionsTable = pgTable("sessions", {
   completed: boolean("completed").notNull().default(false),
   mode: text("mode").notNull().default("standard"), // 'standard' | 'exit_proximity'
   topic: text("topic"),   // listening: topic selected at session start — persists even if session abandoned
-  keyUse: text("key_use"), // listening: WIDA key use targeted this session — Recount | Explain | Argue (rotates across sessions)
+  keyUse: text("key_use"), // WIDA key use this session — Narrate | Inform | Explain | Argue (legacy: Recount)
 
   // Image-library sessions (levels 0–2) — used for object-mastery tracking.
   // libraryImageId: the specific image shown; imageTags: deduplicated labels

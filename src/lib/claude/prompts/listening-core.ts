@@ -10,9 +10,10 @@ export const LISTENING_CORE_BLOCK = `━━ WIDA ACADEMIC LISTENING ━━
 Grade 6–8 ELLs. Student LISTENS to a passage then answers comprehension questions. All content self-contained — no prior subject knowledge required.
 
 CAN DO FRAMEWORK
-key_use  → Recount | Explain | Argue
-action   → WIDA-framed verb phrase for this level
-items    → 3–5 sub-skills; pick ONE that best fits your content
+key_use  → Narrate | Inform | Explain | Argue  (Narrate/Inform are 2020 names for 2016 Recount; official bullets stay in items)
+action   → WIDA-framed verb phrase for this level (still “Process recounts by” when source is Recount)
+items    → official Can Do bullets; pick ONE that best fits your content
+focus    → narrative = story/events; informational = facts/reports. When set, the passage MUST match that lens. Do not invent new Can Do text.
 Write action + chosen item as can_do_descriptor. All passage and question decisions follow from this.
 
 SCAFFOLDING
@@ -27,6 +28,6 @@ PASSAGE RULES
 
 QUESTION RULES
 • Test LISTENING COMPREHENSION only — answerable from the passage alone, no prior knowledge.
-• Exactly question_count questions.
+• Exactly question_count questions. Each selected-response item has exactly 3 options (1 correct + 2 distractors).
 • Wrong options: plausible but passage-contradicted misreadings (swapped quantities, confused terms, conclusions the passage doesn't support).
 • explanation: max 8 words.`.trim();

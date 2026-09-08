@@ -5,9 +5,13 @@
  * always sees the exact question types, valid enum values, and field shapes for this session.
  */
 
-import { callClaude, BASE_PROMPT, toDisplayText } from "./client";
-import { LIBRARY_IMAGE_GROUNDS_CONTENT, OPTIONAL_LINE_VISUALS_BLOCK } from "./prompts/optional-line-visuals";
+import { callClaude, toDisplayText } from "./client";
+import { clampToThreeOptions } from "../choice-options";
+import { OPTIONAL_LINE_VISUALS_BLOCK } from "./prompts/optional-line-visuals";
+import { buildSystemPrompt } from "./prompts/compose";
+import { contentGenPrompt } from "./prompts/content";
 import type { CanDoEntry } from "../listeningContentEngine";
+import { serializeCanDoForPrompt } from "../listeningContentEngine";
 
 // ── Per-level schema tables ───────────────────────────────────────────────────
 
@@ -106,8 +110,8 @@ function buildReadingOutputSchema(level: number, permittedFormats: string[], que
       "can_do_skill": "${mcSkills[0]}",
       /* valid can_do_skill values at Level ${level}: ${mcSkills.join(" | ")} */
       "question": "<question answerable from the passage>",
-      "options": ["<A>", "<B>", "<C>", "<D>"],
-      "option_diagrams": ["<optional simple line marks for A>", null, null, null],
+      "options": ["<A>", "<B>", "<C>"],
+      "option_diagrams": ["<optional simple line marks for A>", null, null],
       /* option_diagrams is OPTIONAL. Same length as options. Use only when a
          few keyboard marks make the choice easier to see (counts, tallies,
          2D outlines). Use null for a choice that stays words-only. Omit the
@@ -122,7 +126,7 @@ function buildReadingOutputSchema(level: number, permittedFormats: string[], que
   if (permittedFormats.includes("sequence_order")) {
     blocks.push(
 `    /* ── sequence_order ── */
-    /* Use for: Recount=sequencing events/steps; Explain=sequencing a process */
+    /* Use for: Narrate=story order; Inform=fact/report order; Explain=process steps */
     {
       "id": "2",
       "type": "sequence_order",
@@ -195,6 +199,7 @@ function buildReadingOutputSchema(level: number, permittedFormats: string[], que
   lines.push(``);
   lines.push(`SCHEMA ENFORCEMENT RULES`);
   lines.push(`• Only these types are valid this session: ${permittedFormats.join(", ")}.`);
+  lines.push(`• multiple_choice: exactly 3 options (1 correct + 2 distractors).`);
   lines.push(`• "explanation" field ONLY on multiple_choice — omit it on all other types.`);
   lines.push(`• correct_order: correct_order[i] = the 0-based destination position of items[i].`);
   lines.push(`• correct_pairs: every pair [left_idx, right_idx]; cover every left item exactly once.`);
@@ -203,65 +208,6 @@ function buildReadingOutputSchema(level: number, permittedFormats: string[], que
 
   return lines.join("\n");
 }
-
-// ── Base system prompt (static) ───────────────────────────────────────────────
-
-const BASE_SYSTEM = `You are a WIDA ACCESS Reading content generator for Grade 6–8 ELL students.
-Your task: write a reading passage with comprehension questions calibrated to the student's WIDA ELP level and targeted Can Do descriptor.
-
-${BASE_PROMPT}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-PER-CALL INPUT FIELDS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-level                   → WIDA ELP level (1–6)
-grade_band              → student's grade band (e.g. "6-8")
-home_language           → student's home language (for vocabulary hints — null if English)
-mode                    → "standard" | "exit_proximity" (exit = push toward next level)
-topic                   → pre-selected passage topic — use only when has_library_image is false
-has_library_image       → true: a real photo is on screen; write about THAT photo
-image_tags              → objects / labels confirmed in the photo
-image_description       → what the photo shows
-image_concept           → optional academic idea in the photo (e.g. plant vs animal cells)
-can_do                  → key_use (Recount|Explain|Argue), action (WIDA framing), items (sub-skills at this level)
-complexity_instruction  → vocabulary, sentence complexity, scaffolding level — follow exactly
-text_format             → passage length and text type — HARD LIMIT; do not exceed
-passage_word_max        → maximum word count for the passage — do not exceed
-permitted_formats       → ONLY use question formats listed in the OUTPUT SCHEMA below; no others
-question_count          → generate exactly this many questions
-
-${LIBRARY_IMAGE_GROUNDS_CONTENT}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-BUILD ORDER
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. SKILL TARGET
-   Pick the item from can_do.items that best fits the topic. Write action + item as can_do_descriptor.
-   All passage and question decisions follow from this.
-
-2. PASSAGE
-   If has_library_image is true: write about the photo (cells, maps, whatever is actually shown). The student can see it — name what is in the picture.
-   If has_library_image is false: write a passage on the given topic.
-   The Can Do skill must be demonstrable from the text.
-   Match text_format, passage_word_max, and complexity_instruction exactly.
-   If the topic is academic, still stay inside the word cap — teach ONE idea, not a full lesson.
-
-${OPTIONAL_LINE_VISUALS_BLOCK}
-   • Recount → clear sequence of events or narrative; main idea unmistakable
-   • Explain  → cause-effect or process; the "how" or "why" is explicit in the text
-   • Argue    → a clear position supported by stated evidence; student can evaluate it
-
-3. QUESTIONS — exactly question_count questions, using ONLY the types listed in OUTPUT SCHEMA
-   Distribute formats when 2+ are permitted — test the Can Do from multiple angles.
-   Each question must be answerable from the passage alone.
-   Wrong options / foils are plausible misreadings of the passage, not random distractors.
-
-4. VOCABULARY
-   Pick 2–3 Tier-2 words from the passage that help unlock comprehension.
-   Provide a brief student-facing definition. Include home_lang_hint only when home_language ≠ null/English.
-
-5. MODE
-   mode = "exit_proximity" → increase inference demand and vocabulary complexity.`;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -337,7 +283,7 @@ export const FALLBACK_READING: ReadingContent = {
     {
       id: "1", type: "multiple_choice", canDoSkill: "main_idea",
       question: "What is this passage mainly about?",
-      options: ["The water cycle", "Ocean animals", "Mountain weather", "River pollution"],
+      options: ["The water cycle", "Ocean animals", "Mountain weather"],
       correct: 0, explanation: "The passage explains how water moves through the cycle.",
     },
     {
@@ -349,7 +295,7 @@ export const FALLBACK_READING: ReadingContent = {
     {
       id: "3", type: "multiple_choice", canDoSkill: "vocabulary",
       question: "What does 'evaporates' mean in the passage?",
-      options: ["Turns to ice", "Turns to vapor and rises", "Falls as rain", "Forms clouds"],
+      options: ["Turns to ice", "Turns to vapor and rises", "Falls as rain"],
       correct: 1, explanation: "Evaporates means water turns into vapor and rises.",
     },
     {
@@ -362,7 +308,7 @@ export const FALLBACK_READING: ReadingContent = {
     {
       id: "5", type: "multiple_choice", canDoSkill: "detail",
       question: "What happens after water vapor cools?",
-      options: ["It evaporates again", "It becomes ice", "It forms clouds", "It sinks into soil"],
+      options: ["It evaporates again", "It becomes ice", "It forms clouds"],
       correct: 2, explanation: "The passage says it 'cools and forms clouds.'",
     },
   ],
@@ -399,8 +345,12 @@ export async function generateReadingContent(params: {
   // Build a level-specific output schema and combine with the static base prompt
   const questionCount = params.questionCount ?? (params.level <= 1 ? 2 : params.level <= 3 ? 3 : 5);
   const schemaSection = buildReadingOutputSchema(params.level, params.permittedFormats, questionCount);
-  const academicLayer = params.academicContentLayer ? `\n\n${params.academicContentLayer}` : "";
-  const systemPrompt  = `${BASE_SYSTEM}${academicLayer}\n\n${schemaSection}`;
+  const systemPrompt  = buildSystemPrompt(
+    contentGenPrompt("reading", params.level),
+    OPTIONAL_LINE_VISUALS_BLOCK,
+    params.academicContentLayer ?? "",
+    schemaSection,
+  );
 
   const userPrompt = JSON.stringify({
     domain:                 "reading",
@@ -412,12 +362,13 @@ export async function generateReadingContent(params: {
     home_language:          params.homeLanguage || null,
     mode:                   params.mode,
     topic:                  params.topic,
-    can_do:                 params.canDo,
+    can_do:                 serializeCanDoForPrompt(params.canDo, { level: params.level, domain: "READING" }),
     complexity_instruction: params.complexityInstruction,
     text_format:            params.textFormat,
     permitted_formats:      params.permittedFormats,
     question_count:         questionCount,
     passage_word_max:       params.passageWordMax ?? (params.level <= 1 ? 40 : 90),
+    required_key_use:       params.canDo.keyUse,
     has_library_image:      params.hasLibraryImage ?? false,
     image_tags:             params.imageTags ?? [],
     image_description:      params.imageDescription ?? null,
@@ -461,7 +412,7 @@ export async function generateReadingContent(params: {
             id: q.id,
             type: "sequence_order" as const,
             canDoSkill: q.can_do_skill ?? "sequence",
-            question: toDisplayText(q.question ?? "Put these events in the correct order."),
+            question: toDisplayText(q.question ?? ""),
             items: q.items ?? [],
             correct_order: (q.correct_order ?? []) as number[],
           } satisfies ReadingQuestionSequence;
@@ -471,7 +422,7 @@ export async function generateReadingContent(params: {
             id: q.id,
             type: "match_columns" as const,
             canDoSkill: q.can_do_skill ?? "cause_effect",
-            question: toDisplayText(q.question ?? "Match each item to its pair."),
+            question: toDisplayText(q.question ?? ""),
             left: q.left ?? [],
             right: q.right ?? [],
             correct_pairs: (q.correct_pairs ?? []) as [number, number][],
@@ -482,23 +433,27 @@ export async function generateReadingContent(params: {
             id: q.id,
             type: "classify" as const,
             canDoSkill: q.can_do_skill ?? "fact_opinion",
-            question: toDisplayText(q.question ?? "Sort each statement."),
+            question: toDisplayText(q.question ?? ""),
             categories: q.categories ?? [],
             items: q.items ?? [],
             correct: Array.isArray(q.correct) ? (q.correct as number[]) : [],
           } satisfies ReadingQuestionClassify;
 
-        default: // multiple_choice (fallback)
+        default: { // multiple_choice (fallback)
+          const three = clampToThreeOptions(q.options, q.correct);
           return {
             id: q.id,
             type: "multiple_choice" as const,
             canDoSkill: q.can_do_skill ?? "detail",
             question: toDisplayText(q.question ?? ""),
-            options: q.options ?? [],
-            optionDiagrams: Array.isArray(q.option_diagrams) ? q.option_diagrams : undefined,
-            correct: typeof q.correct === "number" ? q.correct : 0,
+            options: three.options,
+            optionDiagrams: Array.isArray(q.option_diagrams)
+              ? q.option_diagrams.slice(0, three.options.length)
+              : undefined,
+            correct: three.correct,
             explanation: q.explanation ?? "",
           } satisfies ReadingQuestionMC;
+        }
       }
     });
 
@@ -514,31 +469,7 @@ export async function generateReadingContent(params: {
         homeLangHint: v.home_lang_hint,
       })),
     };
-  } catch {
-    if (params.hasLibraryImage && (params.imageTags?.length || params.imageDescription || params.imageConcept)) {
-      const label = (params.imageConcept || params.imageTags?.slice(0, 3).join(", ") || "the picture").trim();
-      const about = (params.imageDescription || `This picture shows ${label}.`).trim();
-      return {
-        canDoDescriptor: "Identify details in informational text about a picture",
-        passage: `${about} Look at the picture. Find what the words name.`,
-        topic: label,
-        questions: [
-          {
-            id: "1",
-            type: "multiple_choice",
-            canDoSkill: "detail",
-            question: "What does the picture show?",
-            options: [label, "A city map", "Only water", "A classroom of desks"],
-            correct: 0,
-            explanation: "The text and picture are about this scene.",
-          },
-        ],
-        vocabulary: (params.imageTags ?? []).slice(0, 2).map((word) => ({
-          word,
-          definition: `A word from the picture: ${word}.`,
-        })),
-      };
-    }
-    return FALLBACK_READING;
+  } catch (err) {
+    throw err;
   }
 }

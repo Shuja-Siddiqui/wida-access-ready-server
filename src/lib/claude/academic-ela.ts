@@ -16,19 +16,19 @@ import {
 } from "./client";
 import {
   buildSystemPrompt,
-  BASE_BLOCK,
-  LISTENING_CORE_BLOCK,
   OPTIONAL_LINE_VISUALS_BLOCK,
   ELA_SUBJECT_BLOCK,
   ELA_OUTPUT_SCHEMA,
+  contentGenPrompt,
 } from "./prompts";
 import { parseOptionDiagrams, parseVisual } from "./prompts/optional-line-visuals";
 import type { ListeningContent } from "./listening";
+import { serializeCanDoForPrompt } from "../listeningContentEngine";
+import { clampToThreeOptions } from "../choice-options";
 
 const SYSTEM_PROMPT = buildSystemPrompt(
-  "You are an academic listening content generator for Grade 6–8 English Language Learners. Generate an ELA passage presented as a teacher reading a literary or informational text aloud, plus comprehension questions that test whether the student understood the textual and literary language — not whether they have prior ELA knowledge.",
-  BASE_BLOCK,
-  LISTENING_CORE_BLOCK,
+  contentGenPrompt("listening", 3),
+  "Academic ELA listening: test textual language — not prior ELA knowledge.",
   OPTIONAL_LINE_VISUALS_BLOCK,
   ELA_SUBJECT_BLOCK,
   ELA_OUTPUT_SCHEMA,
@@ -50,7 +50,6 @@ export const FALLBACK_ACADEMIC_ELA: ListeningContent = {
         "The library was closed",
         "The shelves were empty",
         "She forgot her backpack",
-        "The librarian stopped her",
       ],
       correct: 1,
       explanation: "The passage says every shelf was empty.",
@@ -59,7 +58,7 @@ export const FALLBACK_ACADEMIC_ELA: ListeningContent = {
       id: "2",
       type: "multiple_choice",
       question: "How did Maya feel when she first saw the empty shelves?",
-      options: ["Confused", "Angry", "Sad", "Excited"],
+      options: ["Confused", "Angry", "Sad"],
       correct: 2,
       explanation: "The passage says 'her heart sank.'",
     },
@@ -71,7 +70,6 @@ export const FALLBACK_ACADEMIC_ELA: ListeningContent = {
         "She felt surprised",
         "She felt disappointed",
         "She felt scared",
-        "She felt bored",
       ],
       correct: 1,
       explanation: "Heart sank means she felt disappointed.",
@@ -104,11 +102,7 @@ export async function generateAcademicElaListeningContent(params: {
     integer_level:          params.level,
     step_within_level:      params.stepWithinLevel,
     complexity_instruction: params.complexityInstruction,
-    can_do: {
-      key_use: params.canDo.keyUse,
-      action:  params.canDo.action,
-      items:   params.canDo.items,
-    },
+    can_do: serializeCanDoForPrompt(params.canDo, { level: params.level, domain: "LISTENING" }),
     oral_format:             params.oralFormat,
     ela_unit:                params.elaUnit,
     ela_genre:               params.elaGenre,
@@ -142,18 +136,21 @@ export async function generateAcademicElaListeningContent(params: {
       topic:       result.topic ?? params.topic,
       context:     result.context ?? "Teacher reading a text aloud to the class",
       visual:      parseVisual((result as { visual?: unknown }).visual),
-      questions: (result.questions || []).map((q) => ({
+      questions: (result.questions || []).map((q) => {
+        const three = clampToThreeOptions(q.options, q.correct);
+        return {
         id:          q.id,
         type:        q.type,
         question:    toDisplayText(q.question),
-        options:     q.options,
-        correct:     q.correct,
+        options:     three.options,
+        correct:     three.correct,
         explanation: q.explanation,
-        optionDiagrams: parseOptionDiagrams((q as { option_diagrams?: unknown }).option_diagrams),
+        optionDiagrams: parseOptionDiagrams((q as { option_diagrams?: unknown }).option_diagrams)?.slice(0, 3),
         visual:      parseVisual((q as { visual?: unknown }).visual),
-      })),
+      };
+      }),
     };
-  } catch {
-    return FALLBACK_ACADEMIC_ELA;
+  } catch (err) {
+    throw err;
   }
 }

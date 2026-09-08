@@ -4,38 +4,250 @@
   "grades": "Grades 6-8",
   "tableHeader": "By the end of each of the given levels of English language proficiency* English language learners can...",
   "footnote": "*Except for Level 6, for which there is no ceiling.",
+  "sources": {
+    "canDoPdf": "WIDA Can Do Descriptors, Key Uses Edition, Grades 6-8 (2016)",
+    "frameworkPdf": "WIDA English Language Development Standards Framework, 2020 Edition"
+  },
   "keyUseDefinitions": [
     {
+      "keyUse": "Narrate",
+      "sourceKeyUse": "Recount",
+      "edition": "2020",
+      "text": "Narrate highlights language to convey real or imaginary experiences through stories and histories. Narratives serve many purposes, including to instruct, entertain, teach, or support argumentation."
+    },
+    {
+      "keyUse": "Inform",
+      "sourceKeyUse": "Recount",
+      "edition": "2020",
+      "text": "Inform highlights language to provide factual information. As students convey information, they define, describe, compare, contrast, organize, categorize, or classify concepts, ideas, or phenomena."
+    },
+    {
       "keyUse": "Recount",
-      "text": "Recount: To display knowledge or narrate experiences or events. Example tasks for the Key Use of Recount include telling or summarizing stories, producing information reports, and sharing past experiences."
+      "edition": "2016",
+      "text": "Recount: To display knowledge or narrate experiences or events. Example tasks for the Key Use of Recount include telling or summarizing stories, producing information reports, and sharing past experiences. WIDA 2020 splits Recount into Narrate and Inform."
     },
     {
       "keyUse": "Explain",
-      "text": "Explain: To clarify the \"why\" or the \"how\" of ideas, actions, or phenomena. Example tasks for the Key Use of Explain include describing life cycles, sharing why or how things work, stating causes and effects, and sharing results of experiments."
+      "edition": "2020",
+      "text2016": "Explain: To clarify the \"why\" or the \"how\" of ideas, actions, or phenomena. Example tasks include describing life cycles, sharing why or how things work, stating causes and effects, and sharing results of experiments.",
+      "text": "Explain highlights language to give an account for how things work or why things happen. As students explain, they substantiate the inner workings of natural, man-made, and social phenomena."
     },
     {
       "keyUse": "Argue",
-      "text": "Argue: To persuade by making claims supported by evidence. Example tasks for the Key Use of Argue include stating preferences or opinions and constructing arguments with evidence."
+      "edition": "2020",
+      "text2016": "Argue: To persuade by making claims supported by evidence. Example tasks include stating preferences or opinions and constructing arguments with evidence.",
+      "text": "Argue highlights language to justify claims using evidence and reasoning. Argue can be used to advance or defend an idea or solution, change the audience’s point of view, bring about action, or accept a position or evaluation of an issue."
     },
     {
       "keyUse": "Discuss",
-      "text": "Discuss: To interact with others to build meaning and share knowledge. Example tasks for the Key Use of Discuss include participating in small or large group activities and projects."
+      "edition": "2016",
+      "text": "Discuss: To interact with others to build meaning and share knowledge. Example tasks include participating in small or large group activities and projects. In 2020, Discuss is not a genre family; it is threaded through all Key Language Uses."
     }
   ],
+  "keyLanguageUses": {
+    "gradeBand": "6-8",
+    "mapping": "WIDA 2020: Recount has been separated into Narrate and Inform. Discuss is not a genre family; it is threaded throughout all Key Language Uses. Level Can Do bullets in this file still come from the 2016 Grades 6-8 Can Do booklet (Recount / Explain / Argue / Discuss).",
+    "overlapNote": "Key Language Uses can overlap and inform each other. They are not strict walls. This session still has ONE primary key_use — write the passage and task for that use. Do not invent new Can Do bullets.",
+    "prominenceTable": {
+      "source": "WIDA English Language Development Standards Framework, 2020 Edition, Table 3-11: Distribution of Key Language Uses in Grades 6-8",
+      "note": "most_prominent / prominent / present. Does not add Can Do bullets. Academic sessions pick a subject where this Key Language Use is most_prominent or prominent — not present-only.",
+      "standards": {
+        "social_instructional": {
+          "Narrate": "most_prominent",
+          "Inform": "most_prominent",
+          "Explain": "most_prominent",
+          "Argue": "most_prominent"
+        },
+        "ela": {
+          "Narrate": "most_prominent",
+          "Inform": "most_prominent",
+          "Explain": "prominent",
+          "Argue": "most_prominent"
+        },
+        "math": {
+          "Narrate": "present",
+          "Inform": "prominent",
+          "Explain": "most_prominent",
+          "Argue": "most_prominent"
+        },
+        "science": {
+          "Narrate": "present",
+          "Inform": "prominent",
+          "Explain": "most_prominent",
+          "Argue": "most_prominent"
+        },
+        "social_studies": {
+          "Narrate": "prominent",
+          "Inform": "present",
+          "Explain": "most_prominent",
+          "Argue": "most_prominent"
+        }
+      }
+    },
+    "Narrate": {
+      "tableDefinition": "Represent experiences through stories and histories.",
+      "definition": "Narrate highlights language to convey real or imaginary experiences through stories and histories. Narratives serve many purposes, including to instruct, entertain, teach, or support argumentation.",
+      "source2016": "Recount",
+      "genres": [
+        "personal recounts of real experiences",
+        "imaginative stories (short story, mystery, science fiction, fantasy)",
+        "autobiographies, memoirs, biographies",
+        "historical recounts"
+      ],
+      "gradeBand6_8": [
+        "Describe people, objects, and scenes using imagery, metaphors, and other stylistic devices",
+        "Manipulate pace to bring attention to key points in the narrative",
+        "Underscore the significance of events",
+        "Create tension and suspense",
+        "Interpret and use historical narratives as primary source evidence in constructing arguments"
+      ],
+      "contentMust": [
+        "Main purpose: a story or history — what happened, who was involved, where and when.",
+        "Use sequence of events. At this grade band, mark why an event matters when the level allows it."
+      ],
+      "contentMustNot": [
+        "Do not make the main text a fact report that only defines or classifies (that is Inform).",
+        "Do not make how/why a system works the main purpose (that is Explain).",
+        "Do not make a claim plus evidence the main purpose (that is Argue)."
+      ]
+    },
+    "Inform": {
+      "tableDefinition": "Communicate factual information on a topic.",
+      "definition": "Inform highlights language to provide factual information. As students convey information, they define, describe, compare, contrast, organize, categorize, or classify concepts, ideas, or phenomena.",
+      "source2016": "Recount",
+      "genres": [
+        "descriptive, classifying, or comparative reports",
+        "lab, investigation, design, or problem-solution reports"
+      ],
+      "gradeBand6_8": [
+        "Manage information about entities according to their composition, taxonomies, and classifications",
+        "Identify and describe various relationships among ideas and information",
+        "Interpret multiple sources of information to develop knowledge before reporting on topics",
+        "Construct research reports that require multiple sources of factual information"
+      ],
+      "contentMust": [
+        "Main purpose: facts about a topic — define, describe, compare, classify, or report.",
+        "Stay objective. Information reports describe or classify (e.g. types of clouds); they do not explain how clouds form (Explain)."
+      ],
+      "contentMustNot": [
+        "Do not make a plotted story the main text (that is Narrate).",
+        "Do not make how/why the main purpose (that is Explain).",
+        "Do not make a claim plus evidence the main purpose (that is Argue)."
+      ]
+    },
+    "Explain": {
+      "tableDefinition": "Give account for how or why things work.",
+      "definition": "Explain highlights language to give an account for how things work or why things happen. As students explain, they substantiate the inner workings of natural, man-made, and social phenomena.",
+      "source2016": "Explain",
+      "genres": [
+        "sequential, causal, cyclical, factorial, or consequential explanations",
+        "mathematical explanations"
+      ],
+      "gradeBand6_8": [
+        "Identify, analyze, and give account for causal, consequential, or systems relationships",
+        "Apply scientific reasoning to show how or why something works",
+        "Construct explanations using models or representations",
+        "Use evidence in the construction of scientific explanations"
+      ],
+      "contentMust": [
+        "Main purpose: how or why — cause, process, or system.",
+        "Explanations are more than descriptions: not only what, but how/why."
+      ],
+      "contentMustNot": [
+        "Do not only name or classify without how/why (that is Inform).",
+        "Do not make a story the main purpose (that is Narrate).",
+        "Do not make persuading with a claim the main purpose (that is Argue)."
+      ]
+    },
+    "Argue": {
+      "tableDefinition": "Justify one’s claims using evidence and reasoning.",
+      "definition": "Argue highlights language to justify claims using evidence and reasoning. Argue can be used to advance or defend an idea or solution, change the audience’s point of view, bring about action, or accept a position or evaluation of an issue.",
+      "source2016": "Argue",
+      "genres": [
+        "exposition (one side)",
+        "discussion (both sides)",
+        "critical response or review",
+        "scientific or mathematical arguments"
+      ],
+      "gradeBand6_8": [
+        "Interpret multiple sources of information to develop claims and counterclaims",
+        "Construct claims and offer them for debate",
+        "Respond to counterclaims",
+        "Contextualize and evaluate primary and secondary sources"
+      ],
+      "contentMust": [
+        "Main purpose: a claim plus reasons or evidence the student can hear or read.",
+        "At this grade band, include a counterclaim when the level allows it."
+      ],
+      "contentMustNot": [
+        "Do not only tell what happened (Narrate) or only list facts (Inform).",
+        "Do not only explain a process without a position (Explain)."
+      ]
+    }
+  },
   "levels": [
     {
       "elpLevel": "ELP Level 1",
       "proficiencyLevel": "Entering",
       "domains": [
         {
+          "domain": "LISTENING",
+          "keyUses": [
+            {
+              "keyUse": "Narrate",
+              "sourceKeyUse": "Recount",
+              "focus": "narrative",
+              "action": "Process recounts by",
+              "canDo": [
+                "Pointing to objects, people, or places based on short oral descriptions"
+              ]
+            },
+            {
+              "keyUse": "Inform",
+              "sourceKeyUse": "Recount",
+              "focus": "informational",
+              "action": "Process recounts by",
+              "canDo": [
+                "Identifying familiar objects or places from oral statements"
+              ]
+            },
+            {
+              "keyUse": "Explain",
+              "action": "Process explanations by",
+              "canDo": [
+                "Matching instructional language, given orally, with visual representation (e.g., “Show me your schedule.”)",
+                "Identifying functions of content-related topics based on short oral statements reinforced visually (e.g., organisms in ecosystems)"
+              ]
+            },
+            {
+              "keyUse": "Argue",
+              "action": "Process arguments by",
+              "canDo": [
+                "Signaling agreement or disagreement of short oral statements or questions",
+                "Identifying points of view (e.g., first or third person) from short statements"
+              ]
+            }
+          ]
+        },
+        {
           "domain": "SPEAKING",
           "keyUses": [
             {
-              "keyUse": "Recount",
+              "keyUse": "Narrate",
+              "sourceKeyUse": "Recount",
+              "focus": "narrative",
               "action": "Recount by",
               "canDo": [
-                "Answering select Wh-questions",
                 "Naming and briefly describing past community or school events using visual support (e.g., posters, photographs)"
+              ]
+            },
+            {
+              "keyUse": "Inform",
+              "sourceKeyUse": "Recount",
+              "focus": "informational",
+              "action": "Recount by",
+              "canDo": [
+                "Answering select Wh-questions"
               ]
             },
             {
@@ -60,10 +272,20 @@
           "domain": "READING",
           "keyUses": [
             {
-              "keyUse": "Recount",
+              "keyUse": "Narrate",
+              "sourceKeyUse": "Recount",
+              "focus": "narrative",
               "action": "Process recounts by",
               "canDo": [
-                "Identifying responses to Wh-questions in charts or illustrated text",
+                "Identifying responses to Wh-questions in charts or illustrated text"
+              ]
+            },
+            {
+              "keyUse": "Inform",
+              "sourceKeyUse": "Recount",
+              "focus": "informational",
+              "action": "Process recounts by",
+              "canDo": [
                 "Identifying icons in graphs, charts, and environmental print related to familiar topics"
               ]
             },
@@ -89,10 +311,20 @@
           "domain": "WRITING",
           "keyUses": [
             {
-              "keyUse": "Recount",
+              "keyUse": "Narrate",
+              "sourceKeyUse": "Recount",
+              "focus": "narrative",
               "action": "Recount by",
               "canDo": [
-                "Producing labeled illustrations of conclusions reached in problem-solving with a partner",
+                "Producing labeled illustrations of conclusions reached in problem-solving with a partner"
+              ]
+            },
+            {
+              "keyUse": "Inform",
+              "sourceKeyUse": "Recount",
+              "focus": "informational",
+              "action": "Recount by",
+              "canDo": [
                 "Reproducing words and phrases related to topics (e.g., including cognates)"
               ]
             },
@@ -137,7 +369,19 @@
           "domain": "LISTENING",
           "keyUses": [
             {
-              "keyUse": "Recount",
+              "keyUse": "Narrate",
+              "sourceKeyUse": "Recount",
+              "focus": "narrative",
+              "action": "Process recounts by",
+              "canDo": [
+                "Sequencing labeled visuals per oral directions",
+                "Identifying settings or time frames in narrative or informational scenarios read aloud"
+              ]
+            },
+            {
+              "keyUse": "Inform",
+              "sourceKeyUse": "Recount",
+              "focus": "informational",
               "action": "Process recounts by",
               "canDo": [
                 "Sequencing labeled visuals per oral directions",
@@ -166,7 +410,19 @@
           "domain": "SPEAKING",
           "keyUses": [
             {
-              "keyUse": "Recount",
+              "keyUse": "Narrate",
+              "sourceKeyUse": "Recount",
+              "focus": "narrative",
+              "action": "Recount by",
+              "canDo": [
+                "Stating main ideas or points of classroom conversations",
+                "Restating details of content-related topics (in home language and English) in small groups"
+              ]
+            },
+            {
+              "keyUse": "Inform",
+              "sourceKeyUse": "Recount",
+              "focus": "informational",
               "action": "Recount by",
               "canDo": [
                 "Stating main ideas or points of classroom conversations",
@@ -195,7 +451,19 @@
           "domain": "READING",
           "keyUses": [
             {
-              "keyUse": "Recount",
+              "keyUse": "Narrate",
+              "sourceKeyUse": "Recount",
+              "focus": "narrative",
+              "action": "Process recounts by",
+              "canDo": [
+                "Sequencing illustrated text of narrative or informational events",
+                "Locating main ideas in a series of simple sentences"
+              ]
+            },
+            {
+              "keyUse": "Inform",
+              "sourceKeyUse": "Recount",
+              "focus": "informational",
               "action": "Process recounts by",
               "canDo": [
                 "Sequencing illustrated text of narrative or informational events",
@@ -224,7 +492,19 @@
           "domain": "WRITING",
           "keyUses": [
             {
-              "keyUse": "Recount",
+              "keyUse": "Narrate",
+              "sourceKeyUse": "Recount",
+              "focus": "narrative",
+              "action": "Recount by",
+              "canDo": [
+                "Completing sentences using word banks",
+                "Producing statements related to main ideas on familiar topics in home language and English"
+              ]
+            },
+            {
+              "keyUse": "Inform",
+              "sourceKeyUse": "Recount",
+              "focus": "informational",
               "action": "Recount by",
               "canDo": [
                 "Completing sentences using word banks",
@@ -273,11 +553,21 @@
           "domain": "LISTENING",
           "keyUses": [
             {
-              "keyUse": "Recount",
+              "keyUse": "Narrate",
+              "sourceKeyUse": "Recount",
+              "focus": "narrative",
               "action": "Process recounts by",
               "canDo": [
-                "Matching main ideas of familiar text read aloud to visuals",
                 "Stating the next event in a series based on clues from narrative or informational oral texts"
+              ]
+            },
+            {
+              "keyUse": "Inform",
+              "sourceKeyUse": "Recount",
+              "focus": "informational",
+              "action": "Process recounts by",
+              "canDo": [
+                "Matching main ideas of familiar text read aloud to visuals"
               ]
             },
             {
@@ -302,10 +592,20 @@
           "domain": "SPEAKING",
           "keyUses": [
             {
-              "keyUse": "Recount",
+              "keyUse": "Narrate",
+              "sourceKeyUse": "Recount",
+              "focus": "narrative",
               "action": "Recount by",
               "canDo": [
-                "Relating a series of events by expressing time in multiple tenses",
+                "Relating a series of events by expressing time in multiple tenses"
+              ]
+            },
+            {
+              "keyUse": "Inform",
+              "sourceKeyUse": "Recount",
+              "focus": "informational",
+              "action": "Recount by",
+              "canDo": [
                 "Connecting ideas in content-related discourse using transitions"
               ]
             },
@@ -331,11 +631,21 @@
           "domain": "READING",
           "keyUses": [
             {
-              "keyUse": "Recount",
+              "keyUse": "Narrate",
+              "sourceKeyUse": "Recount",
+              "focus": "narrative",
               "action": "Process recounts by",
               "canDo": [
-                "Identifying topic sentences, main ideas, and details in paragraphs",
                 "Connecting people to actions based on oral descriptions with details"
+              ]
+            },
+            {
+              "keyUse": "Inform",
+              "sourceKeyUse": "Recount",
+              "focus": "informational",
+              "action": "Process recounts by",
+              "canDo": [
+                "Identifying topic sentences, main ideas, and details in paragraphs"
               ]
             },
             {
@@ -360,11 +670,21 @@
           "domain": "WRITING",
           "keyUses": [
             {
-              "keyUse": "Recount",
+              "keyUse": "Narrate",
+              "sourceKeyUse": "Recount",
+              "focus": "narrative",
               "action": "Recount by",
               "canDo": [
-                "Producing short paragraphs with main ideas and some details",
                 "Composing dialogues or blogs based on personal experiences"
+              ]
+            },
+            {
+              "keyUse": "Inform",
+              "sourceKeyUse": "Recount",
+              "focus": "informational",
+              "action": "Recount by",
+              "canDo": [
+                "Producing short paragraphs with main ideas and some details"
               ]
             },
             {
@@ -409,7 +729,19 @@
           "domain": "LISTENING",
           "keyUses": [
             {
-              "keyUse": "Recount",
+              "keyUse": "Narrate",
+              "sourceKeyUse": "Recount",
+              "focus": "narrative",
+              "action": "Process recounts by",
+              "canDo": [
+                "Identifying main ideas and details in oral discourse",
+                "Evaluating oral presentations of peers based on criteria for success"
+              ]
+            },
+            {
+              "keyUse": "Inform",
+              "sourceKeyUse": "Recount",
+              "focus": "informational",
               "action": "Process recounts by",
               "canDo": [
                 "Identifying main ideas and details in oral discourse",
@@ -438,11 +770,21 @@
           "domain": "SPEAKING",
           "keyUses": [
             {
-              "keyUse": "Recount",
+              "keyUse": "Narrate",
+              "sourceKeyUse": "Recount",
+              "focus": "narrative",
               "action": "Recount by",
               "canDo": [
-                "Paraphrasing and summarizing content-related ideas presented orally",
                 "Connecting ideas with supporting details in a variety of oral venues"
+              ]
+            },
+            {
+              "keyUse": "Inform",
+              "sourceKeyUse": "Recount",
+              "focus": "informational",
+              "action": "Recount by",
+              "canDo": [
+                "Paraphrasing and summarizing content-related ideas presented orally"
               ]
             },
             {
@@ -467,7 +809,19 @@
           "domain": "READING",
           "keyUses": [
             {
-              "keyUse": "Recount",
+              "keyUse": "Narrate",
+              "sourceKeyUse": "Recount",
+              "focus": "narrative",
+              "action": "Process recounts by",
+              "canDo": [
+                "Ordering paragraphs in narrative and informational text",
+                "Identifying summaries of passages in a variety of genres"
+              ]
+            },
+            {
+              "keyUse": "Inform",
+              "sourceKeyUse": "Recount",
+              "focus": "informational",
               "action": "Process recounts by",
               "canDo": [
                 "Ordering paragraphs in narrative and informational text",
@@ -496,11 +850,21 @@
           "domain": "WRITING",
           "keyUses": [
             {
-              "keyUse": "Recount",
+              "keyUse": "Narrate",
+              "sourceKeyUse": "Recount",
+              "focus": "narrative",
               "action": "Recount by",
               "canDo": [
-                "Producing content-related reports",
                 "Reproducing a sequence of events or experiences using transitional words"
+              ]
+            },
+            {
+              "keyUse": "Inform",
+              "sourceKeyUse": "Recount",
+              "focus": "informational",
+              "action": "Recount by",
+              "canDo": [
+                "Producing content-related reports"
               ]
             },
             {
@@ -544,11 +908,21 @@
           "domain": "LISTENING",
           "keyUses": [
             {
-              "keyUse": "Recount",
+              "keyUse": "Narrate",
+              "sourceKeyUse": "Recount",
+              "focus": "narrative",
               "action": "Process recounts by",
               "canDo": [
-                "Categorizing details of content-related main ideas seen and heard in videos or other technologies",
                 "Sequencing a series of illustrated events from oral passages (e.g., historical recaps)"
+              ]
+            },
+            {
+              "keyUse": "Inform",
+              "sourceKeyUse": "Recount",
+              "focus": "informational",
+              "action": "Process recounts by",
+              "canDo": [
+                "Categorizing details of content-related main ideas seen and heard in videos or other technologies"
               ]
             },
             {
@@ -573,11 +947,21 @@
           "domain": "SPEAKING",
           "keyUses": [
             {
-              "keyUse": "Recount",
+              "keyUse": "Narrate",
+              "sourceKeyUse": "Recount",
+              "focus": "narrative",
               "action": "Recount by",
               "canDo": [
-                "Producing oral multimedia, content-related reports based on research from multiple sources",
                 "Tracing the evolution of literary characters, themes, and plots from different venues (e.g., digital text or video)"
+              ]
+            },
+            {
+              "keyUse": "Inform",
+              "sourceKeyUse": "Recount",
+              "focus": "informational",
+              "action": "Recount by",
+              "canDo": [
+                "Producing oral multimedia, content-related reports based on research from multiple sources"
               ]
             },
             {
@@ -602,7 +986,19 @@
           "domain": "READING",
           "keyUses": [
             {
-              "keyUse": "Recount",
+              "keyUse": "Narrate",
+              "sourceKeyUse": "Recount",
+              "focus": "narrative",
+              "action": "Process recounts by",
+              "canDo": [
+                "Sequencing main ideas, events, and conclusions in narrative and informational text",
+                "Matching details of content-related topics to main ideas"
+              ]
+            },
+            {
+              "keyUse": "Inform",
+              "sourceKeyUse": "Recount",
+              "focus": "informational",
               "action": "Process recounts by",
               "canDo": [
                 "Sequencing main ideas, events, and conclusions in narrative and informational text",
@@ -631,11 +1027,21 @@
           "domain": "WRITING",
           "keyUses": [
             {
-              "keyUse": "Recount",
+              "keyUse": "Narrate",
+              "sourceKeyUse": "Recount",
+              "focus": "narrative",
               "action": "Recount by",
               "canDo": [
-                "Producing research reports using multiple sources",
                 "Summarizing conclusions reached from steps in problem-solving or conducting experiments"
+              ]
+            },
+            {
+              "keyUse": "Inform",
+              "sourceKeyUse": "Recount",
+              "focus": "informational",
+              "action": "Recount by",
+              "canDo": [
+                "Producing research reports using multiple sources"
               ]
             },
             {
@@ -679,7 +1085,19 @@
           "domain": "LISTENING",
           "keyUses": [
             {
-              "keyUse": "Recount",
+              "keyUse": "Narrate",
+              "sourceKeyUse": "Recount",
+              "focus": "narrative",
+              "action": "Process recounts by",
+              "canDo": [
+                "Identifying key ideas expressed orally",
+                "Identifying new information expressed by others"
+              ]
+            },
+            {
+              "keyUse": "Inform",
+              "sourceKeyUse": "Recount",
+              "focus": "informational",
               "action": "Process recounts by",
               "canDo": [
                 "Identifying key ideas expressed orally",
@@ -708,7 +1126,19 @@
           "domain": "SPEAKING",
           "keyUses": [
             {
-              "keyUse": "Recount",
+              "keyUse": "Narrate",
+              "sourceKeyUse": "Recount",
+              "focus": "narrative",
+              "action": "Recount by",
+              "canDo": [
+                "Restating new information expressed by others in extended speech",
+                "Posing questions that elicit elaboration and responding to others’ questions and comments"
+              ]
+            },
+            {
+              "keyUse": "Inform",
+              "sourceKeyUse": "Recount",
+              "focus": "informational",
               "action": "Recount by",
               "canDo": [
                 "Restating new information expressed by others in extended speech",
@@ -737,11 +1167,21 @@
           "domain": "READING",
           "keyUses": [
             {
-              "keyUse": "Recount",
+              "keyUse": "Narrate",
+              "sourceKeyUse": "Recount",
+              "focus": "narrative",
               "action": "Process recounts by",
               "canDo": [
-                "Identifying a central idea of a text and how it is conveyed through particular details; summarizing text absent personal opinions or judgments",
                 "Evaluating how a central event is introduced, illustrated, and elaborated in text (e.g., through examples or anecdotes)"
+              ]
+            },
+            {
+              "keyUse": "Inform",
+              "sourceKeyUse": "Recount",
+              "focus": "informational",
+              "action": "Process recounts by",
+              "canDo": [
+                "Identifying a central idea of a text and how it is conveyed through particular details; summarizing text absent personal opinions or judgments"
               ]
             },
             {
@@ -766,11 +1206,21 @@
           "domain": "WRITING",
           "keyUses": [
             {
-              "keyUse": "Recount",
+              "keyUse": "Narrate",
+              "sourceKeyUse": "Recount",
+              "focus": "narrative",
               "action": "Recount by",
               "canDo": [
-                "Providing a concluding statement or section that follows from and supports the information presented",
                 "Conveying sequence, signaling shifts from one time frame to another, and showing the relationships among experiences and events"
+              ]
+            },
+            {
+              "keyUse": "Inform",
+              "sourceKeyUse": "Recount",
+              "focus": "informational",
+              "action": "Recount by",
+              "canDo": [
+                "Providing a concluding statement or section that follows from and supports the information presented"
               ]
             },
             {
