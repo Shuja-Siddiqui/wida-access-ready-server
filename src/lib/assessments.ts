@@ -53,7 +53,7 @@ export const ASSESSMENTS: Record<Assessment, AssessmentConfig> = {
     scale: { min: 1.0, max: 6.0, type: "decimal" },
     levels: { 1: "Entering", 2: "Emerging", 3: "Developing", 4: "Expanding", 5: "Bridging", 6: "Reaching" },
     exitModel: "composite",
-    defaultThresholds: { listening: 6.0, speaking: 6.0, reading: 6.0, writing: 6.0 },
+    defaultThresholds: { listening: 4.7, speaking: 4.7, reading: 4.7, writing: 4.7 },
     normalize: (s) => Math.max(1 / 6, s / 6),
     denormalize: (n) => parseFloat((Math.max(1, n * 6)).toFixed(2)),
     levelLabel: (score) => {
@@ -170,9 +170,8 @@ export type StudentTrack = Tier;
 /**
  * Get exit threshold for a domain, respecting the student's track.
  *
- * WIDA:
- *   academic → 6.0 (full reclassification / "Reaching")
- *   general  → 5.0 ("Bridging" — strong everyday + school communication)
+ * WIDA (all domains, general and academic): 4.7 — state-typical ACCESS
+ * exit cluster, not a WIDA-published “Reaching 6.0” bar.
  *
  * All other assessments use their existing defaultThresholds regardless of track
  * (their scales already represent the single recognized exit point).
@@ -180,10 +179,10 @@ export type StudentTrack = Tier;
 export function getExitThresholdForTrack(
   assessment: Assessment,
   domain: Domain,
-  track: StudentTrack = "academic",
+  _track: StudentTrack = "academic",
 ): number {
-  if (assessment === "WIDA" && track === "general") {
-    return 5.0;
+  if (assessment === "WIDA") {
+    return 4.7;
   }
   return getExitThreshold(assessment, domain);
 }

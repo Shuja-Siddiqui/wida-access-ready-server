@@ -14,7 +14,7 @@
 import canDoData from "../data/canDo.json";
 import curriculumData from "../data/writingCurriculum.json";
 
-import { KEY_USE_ROTATION, nextKeyUse, clampLevel } from "./listeningContentEngine";
+import { nextKeyUse, clampLevel, findKeyUseBlock, toCanDoEntry } from "./listeningContentEngine";
 import type { CanDoEntry } from "./listeningContentEngine";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -45,7 +45,7 @@ export interface WritingContext {
   taskType: string;
   /**
    * The single WIDA Can Do targeted this session — one per key use, rotates across sessions.
-   * Contains: keyUse (Recount|Explain|Argue), action ("Recount by"), items (the sub-skill bullet points).
+   * Contains: keyUse (Narrate|Inform|Explain|Argue), action, items (official Can Do bullets).
    */
   canDo: CanDoEntry;
   /** Single pre-selected topic — persisted from a failed session or randomly chosen */
@@ -57,12 +57,16 @@ export interface WritingContext {
 /**
  * Writing task type by key use + level — derived directly from WRITING CanDo descriptors.
  *
- *  Recount L1 → reproducing words/phrases              → word_phrase
- *  Recount L2 → completing sentences using word banks   → sentence_completion
- *  Recount L3 → short paragraphs with main idea        → paragraph
- *  Recount L4 → content-related reports with transitions → report
- *  Recount L5 → research reports from multiple sources  → research_report
- *  Recount L6 → analytical writing with concluding stmt → analytical_essay
+ *  Inform/Narrate L1 → reproducing words/phrases / labeled events → word_phrase
+ *  Inform/Narrate L2 → completing sentences using word banks   → sentence_completion
+ *  Inform L3 → short paragraphs with main idea        → paragraph
+ *  Narrate L3 → dialogues/blogs from experience       → paragraph
+ *  Inform L4 → content-related reports                → report
+ *  Narrate L4 → sequence of events with transitions   → report
+ *  Inform L5 → research reports from multiple sources  → research_report
+ *  Narrate L5 → summarize experiment/event sequence    → research_report
+ *  Inform L6 → concluding section supporting information → analytical_essay
+ *  Narrate L6 → sequence and time-frame shifts        → analytical_essay
  *
  *  Explain L1 → labeling with relational connectors    → word_phrase
  *  Explain L2 → connecting short sentences             → connected_sentences
@@ -78,15 +82,19 @@ export interface WritingContext {
  *  Argue L5  → persuasive essays backed by research    → persuasive_essay
  *  Argue L6  → argumentative essays, claims + counterclaims → argumentative_essay
  */
+const RECOUNT_WRITING_TASK: Record<number, string> = {
+  1: "word_phrase",
+  2: "sentence_completion",
+  3: "paragraph",
+  4: "report",
+  5: "research_report",
+  6: "analytical_essay",
+};
+
 export const WRITING_TASK_TYPE: Record<string, Record<number, string>> = {
-  Recount: {
-    1: "word_phrase",
-    2: "sentence_completion",
-    3: "paragraph",
-    4: "report",
-    5: "research_report",
-    6: "analytical_essay",
-  },
+  Recount: RECOUNT_WRITING_TASK,
+  Narrate: RECOUNT_WRITING_TASK,
+  Inform: RECOUNT_WRITING_TASK,
   Explain: {
     1: "word_phrase",
     2: "connected_sentences",
@@ -188,14 +196,7 @@ export function getWritingCanDoForKeyUse(level: number, keyUse: string): CanDoEn
   const writingDomain = levelEntry.domains.find((d: any) => d.domain === "WRITING");
   if (!writingDomain) return { keyUse, action: "", items: [] };
 
-  const entry = writingDomain.keyUses.find((k: any) => k.keyUse === keyUse);
-  if (!entry) return { keyUse, action: "", items: [] };
-
-  return {
-    keyUse,
-    action: entry.action as string,
-    items:  entry.canDo  as string[],
-  };
+  return toCanDoEntry(keyUse, findKeyUseBlock(writingDomain.keyUses, keyUse));
 }
 
 // ── Curriculum helpers ────────────────────────────────────────────────────────

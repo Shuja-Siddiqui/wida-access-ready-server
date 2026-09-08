@@ -5,177 +5,28 @@
  *   - 2 object-tap comprehension questions
  */
 
-import { callClaude, BASE_PROMPT, toDisplayText } from "./client";
+import { callClaude, toDisplayText, limitSentences } from "./client";
 import { logger } from "../../config/logger";
+import { contentGenPrompt } from "./prompts/content";
+import { buildSystemPrompt } from "./prompts/compose";
+import { clampToThreeOptions } from "../choice-options";
+import { serializeCanDoForPrompt } from "../listeningContentEngine";
 
-// ── System prompt ─────────────────────────────────────────────────────────────
-
-const SYSTEM_PROMPT = `You are a WIDA image-based listening content generator for Grade 6–8 ELL students (levels 1–2). Generate a short audio passage and comprehension questions based on a real photograph.
-
-${BASE_PROMPT}
-
-INPUT FIELDS
-can_do                 → key_use (Recount|Explain|Argue), action (WIDA framing), items (sub-skills at this level)
-integer_level          → 1 (Entering) or 2 (Emerging)
-current_score          → fractional score, e.g. 1.4
-step_within_level      → 0–4 intra-level difficulty
-complexity_instruction   → vocabulary ceiling and scaffolding — follow exactly
-passage_sentence_target → HARD LIMIT on audio_script length — targets take priority; add one sentence if needed
-level_label            → plain English label for this level (context only)
-topic                  → image setting/category — echo back unchanged
-last_session_score     → prior session score (0–100 or null)
-question_count         → always 2
-image_description      → FOR PASSAGE ONLY — gives scene context so the passage sounds natural. Never use it to write question text. It may mention actions or relationships (e.g. "a girl looks out the window") — ignore those entirely when writing questions.
-image_tags             → FOR QUESTIONS ONLY — the exact object labels DINO confirmed are visible. Every question target must be one of these strings, copied verbatim. Do not use any word from image_description as a question target.
-
-BUILD ORDER
-
-1. SKILL TARGET
-Pick the item from can_do.items that best fits the image topic. Write action+item as can_do_descriptor.
-
-2. PICK QUESTION TARGETS AND FORMAT (do this before writing the passage):
-   Step 2a — open image_tags and choose 2 entries as targets. These exact strings become the answers.
-   Step 2b — pick the format for can_do.key_use (see below).
-   ⚠ Do NOT look at image_description when choosing targets or writing question text.
-
-━━ Recount ━━
-  Format: image_object_tap
-  Pick 2 objects from image_tags as targets.
-  Passage style: describe WHAT objects are present in the setting (existence, not function).
-  Question text: "Find the [exact image_tags string] in the picture."
-  options: 4 strings from image_tags (wrong options are other real objects in the photo)
-  target_label = options[correct] = the exact image_tags string
-
-━━ Explain ━━
-  Format: image_object_tap
-  Pick 2 objects from image_tags as targets.
-  Passage style: explain the PURPOSE or FUNCTION of each target object
-    (e.g., "People sit on chairs." / "Students use pencils to write.")
-    The passage must teach what each object is FOR before the question is asked.
-  Question text: ask about FUNCTION, not name.
-    Pattern: "What do people [verb] [on/with/in]?" or "What do students use to [verb]?"
-    Examples:
-      target = "chair"   → passage says "People sit on chairs."  → question: "What do people sit on?"
-      target = "pencil"  → passage says "Students write with pencils." → question: "What do students write with?"
-      target = "plate"   → passage says "People put food on a plate." → question: "What do people put food on?"
-  options: 4 strings from image_tags (wrong options are other real objects in the photo)
-  target_label = options[correct] = the exact image_tags string
-  ⚠ The question must be answerable ONLY from the passage — the function verb/phrase in the
-    question must appear word-for-word in the passage first.
-
-QUESTION TEXT RULES:
-  Recount: question must be EXACTLY "Find the [exact image_tags string] in the picture."
-    NEVER add actions, poses, gestures, or qualifying descriptions.
-      ✗ WRONG: "Find the person who sits and looks at the leaves."
-      ✗ WRONG: "Find the boy who is smiling."
-      ✓ RIGHT:  "Find the boy in the picture."
-      ✓ RIGHT:  "Find the banana in the picture."
-  Explain: question must ask about a function established in the passage.
-    NEVER use "Find the…" for Explain questions.
-    NEVER ask about a function that was not explicitly stated in the passage.
-  The image_description field provides scene context for writing the PASSAGE only.
-  Never copy its action verbs, poses, or descriptions into question text.
-
-━━ Argue ━━
-  Format: image_yes_no
-  Generate 2 agree/disagree statements about the image:
-    - Question 1: pick a real object from image_tags → statement says it IS in the picture → correct_answer = "agree"
-    - Question 2: pick a PLAUSIBLE but ABSENT object (not in image_tags, common in this setting) → statement says it IS in the picture → correct_answer = "disagree"
-  Question text pattern: "There is a [object] in the picture."
-  No options array needed. No target_label needed.
-  CRITICAL PASSAGE RULE FOR ARGUE: The passage MUST name BOTH the Q1 object AND the Q2 (absent) object.
-    - Introduce the absent object naturally: e.g. "Some children like to ride skateboards, but today they are playing with a basketball."
-    - If the student has not heard a word in the passage, they cannot agree or disagree about it — every question word must appear in audio_script first.
-
-3. PASSAGE
-Write audio_script in general present-simple style (what people typically do in this setting — not a photo description).
-
-MANDATORY PASSAGE RULES (priority order):
-  A. For Recount: EVERY target object MUST appear by its exact name in the passage before being asked about.
-     For Explain: EVERY target object MUST appear by its exact name AND its function/purpose must be stated in the passage.
-       The question asks about that function — so the function phrase in the question must come from the passage.
-     For Argue: both the real object (Q1) AND the absent object (Q2) must be named in the passage.
-  B. Do NOT use "In this picture…", "I see…", or "The photo shows…"
-  C. Stay within passage_sentence_target. Add one sentence if needed to name all targets.
-  D. NEVER invent specific person–object interactions. image_tags only confirm an object EXISTS in the scene — they say nothing about who holds it, uses it, or where it is. Mention objects by their presence in the setting, not by fabricated actions.
-     WRONG: "A girl holds a banana." (invents who holds it)
-     RIGHT: "Students have bananas and sandwiches on their lunch trays."
-  E. NEVER read or quote text from signs, murals, posters, or whiteboards visible in the image. Reference the object only — not what it says.
-     WRONG: "A sign says 'Be kind.'" (quotes text from the image)
-     RIGHT: "There is a colorful mural on the wall."
-
-4. SCAFFOLDING
-- last_session_score null or ≥70 → mention each target object once naturally
-- last_session_score <70 → mention each target object at least twice, near the start of its sentence, simplest vocabulary
-
-RULES
-- explanation: max 8 words.
-
-OUTPUT — use the correct schema for each format:
-
-For Recount (image_object_tap — name the object):
-{
-  "can_do_descriptor": "<action + chosen item>",
-  "audio_script": "<general present-simple describing what objects are present>",
-  "topic": "<echo input topic>",
-  "context": "<one sentence: who speaks and to whom>",
-  "questions": [
-    {
-      "id": "1",
-      "type": "image_object_tap",
-      "question": "Find the [exact image_tags string] in the picture.",
-      "options": ["tag1", "tag2", "tag3", "tag4"],
-      "target_label": "<exact image_tags string>",
-      "correct": 0,
-      "explanation": "<max 8 words>"
-    }
-  ]
+/** Prefer Claude's own stem. Do not invent student-facing question text. */
+export function resolvePictureListeningQuestion(
+  raw: unknown,
+  _kind: "yes_no" | "tap",
+  _targetLabel: string,
+): string {
+  return toDisplayText(
+    raw && typeof raw === "object"
+      ? (raw as Record<string, unknown>).question
+        ?? (raw as Record<string, unknown>).statement
+        ?? (raw as Record<string, unknown>).claim
+        ?? (raw as Record<string, unknown>).prompt
+      : raw,
+  ).trim();
 }
-
-For Explain (image_object_tap — function-framed question):
-{
-  "can_do_descriptor": "<action + chosen item>",
-  "audio_script": "<general present-simple explaining what each target object is USED FOR>",
-  "topic": "<echo input topic>",
-  "context": "<one sentence: who speaks and to whom>",
-  "questions": [
-    {
-      "id": "1",
-      "type": "image_object_tap",
-      "question": "What do people [verb from passage] [on/with/in]?",
-      "options": ["tag1", "tag2", "tag3", "tag4"],
-      "target_label": "<exact image_tags string>",
-      "correct": 0,
-      "explanation": "<max 8 words>"
-    }
-  ]
-}
-
-For Argue (image_yes_no questions):
-{
-  "can_do_descriptor": "<action + chosen item>",
-  "audio_script": "<general present-simple>",
-  "topic": "<echo input topic>",
-  "context": "<one sentence: who speaks and to whom>",
-  "questions": [
-    {
-      "id": "1",
-      "type": "image_yes_no",
-      "question": "There is a [real object from image_tags] in the picture.",
-      "correct_answer": "agree",
-      "target_label": "<exact image_tags string>",
-      "explanation": "<max 8 words>"
-    },
-    {
-      "id": "2",
-      "type": "image_yes_no",
-      "question": "There is a [plausible absent object] in the picture.",
-      "correct_answer": "disagree",
-      "target_label": "<the absent object name>",
-      "explanation": "<max 8 words>"
-    }
-  ]
-}`;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -247,26 +98,34 @@ export async function generateImagePassageContent(params: {
       : "Level 2 (Emerging): locate specific objects in a scene after hearing a short descriptive passage";
 
   const BASE_SENTENCE_TARGETS: Record<number, string> = {
-    1: "3–4 short sentences (~30–55 words total). Subject-verb-object structure only. No subordinate clauses.",
-    2: "3–4 sentences (~40–65 words total). Simple sentences, one idea each. Familiar everyday vocabulary.",
+    1: "1–3 very short sentences (~12–35 words). Subject-verb-object. No extra background.",
+    2: "1–3 short sentences (~18–45 words). One idea each. Do not write a paragraph.",
   };
   const base = BASE_SENTENCE_TARGETS[level] ?? BASE_SENTENCE_TARGETS[2];
+  const ku = canDo.keyUse;
 
-  const passageSentenceTarget =
-    canDo.keyUse === "Explain"
-      ? `${base} Each target object must be named by its exact label AND its function must be stated (e.g. "People sit on chairs." / "Students write with pencils."). The question will ask about the FUNCTION — never repeat the object label in the question text.`
-      : `${base} Every question target object must be named by its exact label in the passage.`;
+  let passageSentenceTarget = `${base} Every question target object must be named by its exact label in the passage.`;
+  if (level <= 1 && ku === "Explain") {
+    passageSentenceTarget = `${base} Name 1 target by its exact label AND its function (e.g. "People sit on chairs."). The question asks the FUNCTION — never repeat the object label in the question text.`;
+  } else if (level >= 2 && ku === "Narrate") {
+    passageSentenceTarget = `${base} Name 3 image_tags in time order (first, then, last) as a short story. Q1 is the first tag; Q2 is the last tag.`;
+  } else if (level >= 2 && ku === "Inform") {
+    passageSentenceTarget = `${base} Name 3 image_tags in order as a fact process (first, then, last), not a character plot. Q1 first tag; Q2 last tag.`;
+  } else if (level >= 2 && ku === "Explain") {
+    passageSentenceTarget = `${base} Name 2 image_tags and compare or classify them (size, job, group) or state cause/effect. The question asks which object matches — do not only say "Find the [tag]."`;
+  } else if (level >= 2 && ku === "Argue") {
+    passageSentenceTarget = `${base} Use 2 real image_tags as evidence (amount or what is there). Q1 true claim (agree). Q2 false claim (disagree).`;
+  } else if (ku === "Explain") {
+    passageSentenceTarget = `${base} Each target object must be named by its exact label AND its function must be stated (e.g. "People sit on chairs." / "Students write with pencils."). The question will ask about the FUNCTION — never repeat the object label in the question text.`;
+  }
 
   const prompt = JSON.stringify({
+    required_key_use: canDo.keyUse,
     integer_level: level,
     current_score: fractionalLevel,
     step_within_level: stepWithinLevel,
     level_label: canDoDescriptor,
-    can_do: {
-      key_use: canDo.keyUse,
-      action: canDo.action,
-      items: canDo.items,
-    },
+    can_do: serializeCanDoForPrompt(canDo, { level, domain: "LISTENING" }),
     complexity_instruction: complexityInstruction,
     passage_sentence_target: passageSentenceTarget,
     topic,
@@ -277,14 +136,18 @@ export async function generateImagePassageContent(params: {
   });
 
   try {
-    const result = (await callClaude(SYSTEM_PROMPT, prompt, 2000)) as Record<string, unknown>;
+    const result = (await callClaude(
+      buildSystemPrompt(contentGenPrompt("listening", Math.max(1, Math.min(level, 2)))),
+      prompt,
+      2000,
+    )) as Record<string, unknown>;
     const questions = (result.questions as Array<Record<string, unknown>>) ?? [];
 
     const rawPassage = result.audio_script ?? result.passage;
-    const passage = toDisplayText(rawPassage);
+    const passage = limitSentences(toDisplayText(rawPassage), 3);
 
     logger.info(
-      { passage: passage.slice(0, 120), questionCount: questions.length },
+      { keyUse: canDo.keyUse, passage: passage.slice(0, 120), questionCount: questions.length },
       "generateImagePassageContent: raw result",
     );
 
@@ -292,75 +155,60 @@ export async function generateImagePassageContent(params: {
       throw new Error("Claude returned an empty audio_script/passage — using fallback");
     }
 
-    return {
-      passage,
-      questions: questions.map((q, i): ImagePassageQuestion => {
+    const mapped = questions.map((q, i): ImagePassageQuestion => {
         if (q.type === "image_yes_no") {
           const correctAnswer =
             (q.correct_answer as string) === "disagree" ? "disagree" : "agree";
+          const targetLabel = toDisplayText(q.target_label ?? "");
           return {
             id: String(q.id ?? i + 1),
             type: "image_yes_no",
-            question: toDisplayText(q.question),
+            question: resolvePictureListeningQuestion(q, "yes_no", targetLabel),
             correctAnswer,
-            targetLabel: toDisplayText(q.target_label ?? ""),
-            explanation: toDisplayText(q.explanation ?? ""),
-          };
-        }
-        if (q.type === "image_explain_mc") {
-          const correct = typeof q.correct === "number" ? q.correct : 0;
-          const options = Array.isArray(q.options) ? (q.options as string[]) : imageTags.slice(0, 4);
-          const targetLabel = toDisplayText(q.target_label ?? options[correct] ?? imageTags[i] ?? "");
-          return {
-            id: String(q.id ?? i + 1),
-            type: "image_explain_mc",
-            question: toDisplayText(q.question),
-            options,
-            correct,
             targetLabel,
             explanation: toDisplayText(q.explanation ?? ""),
           };
         }
-        // Default: image_object_tap (Recount)
-        const correct = typeof q.correct === "number" ? q.correct : 0;
-        const options = Array.isArray(q.options) ? (q.options as string[]) : imageTags.slice(0, 4);
-        const targetLabel = toDisplayText(q.target_label ?? options[correct] ?? imageTags[i] ?? "");
+        if (q.type === "image_explain_mc") {
+          const three = clampToThreeOptions(
+            Array.isArray(q.options) ? q.options : imageTags.slice(0, 3),
+            q.correct,
+          );
+          const targetLabel = toDisplayText(q.target_label ?? three.options[three.correct] ?? imageTags[i] ?? "");
+          return {
+            id: String(q.id ?? i + 1),
+            type: "image_explain_mc",
+            question: resolvePictureListeningQuestion(q, "tap", targetLabel),
+            options: three.options,
+            correct: three.correct,
+            targetLabel,
+            explanation: toDisplayText(q.explanation ?? ""),
+          };
+        }
+        const three = clampToThreeOptions(
+          Array.isArray(q.options) ? q.options : imageTags.slice(0, 3),
+          q.correct,
+        );
+        const targetLabel = toDisplayText(q.target_label ?? three.options[three.correct] ?? imageTags[i] ?? "");
         return {
           id: String(q.id ?? i + 1),
           type: "image_object_tap",
-          question: toDisplayText(q.question),
+          question: resolvePictureListeningQuestion(q, "tap", targetLabel),
           targetLabel,
-          options,
-          correct,
+          options: three.options,
+          correct: three.correct,
           explanation: toDisplayText(q.explanation ?? ""),
         };
-      }),
+      });
+    if (mapped.some((q) => !q.question.trim())) {
+      throw new Error("Claude omitted student-facing question text");
+    }
+    return {
+      passage,
+      questions: mapped,
     };
   } catch (err) {
-    logger.error({ err }, "generateImagePassageContent failed, using fallback");
-    const [t0 = "object", t1 = "item", t2 = "thing", t3 = "element"] = imageTags;
-    return {
-      passage: `Look at the picture. There is a ${t0} and a ${t1} in the scene.`,
-      questions: [
-        {
-          id: "1",
-          type: "image_object_tap",
-          question: `Find the ${t0} in the picture.`,
-          targetLabel: t0,
-          options: [t0, t1, t2, t3],
-          correct: 0,
-          explanation: `The ${t0} is in the image.`,
-        },
-        {
-          id: "2",
-          type: "image_object_tap",
-          question: `Find the ${t1} in the picture.`,
-          targetLabel: t1,
-          options: [t1, t0, t2, t3],
-          correct: 0,
-          explanation: `The ${t1} is in the image.`,
-        },
-      ],
-    };
+    logger.error({ err, keyUse: canDo.keyUse }, "generateImagePassageContent failed");
+    throw err;
   }
 }

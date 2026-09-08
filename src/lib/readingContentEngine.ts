@@ -14,12 +14,10 @@
 import canDoData from "../data/canDo.json";
 import curriculumData from "../data/readingCurriculum.json";
 
-// Re-use shared types from the listening engine — the key use rotation is the same
-// across all domains (Recount → Explain → Argue cycles continuously).
 export type { CanDoEntry, KeyUse } from "./listeningContentEngine";
 export { KEY_USE_ROTATION, nextKeyUse, clampLevel } from "./listeningContentEngine";
 
-import { KEY_USE_ROTATION, nextKeyUse, clampLevel } from "./listeningContentEngine";
+import { nextKeyUse, clampLevel, findKeyUseBlock, toCanDoEntry } from "./listeningContentEngine";
 import type { CanDoEntry } from "./listeningContentEngine";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -41,7 +39,7 @@ export interface ReadingContext {
   permittedFormats: string[];
   /**
    * The single WIDA Can Do targeted this session — one per key use, rotates across sessions.
-   * Contains: keyUse (Recount|Explain|Argue), action ("Process recounts by"), items (the sub-skill bullet points).
+   * Contains: keyUse (Narrate|Inform|Explain|Argue), action, items (official Can Do bullets).
    */
   canDo: CanDoEntry;
   /** Single pre-selected topic — persisted from a failed session or randomly chosen */
@@ -58,21 +56,21 @@ export interface ReadingContext {
  * Question formats permitted at each WIDA level — derived directly from the
  * READING CanDo descriptors (Key Uses Edition, Grades 6–8):
  *
- *  L1 Recount → identify Wh-question responses        → multiple_choice
+ *  L1 Narrate/Inform (2016 Recount) → Wh / icons      → multiple_choice
  *  L1 Explain → match objects/media to words           → match_columns
  *  L1 Argue   → classify true from false statements    → classify
- *  L2 Recount → sequence illustrated events            → sequence_order
+ *  L2 Narrate/Inform → sequence illustrated events     → sequence_order
  *  L2 Explain → compare ideas (same topic)             → multiple_choice
  *  L2 Argue   → distinguish facts from opinions        → classify
- *  L3 Recount → identify topic sentences/main ideas    → multiple_choice
+ *  L3 Inform → identify topic sentences/main ideas     → multiple_choice
  *  L3 Explain → sequence steps or events               → sequence_order
  *  L3 Argue   → identify claims and reasons            → multiple_choice
- *  L4 Recount → order paragraphs / identify summaries  → sequence_order, multiple_choice
+ *  L4 Narrate/Inform → order paragraphs / summaries    → sequence_order, multiple_choice
  *  L4 Explain → match cause to effect                  → match_columns
  *  L4 Argue   → classify pros and cons                 → classify
- *  L5 Recount → sequence main ideas / conclusions      → sequence_order
+ *  L5 Narrate/Inform → sequence main ideas / conclusions → sequence_order
  *  L5 Argue   → evaluate evidence / develop stance     → multiple_choice
- *  L6 Recount → identify central idea + details        → multiple_choice
+ *  L6 Inform → identify central idea + details         → multiple_choice
  *  L6 Argue   → distinguish fact/reasoned judgment/speculation → classify
  */
 export const READING_PERMITTED_FORMATS: Record<number, string[]> = {
@@ -83,6 +81,22 @@ export const READING_PERMITTED_FORMATS: Record<number, string[]> = {
   5: ["multiple_choice", "sequence_order"],
   6: ["multiple_choice", "classify"],
 };
+
+/** At L1–2, one format per Key Language Use so items match the content guide. */
+export function readingFormatsForKeyUse(elpLevel: number, keyUse: string): string[] {
+  const ku = keyUse === "Recount" ? "Narrate" : keyUse;
+  if (elpLevel === 1) {
+    if (ku === "Explain") return ["match_columns"];
+    if (ku === "Argue") return ["classify"];
+    return ["multiple_choice"];
+  }
+  if (elpLevel === 2) {
+    if (ku === "Narrate" || ku === "Inform") return ["sequence_order"];
+    if (ku === "Argue") return ["classify"];
+    return ["multiple_choice"];
+  }
+  return READING_PERMITTED_FORMATS[elpLevel] ?? ["multiple_choice"];
+}
 
 /** Text format and length by WIDA level — what students READ at each level */
 const READING_TEXT_FORMAT: Record<number, string> = {
@@ -150,14 +164,7 @@ export function getReadingCanDoForKeyUse(level: number, keyUse: string): CanDoEn
   const readingDomain = levelEntry.domains.find((d: any) => d.domain === "READING");
   if (!readingDomain) return { keyUse, action: "", items: [] };
 
-  const entry = readingDomain.keyUses.find((k: any) => k.keyUse === keyUse);
-  if (!entry) return { keyUse, action: "", items: [] };
-
-  return {
-    keyUse,
-    action: entry.action as string,
-    items:  entry.canDo  as string[],
-  };
+  return toCanDoEntry(keyUse, findKeyUseBlock(readingDomain.keyUses, keyUse));
 }
 
 // ── Curriculum helpers ────────────────────────────────────────────────────────
@@ -230,7 +237,7 @@ export function buildReadingContext(
     stepLabel:             STEP_LABELS[step],
     complexityInstruction: (COMPLEXITY_INSTRUCTIONS[step] ?? COMPLEXITY_INSTRUCTIONS[2])(elpLevel),
     textFormat:            READING_TEXT_FORMAT[elpLevel]         ?? "",
-    permittedFormats:      READING_PERMITTED_FORMATS[elpLevel]   ?? ["multiple_choice"],
+    permittedFormats:      readingFormatsForKeyUse(elpLevel, keyUse),
     canDo:                 getReadingCanDoForKeyUse(elpLevel, keyUse),
     selectedTopic:         selectReadingTopic(elpLevel, persistedTopic, topicsUsedToday),
     questionCount:         READING_QUESTION_COUNT[elpLevel]      ?? 3,

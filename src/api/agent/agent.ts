@@ -24,7 +24,7 @@ const router = Router();
 
 const QuestionSchema = z.object({
   level:   z.number().int().min(0).max(6),
-  keyUse:  z.enum(["Recount", "Explain", "Argue"]),
+  keyUse:  z.enum(["Narrate", "Inform", "Explain", "Argue", "Recount"]),
   format:  z.enum([
     "listening_mc",
     "listening_tf",
@@ -38,19 +38,19 @@ const QuestionSchema = z.object({
 
 const SessionSchema = z.object({
   level:    z.number().int().min(0).max(6),
-  keyUses:  z.array(z.enum(["Recount", "Explain", "Argue"])).min(1).max(3).optional(),
+  keyUses:  z.array(z.enum(["Narrate", "Inform", "Explain", "Argue", "Recount"])).min(1).max(4).optional(),
   topic:    z.string().max(100).optional(),
 });
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const BEST_FORMAT_FOR_LEVEL: Record<number, Record<string, string>> = {
-  1: { Recount: "listening_image_grid", Explain: "listening_image_grid", Argue: "listening_tf"    },
-  2: { Recount: "listening_sequence",   Explain: "listening_classify",   Argue: "listening_mc"    },
-  3: { Recount: "listening_sequence",   Explain: "listening_match",      Argue: "listening_mc"    },
-  4: { Recount: "listening_mc",         Explain: "listening_match",      Argue: "listening_match"  },
-  5: { Recount: "listening_sequence",   Explain: "listening_mc",         Argue: "listening_mc"    },
-  6: { Recount: "listening_mc",         Explain: "listening_mc",         Argue: "listening_mc"    },
+  1: { Narrate: "listening_image_grid", Inform: "listening_image_grid", Recount: "listening_image_grid", Explain: "listening_image_grid", Argue: "listening_tf"    },
+  2: { Narrate: "listening_sequence",   Inform: "listening_sequence",   Recount: "listening_sequence",   Explain: "listening_classify",   Argue: "listening_mc"    },
+  3: { Narrate: "listening_sequence",   Inform: "listening_mc",         Recount: "listening_sequence",   Explain: "listening_match",      Argue: "listening_mc"    },
+  4: { Narrate: "listening_mc",         Inform: "listening_mc",         Recount: "listening_mc",         Explain: "listening_match",      Argue: "listening_match"  },
+  5: { Narrate: "listening_sequence",   Inform: "listening_mc",         Recount: "listening_sequence",   Explain: "listening_mc",         Argue: "listening_mc"    },
+  6: { Narrate: "listening_mc",         Inform: "listening_mc",         Recount: "listening_mc",         Explain: "listening_mc",         Argue: "listening_mc"    },
 };
 
 // ── Routes ────────────────────────────────────────────────────────────────────
@@ -111,7 +111,7 @@ router.post("/agent/listening/session", requireAuth, async (req, res) => {
       meta: {
         agentId: LISTENING_AGENT_ID,
         questionCount: questions.length,
-        keyUses: keyUses ?? ["Recount", "Explain", "Argue"],
+        keyUses: keyUses ?? ["Narrate", "Inform", "Explain", "Argue"],
       },
     });
   } catch (err) {
@@ -133,8 +133,8 @@ router.get("/agent/listening/candos", requireAuth, (req, res) => {
     res.status(400).json({ error: "level must be 0–6" });
     return;
   }
-  if (!["Recount", "Explain", "Argue"].includes(keyUse)) {
-    res.status(400).json({ error: "keyUse must be Recount, Explain, or Argue" });
+  if (!["Narrate", "Inform", "Explain", "Argue", "Recount"].includes(keyUse)) {
+    res.status(400).json({ error: "keyUse must be Narrate, Inform, Explain, Argue, or Recount" });
     return;
   }
 

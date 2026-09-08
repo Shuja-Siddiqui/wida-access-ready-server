@@ -18,6 +18,7 @@ router.use("/speech", requireAuth);
 const TextToSpeechBody = z.object({
   text: z.string().min(1).max(4000),
   voice: z.string().min(1).max(100).optional(),
+  delivery: z.enum(["passage", "coaching"]).optional(),
 });
 
 // Audio clips are short practice-answer recordings (a few seconds to ~60s).
@@ -48,7 +49,11 @@ router.post("/speech/text-to-speech", async (req: Request, res: Response) => {
   }
 
   try {
-    const audio = await textToSpeech(parsed.data.text, parsed.data.voice);
+    const audio = await textToSpeech(
+      parsed.data.text,
+      parsed.data.voice,
+      parsed.data.delivery ?? "passage",
+    );
     res.status(200);
     res.setHeader("Content-Type", "audio/mpeg");
     res.setHeader("Content-Length", String(audio.length));
@@ -85,8 +90,10 @@ router.post(
     }
 
     try {
-      const text = await speechToText(req.body, contentType);
-      sendSuccess(res, { text });
+      const reference =
+        typeof req.headers["x-speech-reference"] === "string" ? req.headers["x-speech-reference"] : "";
+      const result = await speechToText(req.body, contentType, reference);
+      sendSuccess(res, result);
     } catch (error) {
       if (error instanceof AzureSpeechNotConfiguredError) {
         sendError(res, 503, "Server speech transcription is not configured");

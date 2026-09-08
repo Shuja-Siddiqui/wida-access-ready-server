@@ -3,5 +3,5 @@
   "ext": "ts,js,mjs,json",
   "ignore": ["dist", "node_modules", "logs", "src/generated"],
   "delay": 400,
-  "exec": "npm run build && node --env-file=.env --enable-source-maps ./dist/index.mjs"
+  "exec": "node ./build.mjs && node --env-file=.env --enable-source-maps ./dist/index.mjs"
 }

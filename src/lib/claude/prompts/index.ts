@@ -9,6 +9,8 @@ export { BASE_BLOCK }                                               from "./base
 export { LISTENING_CORE_BLOCK }                                     from "./listening-core";
 export { OPTIONAL_LINE_VISUALS_BLOCK, LIBRARY_IMAGE_GROUNDS_CONTENT } from "./optional-line-visuals";
 export { buildSystemPrompt, blockIf }                               from "./compose";
+export { contentGenPrompt, contentBand, CONTENT_KERNEL }            from "./content";
+export type { ContentDomain, ContentBand }                          from "./content";
 export { ACADEMIC_IMAGE_ANCHOR_BLOCK, buildImageAnchorPromptFields } from "./academic-image-anchor";
 
 // Subject blocks — guidelines, visual anchor tags, output schemas

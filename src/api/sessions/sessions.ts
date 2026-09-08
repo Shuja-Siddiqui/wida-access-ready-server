@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
-import { eq, and, sql, desc, inArray, gt, or } from "drizzle-orm";
+import { eq, and, sql, desc, inArray, gt, or, notInArray, isNotNull } from "drizzle-orm";
+import { z } from "zod";
 import {
   db,
   studentsTable,
@@ -22,8 +23,10 @@ import {
 import { buildReadingContext } from "../../lib/readingContentEngine";
 import { buildSpeakingContext } from "../../lib/speakingContentEngine";
 import { buildWritingContext } from "../../lib/writingContentEngine";
+import { getContentPortrayal } from "../../lib/listeningContentEngine";
 import {
-  nextSubject,
+  nextKeyUse,
+  pickSubjectForKeyUse,
   buildAcademicContentLayer,
   pickAcademicTopicLabel,
 } from "../../lib/academicSubjectContent";
@@ -54,6 +57,8 @@ import {
   generateSpeakingContent,
   generateWritingContent,
   getWritingFeedback,
+  generateAttemptFeedback,
+  generateItemFeedback,
   generateImagePassageContent,
 } from "../../lib/claude";
 import { SUBJECT_VISUAL_ANCHOR_TAGS } from "../../lib/claude/prompts";
@@ -84,14 +89,47 @@ import { resolveStudentAccess } from "../../lib/subscription";
 
 const storage = new ObjectStorageService();
 
+const ItemFeedbackBody = z.object({
+  domain: z.string().min(1),
+  level: z.number(),
+  format: z.enum(["picture", "selected_response", "speaking", "writing"]),
+  question: z.string(),
+  studentAnswer: z.string(),
+  correctAnswer: z.string().optional(),
+  passage: z.string().optional(),
+  imageDescription: z.string().optional(),
+  imageTags: z.array(z.string()).optional(),
+  targetObject: z.string().optional(),
+  prompt: z.string().optional(),
+  scaffold: z.string().optional(),
+  canDo: z.string().optional(),
+  keyUse: z.string().optional(),
+  canDoItems: z.array(z.string()).optional(),
+  canDoAction: z.string().optional(),
+  options: z.array(z.string()).optional(),
+  responseLength: z.string().optional(),
+  minSentences: z.number().optional(),
+  correct: z.boolean().optional(),
+  sttConfidence: z.number().optional(),
+  uncertainWords: z.array(z.string()).optional(),
+  tryCount: z.number().optional(),
+  lastJudgment: z.enum(["agree", "partial", "rejected"]).optional(),
+  lastCoachTip: z.string().optional(),
+});
+
+function dinoLabels(row: { detectionResults: unknown }): string[] {
+  const detections = ((row.detectionResults as { detections?: { label?: string }[] } | null)?.detections ?? [])
+    .map((d) => d.label)
+    .filter((t): t is string => typeof t === "string" && t.trim().length > 0);
+  return [...new Set(detections)];
+}
+
 function writingImageTags(row: {
   tags: unknown;
   detectionResults: unknown;
 }): string[] {
   const official = Array.isArray(row.tags) ? row.tags.filter((t): t is string => typeof t === "string") : [];
-  const detections = ((row.detectionResults as { detections?: { label?: string }[] } | null)?.detections ?? [])
-    .map((d) => d.label)
-    .filter((t): t is string => typeof t === "string" && t.trim().length > 0);
+  const detections = dinoLabels(row);
   return [...new Set([...official, ...detections])];
 }
 
@@ -128,13 +166,16 @@ type LibraryAnchorRow = {
   detectionResults: unknown;
 };
 
-function toDomainAnchor(row: LibraryAnchorRow) {
+function toDomainAnchor(row: LibraryAnchorRow, preferDino = false) {
+  const dino = dinoLabels(row);
+  const tags = preferDino && dino.length >= 2 ? dino : writingImageTags(row);
   return {
     id: row.id,
-    tags: writingImageTags(row),
+    tags,
     s3Key: row.s3Key,
     description: row.description,
     imageConcept: row.imageConcept,
+    detectionResults: row.detectionResults,
   };
 }
 
@@ -412,7 +453,7 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
     .limit(1);
 
   const currentLevel = levelRow ? parseFloat(levelRow.currentLevel) : config.scale.min;
-  const exitThreshold = levelRow ? parseFloat(levelRow.exitThreshold) : getExitThreshold(assessment, configDomain);
+  const exitThreshold = getExitThreshold(assessment, configDomain);
   const gap = Math.max(0, exitThreshold - currentLevel);
   const mode = gap <= 0.5 && gap > 0 ? "exit_proximity" : "standard";
 
@@ -466,11 +507,25 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
       .limit(1);
 
     const lastScore      = lastCompletedSession?.scorePct ?? 100;
-    const lastKeyUse     = lastCompletedSession?.keyUse ?? null;
     const persistedTopic =
       lastCompletedSession && lastScore < 70
         ? lastCompletedSession.topic
         : null;
+
+    const [lastAnySession] = await db
+      .select({ keyUse: sessionsTable.keyUse })
+      .from(sessionsTable)
+      .where(and(
+        eq(sessionsTable.studentId, student.id),
+        eq(sessionsTable.domain, "listening"),
+        eq(sessionsTable.tier, "general"),
+      ))
+      .orderBy(desc(sessionsTable.createdAt))
+      .limit(1);
+
+    const lastKeyUse = persistedTopic
+      ? (lastCompletedSession?.keyUse ?? null)
+      : (lastAnySession?.keyUse ?? lastCompletedSession?.keyUse ?? null);
 
     // ── Levels 0, 1, 2 → image-library object-tap sessions ────────────────
     if (Math.floor(currentLevel) <= 2) {
@@ -601,13 +656,16 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
               sessionId:  earlySession.id,
               domain,
               levelStart: currentLevel,
+              keyUse:     imageCtx.canDo.keyUse,
               content: {
                 type: "image_library",
                 data: {
                   topic:            chosenTopic.name,
+                  keyUse:           imageCtx.canDo.keyUse,
                   passage:          imagePassage.passage,
                   imageUrl,
                   tags:             cleanTags,
+                  imageDescription: (imageRow.description as string | null) || cleanTags.join(", "),
                   // Send deduplicated detections — one box per area, no overlaps
                   detectionResults: { detections: cleanDetections, model: (imageRow.detectionResults as any)?.model ?? "grounding-dino" },
                   questions:        safeQuestions,
@@ -702,7 +760,8 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
       sessionId: earlySession.id,
       domain,
       levelStart: currentLevel,
-      content: { type: "listening", data: { ...(listeningContent as unknown as Record<string, unknown> ?? {}), illustrationUrl } },
+      keyUse: listeningCtx.canDo.keyUse,
+      content: { type: "listening", data: { ...(listeningContent as unknown as Record<string, unknown> ?? {}), illustrationUrl, keyUse: listeningCtx.canDo.keyUse } },
       mode,
       exitThreshold,
     });
@@ -712,36 +771,38 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
   // ── Academic listening tier ───────────────────────────────────────────────
   if (domain === "listening" && tier === "academic") {
     // Retrieve last completed academic session to drive keyUse + subject rotation
-    const [lastAcademicSession] = await db
+    const recentAcademicSessions = await db
       .select({
-        topic:    sessionsTable.topic,
-        scorePct: sessionsTable.scorePct,
-        keyUse:   sessionsTable.keyUse,
-        subject:  sessionsTable.subject,
+        topic:     sessionsTable.topic,
+        scorePct:  sessionsTable.scorePct,
+        keyUse:    sessionsTable.keyUse,
+        subject:   sessionsTable.subject,
+        completed: sessionsTable.completed,
       })
       .from(sessionsTable)
       .where(and(
         eq(sessionsTable.studentId, student.id),
         eq(sessionsTable.domain, "listening"),
         eq(sessionsTable.tier, "academic"),
-        eq(sessionsTable.completed, true),
       ))
       .orderBy(desc(sessionsTable.createdAt))
-      .limit(1);
+      .limit(16);
 
+    const lastAnyAcademic = recentAcademicSessions[0];
+    const lastAcademicSession = recentAcademicSessions.find((s) => s.completed);
     const lastScore      = lastAcademicSession?.scorePct ?? 100;
-    const lastKeyUse     = lastAcademicSession?.keyUse   ?? null;
-    const lastSubject    = lastAcademicSession?.subject   ?? null;
     const persistedTopic =
       lastAcademicSession && lastScore < 70 ? lastAcademicSession.topic : null;
+    const lastKeyUse = persistedTopic
+      ? (lastAcademicSession?.keyUse ?? null)
+      : (lastAnyAcademic?.keyUse ?? null);
 
-    // Build academic context — extends ListeningContext with subject + subjectLabel
     const academicCtx = buildAcademicListeningContext(
       currentLevel,
       topicsUsedToday,
       persistedTopic,
       lastKeyUse,
-      lastSubject,
+      recentAcademicSessions,
     );
 
     // ── Levels 1–2: academic image-tap ───────────────────────────────────────
@@ -916,15 +977,18 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
             sessionId:    earlyAcImageSession.id,
             domain,
             levelStart:   currentLevel,
+            keyUse:       academicCtx.canDo.keyUse,
             subject:      academicCtx.subject,
             subjectLabel: academicCtx.subjectLabel,
             content: {
               type: "image_library",
               data: {
                 topic:            `[${academicCtx.subjectLabel}] Academic Image`,
+                keyUse:           academicCtx.canDo.keyUse,
                 passage:          academicTapContent.passage,
                 imageUrl,
                 tags:             cleanTags,
+                imageDescription,
                 detectionResults: {
                   detections: cleanDetections,
                   model:      (acImage.detectionResults as any)?.model ?? "grounding-dino",
@@ -1156,6 +1220,7 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
       sessionId:    earlySession.id,
       domain,
       levelStart:   currentLevel,
+      keyUse:       academicCtx.canDo.keyUse,
       subject:      academicCtx.subject,
       subjectLabel: academicCtx.subjectLabel,
       content:      {
@@ -1178,7 +1243,7 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
   // ── Non-listening domains ─────────────────────────────────────────────────
   // Fetch the last completed session for this domain/tier to drive key-use
   // rotation and topic persistence (reuse topic if last session score < 70).
-  const [lastDomainSession] = await db
+  const recentDomainSessions = await db
     .select({
       topic:    sessionsTable.topic,
       scorePct: sessionsTable.scorePct,
@@ -1193,12 +1258,30 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
       eq(sessionsTable.completed, true),
     ))
     .orderBy(desc(sessionsTable.createdAt))
-    .limit(1);
+    .limit(16);
+
+  const lastDomainSession = recentDomainSessions[0];
 
   const lastDomainScore    = lastDomainSession?.scorePct ?? 100;
   const lastDomainKeyUse   = lastDomainSession?.keyUse   ?? null;
   const domainPersistedTopic =
     lastDomainSession && lastDomainScore < 70 ? lastDomainSession.topic : null;
+
+  const recentImageRows = await db
+    .select({ libraryImageId: sessionsTable.libraryImageId })
+    .from(sessionsTable)
+    .where(and(
+      eq(sessionsTable.studentId, student.id),
+      eq(sessionsTable.domain, domain),
+      isNotNull(sessionsTable.libraryImageId),
+    ))
+    .orderBy(desc(sessionsTable.createdAt))
+    .limit(8);
+  const excludeImageIds = [...new Set(
+    recentImageRows
+      .map((r) => r.libraryImageId)
+      .filter((id): id is string => typeof id === "string" && id.length > 0),
+  )];
 
   // Variables set inside the switch so the DB insert can store them.
   let sessionTopic:  string | null = null;
@@ -1209,8 +1292,12 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
   const academicDomain = tier === "academic" && (domain === "reading" || domain === "speaking" || domain === "writing")
     ? (domain as "reading" | "speaking" | "writing")
     : null;
+  const academicIsRetry = domainPersistedTopic !== null;
+  const academicKeyUse = academicDomain
+    ? nextKeyUse(lastDomainKeyUse, academicIsRetry)
+    : null;
   const academicSubject = academicDomain
-    ? nextSubject(lastDomainSession?.subject ?? null)
+    ? pickSubjectForKeyUse(academicKeyUse, recentDomainSessions, academicIsRetry)
     : null;
   const academicTopic = academicSubject
     ? pickAcademicTopicLabel(academicSubject, currentLevel, domainPersistedTopic, topicsUsedToday)
@@ -1220,6 +1307,7 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
         subject: academicSubject,
         subjectLabel: ACADEMIC_SUBJECT_LABELS[academicSubject],
         domain: academicDomain,
+        keyUse: academicKeyUse,
       })
     : undefined;
 
@@ -1256,9 +1344,20 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
     s3Key: string;
     description?: string | null;
     imageConcept?: string | null;
+    detectionResults?: unknown;
   } | null = null;
   let domainAnchorUrl: string | null = null;
+  const skipRecentImage = excludeImageIds.length
+    ? notInArray(libraryTable.id, excludeImageIds)
+    : undefined;
+  const elpFloor = Math.floor(currentLevel);
+  const domainKeyUseForPhoto = academicKeyUse ?? nextKeyUse(lastDomainKeyUse, domainPersistedTopic !== null);
+  const portrayal = getContentPortrayal(elpFloor, domain.toUpperCase(), domainKeyUseForPhoto);
+  const pictureUse = (portrayal?.picture as { use?: string } | null | undefined)?.use;
+  const skipLibraryPhoto = elpFloor <= 2 && pictureUse === "not_needed";
+  const requireLibraryPhoto = elpFloor <= 2 && pictureUse === "required";
   try {
+    if (!skipLibraryPhoto) {
     const terms = preferredTopic ? topicSearchTerms(preferredTopic) : [];
     const metaMatch = terms.length
       ? or(
@@ -1277,25 +1376,34 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
         .innerJoin(libraryTopicsTable, eq(libraryTopicsTable.libraryId, libraryTable.id))
         .innerJoin(topicsTable, eq(topicsTable.id, libraryTopicsTable.topicId))
         .where(
-          or(
-            ...terms.map((t) =>
-              sql`LOWER(${topicsTable.name}) LIKE LOWER(${"%" + t + "%"})`,
-            ),
-          ),
+          skipRecentImage
+            ? and(
+                or(
+                  ...terms.map((t) =>
+                    sql`LOWER(${topicsTable.name}) LIKE LOWER(${"%" + t + "%"})`,
+                  ),
+                ),
+                skipRecentImage,
+              )
+            : or(
+                ...terms.map((t) =>
+                  sql`LOWER(${topicsTable.name}) LIKE LOWER(${"%" + t + "%"})`,
+                ),
+              ),
         )
         .orderBy(sql`RANDOM()`)
         .limit(1);
-      if (byLinkedTopic?.s3Key) domainAnchor = toDomainAnchor(byLinkedTopic);
+      if (byLinkedTopic?.s3Key) domainAnchor = toDomainAnchor(byLinkedTopic, requireLibraryPhoto);
     }
 
     if (!domainAnchor && metaMatch) {
       const [byMeta] = await db
         .select(LIBRARY_ANCHOR_COLS)
         .from(libraryTable)
-        .where(metaMatch)
+        .where(skipRecentImage ? and(metaMatch, skipRecentImage) : metaMatch)
         .orderBy(sql`RANDOM()`)
         .limit(1);
-      if (byMeta?.s3Key) domainAnchor = toDomainAnchor(byMeta);
+      if (byMeta?.s3Key) domainAnchor = toDomainAnchor(byMeta, requireLibraryPhoto);
     }
 
     const subjectAnchorTags = academicSubject
@@ -1312,36 +1420,49 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
               subjectAnchorTags.map((t) => `'${t.replace(/'/g, "''")}'`).join(","),
             )}]::text[]`,
             sql`(${libraryTable.contexts} = '{}' OR ${libraryTable.contexts} && ARRAY[${`academic:${academicSubject}`}]::text[])`,
+            ...(skipRecentImage ? [skipRecentImage] : []),
           ),
         )
         .orderBy(sql`RANDOM()`)
         .limit(1);
-      if (row?.s3Key) domainAnchor = toDomainAnchor(row);
+      if (row?.s3Key) domainAnchor = toDomainAnchor(row, requireLibraryPhoto);
     }
 
-    // Writing always needs a photo when the library has one. Other domains only
-    // fall back to any image at levels 1–2 — then the passage must follow the photo.
-    if (!domainAnchor && (domain === "writing" || Math.floor(currentLevel) <= 2)) {
+    const anyPhotoWhere = requireLibraryPhoto
+      ? sql`jsonb_array_length(COALESCE(${libraryTable.detectionResults}->'detections', '[]'::jsonb)) >= 2`
+      : sql`jsonb_array_length(COALESCE(${libraryTable.detectionResults}->'detections', '[]'::jsonb)) >= 1
+              OR jsonb_array_length(COALESCE(${libraryTable.tags}, '[]'::jsonb)) >= 1`;
+    if (!domainAnchor && (domain === "writing" || elpFloor <= 2)) {
       const [row] = await db
         .select(LIBRARY_ANCHOR_COLS)
         .from(libraryTable)
-        .where(
-          sql`jsonb_array_length(COALESCE(${libraryTable.detectionResults}->'detections', '[]'::jsonb)) >= 1
-              OR jsonb_array_length(COALESCE(${libraryTable.tags}, '[]'::jsonb)) >= 1`,
-        )
+        .where(skipRecentImage ? and(anyPhotoWhere, skipRecentImage) : anyPhotoWhere)
         .orderBy(sql`RANDOM()`)
         .limit(1);
-      if (row?.s3Key) domainAnchor = toDomainAnchor(row);
+      if (row?.s3Key) domainAnchor = toDomainAnchor(row, requireLibraryPhoto);
+    }
+    if (!domainAnchor && (domain === "writing" || elpFloor <= 2) && skipRecentImage) {
+      const [row] = await db
+        .select(LIBRARY_ANCHOR_COLS)
+        .from(libraryTable)
+        .where(anyPhotoWhere)
+        .orderBy(sql`RANDOM()`)
+        .limit(1);
+      if (row?.s3Key) domainAnchor = toDomainAnchor(row, requireLibraryPhoto);
+    }
+    if (requireLibraryPhoto && domainAnchor && domainAnchor.tags.length < 2) {
+      domainAnchor = null;
     }
     if (domainAnchor) {
-      if (domain !== "writing") {
+      if (domain !== "writing" && domain !== "speaking") {
         preferredTopic = topicFromAnchor(domainAnchor);
       }
       req.log.info(
-        { imageId: domainAnchor.id, tags: domainAnchor.tags, topic: preferredTopic, domain },
+        { imageId: domainAnchor.id, tags: domainAnchor.tags, topic: preferredTopic, domain, excludeImageIds, requireLibraryPhoto },
         "Domain library image selected",
       );
       domainAnchorUrl = await storage.getPresignedGetUrl(domainAnchor.s3Key, 3600).catch(() => null);
+    }
     }
   } catch (err) {
     req.log.warn({ err }, "Domain library image lookup failed, continuing without photo");
@@ -1480,14 +1601,24 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
     })
     .returning();
 
-  if (contentData && typeof contentData === "object" && domainAnchorUrl) {
-    (contentData as Record<string, unknown>).illustrationUrl = domainAnchorUrl;
+  if (contentData && typeof contentData === "object") {
+    const row = contentData as Record<string, unknown>;
+    if (domainAnchorUrl) row.illustrationUrl = domainAnchorUrl;
+    if (domainAnchor?.tags?.length) {
+      row.imageTags = domainAnchor.tags;
+      row.tags = domainAnchor.tags;
+    }
+    if (domainAnchor?.description) row.imageDescription = domainAnchor.description;
+    if (domainAnchor?.detectionResults) row.detectionResults = domainAnchor.detectionResults;
+    if (sessionTopic) row.topic = sessionTopic;
+    if (sessionKeyUse) row.keyUse = sessionKeyUse;
   }
 
   sendSuccess(res, {
     sessionId: session.id,
     domain,
     levelStart: currentLevel,
+    keyUse: sessionKeyUse,
     content: {
       type: domain,
       data: contentData,
@@ -1562,7 +1693,7 @@ router.post("/students/:studentId/sessions/:sessionId/complete", requireStudentA
     .limit(1);
 
   const currentLevel = levelRow ? parseFloat(levelRow.currentLevel) : 1.0;
-  const exitThreshold = levelRow ? parseFloat(levelRow.exitThreshold) : getExitThreshold(assessment, completionConfigDomain);
+  const exitThreshold = getExitThreshold(assessment, completionConfigDomain);
   const consecutivePass = levelRow ? parseInt(levelRow.consecutivePassCount) : 0;
   const consecutiveFail = levelRow ? parseInt(levelRow.consecutiveFailCount) : 0;
 
@@ -1725,6 +1856,24 @@ router.post("/students/:studentId/sessions/:sessionId/complete", requireStudentA
 
   const message = getSessionEndMessage(domain, levelUpdate.delta, scorePct, student.name);
 
+  const attemptFeedback =
+    domain === "speaking" || domain === "writing"
+      ? null
+      : await generateAttemptFeedback({
+          domain,
+          tier,
+          level: currentLevel,
+          scorePct,
+          topic: session.topic,
+          keyUse: session.keyUse,
+          answers: parsed.data.answers ?? [],
+        }).catch(() => ({
+          summary: "You finished this practice. Review missed items and try again soon.",
+          mistakes: [],
+          strengths: ["You completed the session."],
+          nextSteps: ["Practice the same skill again tomorrow."],
+        }));
+
   sendSuccess(res, {
     sessionId: session.id,
     scorePct,
@@ -1739,6 +1888,7 @@ router.post("/students/:studentId/sessions/:sessionId/complete", requireStudentA
     xpEarned,
     streakBonus,
     totalXp: newTotalXp,
+    attemptFeedback,
   });
 });
 
@@ -1827,7 +1977,7 @@ router.post("/students/:studentId/writing/feedback", requireStudentAccess("stude
 
   const config = getAssessmentConfig(assessment);
   const currentLevel = levelRow ? parseFloat(levelRow.currentLevel) : config.scale.min;
-  const exitThreshold = levelRow ? parseFloat(levelRow.exitThreshold) : getExitThreshold(assessment, "writing");
+  const exitThreshold = getExitThreshold(assessment, "writing");
   const gap = Math.max(0, exitThreshold - currentLevel);
   const mode = gap <= 0.5 && gap > 0 ? "exit_proximity" : "standard";
 
@@ -1840,6 +1990,23 @@ router.post("/students/:studentId/writing/feedback", requireStudentAccess("stude
     minSentences:    parsed.data.level <= 2 ? 3 : parsed.data.level <= 3 ? 4 : parsed.data.level <= 4 ? 6 : parsed.data.level <= 5 ? 8 : 12,
   });
 
+  sendSuccess(res, feedback);
+});
+
+router.post("/students/:studentId/item-feedback", requireStudentAccess("studentId"), async (req, res): Promise<void> => {
+  const studentId = typeof req.params.studentId === "string" ? req.params.studentId : "";
+  if (!studentId) {
+    sendError(res, 400, "Missing student id");
+    return;
+  }
+
+  const parsed = ItemFeedbackBody.safeParse(req.body);
+  if (!parsed.success) {
+    sendError(res, 400, "Missing or invalid item feedback fields");
+    return;
+  }
+
+  const feedback = await generateItemFeedback(parsed.data);
   sendSuccess(res, feedback);
 });
 

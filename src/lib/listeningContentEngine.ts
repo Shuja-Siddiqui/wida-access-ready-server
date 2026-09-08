@@ -12,6 +12,7 @@
  */
 
 import canDoData from "../data/canDo.json";
+import contentGuideData from "../data/can-do-content-guide.json";
 import curriculumData from "../data/listeningCurriculum.json";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -33,7 +34,7 @@ export interface ListeningContext {
   permittedFormats: string[];
   /**
    * The single WIDA Can Do targeted this session — one per key use, rotates across sessions.
-   * Contains: keyUse (Recount|Explain|Argue), action ("Process recounts by"), items (the sub-skill bullet points).
+   * Contains: keyUse (Narrate|Inform|Explain|Argue), action, items, plus sourceKeyUse/focus when split from 2016 Recount.
    */
   canDo: CanDoEntry;
   /** Single pre-selected topic — persisted from a failed session or randomly chosen */
@@ -79,7 +80,7 @@ const STEP_LABELS = ["Entry", "Early", "Mid", "Late", "Advanced"] as const;
 /**
  * Each WIDA integer level (1–6) is divided into 5 sub-steps of 0.2.
  * We floor (not round) so that 1.8 stays in Level 1, not Level 2.
- * Level 1 is the entry point; Level 6.0 is the exit.
+ * Level 1 is the entry point; WIDA practice exit is 4.7.
  */
 function floorLevel(fractional: number): number {
   return Math.min(6, Math.max(1, Math.floor(fractional)));
@@ -106,34 +107,148 @@ const COMPLEXITY_INSTRUCTIONS: Record<number, (level: number) => string> = {
 
 // ── Can Do helpers ────────────────────────────────────────────────────────────
 
-/** Ordered rotation of key uses across listening sessions. Discuss is Oral Language only — not in Listening. */
-export const KEY_USE_ROTATION = ["Recount", "Explain", "Argue"] as const;
+/** Ordered rotation. 2016 Recount is split into Narrate + Inform. Discuss is oral-only — not in this rotation. */
+export const KEY_USE_ROTATION = ["Narrate", "Inform", "Explain", "Argue"] as const;
 export type KeyUse = typeof KEY_USE_ROTATION[number];
+
+/** Map stored session values (including legacy Recount) onto the current rotation. */
+export function normalizeRotationKeyUse(keyUse: string | null | undefined): KeyUse | null {
+  if (!keyUse) return null;
+  if (keyUse === "Recount") return "Narrate";
+  if (KEY_USE_ROTATION.includes(keyUse as KeyUse)) return keyUse as KeyUse;
+  return null;
+}
 
 /**
  * Returns the next key use in the rotation.
- * @param lastKeyUse - The key use from the student's last completed listening session, or null for their first.
+ * @param lastKeyUse - The key use from the student's last completed session, or null for their first.
  * @param isRetry    - If true, keep the same key use (student is re-practising the same skill).
  */
 export function nextKeyUse(lastKeyUse: string | null, isRetry: boolean): KeyUse {
-  if (isRetry && lastKeyUse && KEY_USE_ROTATION.includes(lastKeyUse as KeyUse)) {
-    return lastKeyUse as KeyUse;
-  }
-  const lastIndex = KEY_USE_ROTATION.indexOf(lastKeyUse as KeyUse);
+  const last = normalizeRotationKeyUse(lastKeyUse);
+  if (isRetry && last) return last;
+  const lastIndex = last ? KEY_USE_ROTATION.indexOf(last) : -1;
   return KEY_USE_ROTATION[(lastIndex + 1) % KEY_USE_ROTATION.length];
 }
 
 export interface CanDoEntry {
-  /** The key use category — Recount | Explain | Argue */
+  /** App key use — Narrate | Inform | Explain | Argue (legacy lookups may still pass Recount) */
   keyUse: string;
-  /** The action framing — e.g. "Process recounts by" / "Process explanations by" / "Process arguments by" */
+  /** 2016 booklet name when this cell was split from Recount */
+  sourceKeyUse?: string;
+  /** Passage/task lens when Narrate and Inform share the same official bullets */
+  focus?: "narrative" | "informational";
+  /** The action framing — e.g. "Process recounts by" / "Process explanations by" */
   action: string;
   /**
-   * The sub-skill bullet points that describe HOW the student demonstrates this Can Do.
-   * Together with `action`, these form ONE complete Can Do — not separate Can Dos.
-   * Example: action="Process recounts by" + items=["Identifying familiar objects...", "Pointing to objects..."]
+   * Official Can Do bullets. Together with `action`, these form ONE complete Can Do.
    */
   items: string[];
+}
+
+export function findKeyUseBlock(keyUses: any[] | undefined, keyUse: string): any | undefined {
+  if (!Array.isArray(keyUses)) return undefined;
+  const exact = keyUses.find((k: any) => k.keyUse === keyUse);
+  if (exact) return exact;
+  if (keyUse === "Narrate" || keyUse === "Inform") {
+    return keyUses.find((k: any) => k.keyUse === "Recount");
+  }
+  if (keyUse === "Recount") {
+    return keyUses.find((k: any) => k.keyUse === "Narrate")
+      ?? keyUses.find((k: any) => k.keyUse === "Inform");
+  }
+  return undefined;
+}
+
+export function toCanDoEntry(requestedKeyUse: string, entry: any | undefined): CanDoEntry {
+  if (!entry) return { keyUse: requestedKeyUse, action: "", items: [] };
+  return {
+    keyUse: requestedKeyUse,
+    sourceKeyUse: entry.sourceKeyUse,
+    focus: entry.focus,
+    action: (entry.action as string) ?? "",
+    items: (entry.canDo as string[]) ?? [],
+  };
+}
+
+/** Official 2020 Key Language Use guide for this session (from canDo.json). */
+export function getKeyLanguageUseGuide(keyUse: string | null | undefined): Record<string, unknown> | null {
+  const klu = (canDoData as any).keyLanguageUses;
+  if (!klu) return null;
+  const name =
+    keyUse === "Recount" ? "Narrate"
+      : keyUse && klu[keyUse] ? keyUse
+        : null;
+  if (!name) return null;
+  const entry = klu[name];
+  const table = klu.prominenceTable;
+  const standards = table?.standards as Record<string, Record<string, string>> | undefined;
+  const prominence: Record<string, string> = {};
+  if (standards) {
+    for (const [std, uses] of Object.entries(standards)) {
+      if (uses[name]) prominence[std] = uses[name];
+    }
+  }
+  return {
+    name,
+    grade_band: klu.gradeBand ?? "6-8",
+    mapping: klu.mapping ?? null,
+    overlap_note: klu.overlapNote ?? null,
+    definition: entry.definition,
+    table_definition: entry.tableDefinition ?? null,
+    source_2016: entry.source2016 ?? null,
+    genres: entry.genres ?? [],
+    grade_6_8: entry.gradeBand6_8 ?? [],
+    content_must: entry.contentMust ?? [],
+    content_must_not: entry.contentMustNot ?? [],
+    prominence_grades_6_8: Object.keys(prominence).length > 0
+      ? {
+          source: table.source ?? null,
+          note: table.note ?? null,
+          by_standard: prominence,
+          preferred_academic_subjects: subjectPoolForKeyUse(name as KeyUse),
+        }
+      : null,
+  };
+}
+
+export type PortrayalDomain = "LISTENING" | "SPEAKING" | "READING" | "WRITING";
+
+/** How to write this cell (from can-do-content-guide.json). Sent on generate with Can Do + Key Language Use. */
+export function getContentPortrayal(
+  level: number | undefined,
+  domain: string | undefined,
+  keyUse: string | null | undefined,
+): Record<string, unknown> | null {
+  if (level == null || !domain) return null;
+  const elp = clampLevel(level);
+  const dom = domain.toUpperCase() as PortrayalDomain;
+  const ku = normalizeRotationKeyUse(keyUse) ?? keyUse;
+  if (!ku) return null;
+  const lvl = (contentGuideData as { levels?: Array<Record<string, unknown>> }).levels
+    ?.find((row) => row.level === elp);
+  const cell = (lvl?.[dom] as Record<string, { contentThatHelps?: string; picture?: unknown }> | undefined)?.[ku];
+  if (!cell) return null;
+  return {
+    how_to_portray: cell.contentThatHelps ?? null,
+    picture: cell.picture ?? null,
+  };
+}
+
+/** Shape sent to Claude: 2016 Can Do bullets + 2020 Key Language Use + portrayal from the content guide. */
+export function serializeCanDoForPrompt(
+  canDo: CanDoEntry,
+  opts?: { level?: number; domain?: string },
+): Record<string, unknown> {
+  return {
+    key_use: canDo.keyUse,
+    source_key_use: canDo.sourceKeyUse ?? null,
+    focus: canDo.focus ?? null,
+    action: canDo.action,
+    items: canDo.items,
+    key_language_use: getKeyLanguageUseGuide(canDo.keyUse),
+    content_portrayal: getContentPortrayal(opts?.level, opts?.domain, canDo.keyUse),
+  };
 }
 
 /**
@@ -150,14 +265,7 @@ export function getListeningCanDoForKeyUse(level: number, keyUse: string): CanDo
   const listeningDomain = levelEntry.domains.find((d: any) => d.domain === "LISTENING");
   if (!listeningDomain) return { keyUse, action: "", items: [] };
 
-  const entry = listeningDomain.keyUses.find((k: any) => k.keyUse === keyUse);
-  if (!entry) return { keyUse, action: "", items: [] };
-
-  return {
-    keyUse,
-    action: entry.action as string,
-    items:  entry.canDo  as string[],
-  };
+  return toCanDoEntry(keyUse, findKeyUseBlock(listeningDomain.keyUses, keyUse));
 }
 
 // ── Curriculum helpers ────────────────────────────────────────────────────────
@@ -268,13 +376,23 @@ export function clampLevel(level: number): number {
 // ── Academic tier ─────────────────────────────────────────────────────────────
 
 /**
- * Academic subject areas for the listening_academic tier.
- * Rotates across sessions just like key uses in general listening.
- * When the user provides subject-specific guidelines these will drive
- * different Claude prompts and Can Do descriptors per subject.
+ * Academic subjects for the academic tier (WIDA ELD Standards 2–5).
+ * Standard 1 (Social & Instructional) is the everyday / photo path, not this list.
  */
 export const ACADEMIC_SUBJECTS = ["math", "science", "social_studies", "ela"] as const;
 export type AcademicSubject = (typeof ACADEMIC_SUBJECTS)[number];
+
+const STANDARD_TO_SUBJECT: Record<string, AcademicSubject> = {
+  ela: "ela",
+  math: "math",
+  science: "science",
+  social_studies: "social_studies",
+};
+
+const PROMINENCE_RANK: Record<string, number> = {
+  most_prominent: 0,
+  prominent: 1,
+};
 
 /** Human-readable labels for each academic subject. */
 export const ACADEMIC_SUBJECT_LABELS: Record<AcademicSubject, string> = {
@@ -284,13 +402,89 @@ export const ACADEMIC_SUBJECT_LABELS: Record<AcademicSubject, string> = {
   ela:           "English Language Arts",
 };
 
+function prominenceTableStandards(): Record<string, Record<string, string>> | undefined {
+  return (canDoData as { keyLanguageUses?: { prominenceTable?: { standards?: Record<string, Record<string, string>> } } })
+    .keyLanguageUses?.prominenceTable?.standards;
+}
+
 /**
- * Returns the next subject in the rotation.
- * @param lastSubject - The subject from the student's last academic session, or null for their first.
+ * Academic subjects where this Key Language Use is most_prominent or prominent
+ * (WIDA 2020 Table 3-11). "Present" pairings (e.g. Narrate + math) are excluded.
+ * Order: most_prominent first, then prominent.
  */
-export function nextSubject(lastSubject: string | null): AcademicSubject {
-  const lastIndex = ACADEMIC_SUBJECTS.indexOf(lastSubject as AcademicSubject);
-  return ACADEMIC_SUBJECTS[(lastIndex + 1) % ACADEMIC_SUBJECTS.length];
+export function subjectPoolForKeyUse(keyUse: string | null | undefined): AcademicSubject[] {
+  const ku = normalizeRotationKeyUse(keyUse);
+  const standards = prominenceTableStandards();
+  if (!ku || !standards) return [...ACADEMIC_SUBJECTS];
+
+  const scored: { subject: AcademicSubject; rank: number }[] = [];
+  for (const [std, subject] of Object.entries(STANDARD_TO_SUBJECT)) {
+    const level = standards[std]?.[ku];
+    const rank = level ? PROMINENCE_RANK[level] : undefined;
+    if (rank === undefined) continue;
+    scored.push({ subject, rank });
+  }
+  scored.sort((a, b) => a.rank - b.rank || ACADEMIC_SUBJECTS.indexOf(a.subject) - ACADEMIC_SUBJECTS.indexOf(b.subject));
+  const unique: AcademicSubject[] = [];
+  for (const row of scored) {
+    if (!unique.includes(row.subject)) unique.push(row.subject);
+  }
+  return unique.length > 0 ? unique : [...ACADEMIC_SUBJECTS];
+}
+
+export function prominenceForSubject(
+  keyUse: string | null | undefined,
+  subject: AcademicSubject,
+): string | null {
+  const ku = normalizeRotationKeyUse(keyUse);
+  if (!ku) return null;
+  return prominenceTableStandards()?.[subject]?.[ku] ?? null;
+}
+
+export type AcademicSessionRef = {
+  keyUse?: string | null;
+  subject?: string | null;
+};
+
+function asAcademicSubject(value: string | null | undefined): AcademicSubject | null {
+  return ACADEMIC_SUBJECTS.includes(value as AcademicSubject) ? (value as AcademicSubject) : null;
+}
+
+/**
+ * Pick the academic world for this session's Key Language Use.
+ * Rotates inside that use's Table 3-11 pool (last time we practiced THIS key use),
+ * so Narrate can move ela → social_studies instead of locking to one subject.
+ */
+export function pickSubjectForKeyUse(
+  keyUse: string | null | undefined,
+  recent: AcademicSessionRef[] | string | null = [],
+  isRetry = false,
+): AcademicSubject {
+  const pool = subjectPoolForKeyUse(keyUse);
+  const ku = normalizeRotationKeyUse(keyUse);
+  const rows: AcademicSessionRef[] = typeof recent === "string" || recent == null
+    ? (recent ? [{ subject: recent }] : [])
+    : recent;
+  const lastAny = asAcademicSubject(rows[0]?.subject);
+  if (isRetry && lastAny && pool.includes(lastAny)) return lastAny;
+
+  const lastSame = ku
+    ? asAcademicSubject(
+        rows.find((r) => normalizeRotationKeyUse(r.keyUse) === ku)?.subject,
+      )
+    : null;
+  if (lastSame && pool.includes(lastSame)) {
+    return pool[(pool.indexOf(lastSame) + 1) % pool.length];
+  }
+  return pool.find((s) => s !== lastAny) ?? pool[0];
+}
+
+export function nextSubject(
+  lastSubject: string | null,
+  keyUse: string | null = null,
+  isRetry = false,
+): AcademicSubject {
+  return pickSubjectForKeyUse(keyUse, lastSubject, isRetry);
 }
 
 /**
@@ -306,23 +500,18 @@ export interface AcademicListeningContext extends ListeningContext {
 
 /**
  * Assembles the AcademicListeningContext for one academic session.
- * Identical to buildListeningContext but adds subject rotation on top.
- *
- * @param fractionalLevel - Student's current academic listening score
- * @param topicsUsedToday - Topics used in the last 24 h (for dedup)
- * @param persistedTopic  - Topic from last failed session — reuse if set
- * @param lastKeyUse      - Key use from last academic listening session
- * @param lastSubject     - Subject from last academic listening session
+ * Key use still rotates; the academic subject is chosen from Table 3-11 for that use.
  */
 export function buildAcademicListeningContext(
   fractionalLevel: number,
   topicsUsedToday: string[] = [],
   persistedTopic: string | null = null,
   lastKeyUse: string | null = null,
-  lastSubject: string | null = null,
+  recentAcademic: AcademicSessionRef[] = [],
 ): AcademicListeningContext {
-  const base    = buildListeningContext(fractionalLevel, topicsUsedToday, persistedTopic, lastKeyUse);
-  const subject = nextSubject(lastSubject);
+  const base = buildListeningContext(fractionalLevel, topicsUsedToday, persistedTopic, lastKeyUse);
+  const isRetry = persistedTopic !== null;
+  const subject = pickSubjectForKeyUse(base.canDo.keyUse, recentAcademic, isRetry);
   return {
     ...base,
     subject,

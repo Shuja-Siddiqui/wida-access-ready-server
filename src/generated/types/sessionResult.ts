@@ -17,4 +17,14 @@ export interface SessionResult {
   streakUpdated: boolean;
   newStreak: number;
   domainAtExit: boolean;
+  attemptFeedback?: {
+    summary: string;
+    mistakes: Array<{
+      question: string;
+      whatHappened: string;
+      howToImprove: string;
+    }>;
+    strengths: string[];
+    nextSteps: string[];
+  } | null;
 }

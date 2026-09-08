@@ -16,19 +16,19 @@ import {
 } from "./client";
 import {
   buildSystemPrompt,
-  BASE_BLOCK,
-  LISTENING_CORE_BLOCK,
   OPTIONAL_LINE_VISUALS_BLOCK,
   MATH_SUBJECT_BLOCK,
   MATH_OUTPUT_SCHEMA,
+  contentGenPrompt,
 } from "./prompts";
 import { parseOptionDiagrams, parseVisual } from "./prompts/optional-line-visuals";
 import type { ListeningContent } from "./listening";
+import { serializeCanDoForPrompt } from "../listeningContentEngine";
+import { clampToThreeOptions } from "../choice-options";
 
 const SYSTEM_PROMPT = buildSystemPrompt(
-  "You are an academic listening content generator for Grade 6–8 English Language Learners. Generate a mathematics word problem read aloud by a teacher, plus comprehension questions that test whether the student understood the mathematical language and situation — not whether they can compute the answer.",
-  BASE_BLOCK,
-  LISTENING_CORE_BLOCK,
+  contentGenPrompt("listening", 3),
+  "Academic math listening: test whether the student understood the mathematical language and situation — not computation.",
   OPTIONAL_LINE_VISUALS_BLOCK,
   MATH_SUBJECT_BLOCK,
   MATH_OUTPUT_SCHEMA,
@@ -46,7 +46,7 @@ export const FALLBACK_ACADEMIC_MATH: ListeningContent = {
       id: "1",
       type: "multiple_choice",
       question: "How much does one pound of apples cost?",
-      options: ["$0.80", "$1.50", "$3.00", "$2.30"],
+      options: ["$0.80", "$1.50", "$3.00"],
       correct: 1,
       explanation: "The audio says apples cost $1.50 per pound.",
     },
@@ -58,7 +58,6 @@ export const FALLBACK_ACADEMIC_MATH: ListeningContent = {
         "How many apples to buy",
         "The total cost of her purchase",
         "The price per banana",
-        "Which fruit is cheaper",
       ],
       correct: 1,
       explanation: "She wants the total cost before checkout.",
@@ -67,7 +66,7 @@ export const FALLBACK_ACADEMIC_MATH: ListeningContent = {
       id: "3",
       type: "multiple_choice",
       question: "How many pounds of bananas does Maria buy?",
-      options: ["One pound", "Three pounds", "Two pounds", "Four pounds"],
+      options: ["One pound", "Three pounds", "Two pounds"],
       correct: 2,
       explanation: "The audio says two pounds of bananas.",
     },
@@ -98,11 +97,7 @@ export async function generateAcademicMathListeningContent(params: {
     integer_level:          params.level,
     step_within_level:      params.stepWithinLevel,
     complexity_instruction: params.complexityInstruction,
-    can_do: {
-      key_use: params.canDo.keyUse,
-      action:  params.canDo.action,
-      items:   params.canDo.items,
-    },
+    can_do: serializeCanDoForPrompt(params.canDo, { level: params.level, domain: "LISTENING" }),
     oral_format:             params.oralFormat,
     math_unit:               params.mathUnit,
     math_scenario:           params.mathScenario,
@@ -135,18 +130,21 @@ export async function generateAcademicMathListeningContent(params: {
       topic:       result.topic ?? params.topic,
       context:     result.context ?? "Teacher reading a word problem aloud to the class",
       visual:      parseVisual((result as { visual?: unknown }).visual),
-      questions: (result.questions || []).map((q) => ({
+      questions: (result.questions || []).map((q) => {
+        const three = clampToThreeOptions(q.options, q.correct);
+        return {
         id:          q.id,
         type:        q.type,
         question:    toDisplayText(q.question),
-        options:     q.options,
-        correct:     q.correct,
+        options:     three.options,
+        correct:     three.correct,
         explanation: q.explanation,
-        optionDiagrams: parseOptionDiagrams((q as { option_diagrams?: unknown }).option_diagrams),
+        optionDiagrams: parseOptionDiagrams((q as { option_diagrams?: unknown }).option_diagrams)?.slice(0, 3),
         visual:      parseVisual((q as { visual?: unknown }).visual),
-      })),
+      };
+      }),
     };
-  } catch {
-    return FALLBACK_ACADEMIC_MATH;
+  } catch (err) {
+    throw err;
   }
 }

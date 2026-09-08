@@ -25,8 +25,8 @@ export function getClient(): Anthropic {
 // ── Shared base prompt ────────────────────────────────────────────────────────
 
 /**
- * Interpolated into every domain system prompt.
- * Keeps all generators in sync on scoring model and JSON-only output rule.
+ * Legacy shared block for non-routed callers (object-detect, etc.).
+ * Content generation uses CONTENT_KERNEL + one domain×band slice instead.
  */
 export const BASE_PROMPT = `Scale 1.0–6.0. Each level has 5 sub-steps (0–4); complexity_instruction governs vocabulary and scaffolding at each sub-step.
 Return ONLY valid JSON. No preamble, no markdown, no code fences.
@@ -46,8 +46,8 @@ If a topic is visual and you cannot mark it simply, describe it in prose.`.trim(
 
 /** Passage-length targets for all WIDA levels (used by listening + academic math). */
 export const PASSAGE_SENTENCE_TARGETS: Record<number, string> = {
-  1: "3–4 sentences (~30–55 words): short, simple sentences only. Subject-verb-object structure. High-frequency nouns and basic verbs. No subordinate clauses.",
-  2: "3–4 sentences (~40–65 words): simple sentences, one idea each. Familiar everyday vocabulary only. No complex grammar.",
+  1: "1–3 very short sentences (~12–35 words). One idea each. Common words only. No extra background.",
+  2: "1–3 short sentences (~18–45 words). Simple sentences. Do not write a paragraph.",
   3: "3–4 sentences (~80–120 words): one short, focused paragraph. Simple, familiar vocabulary.",
   4: "5–7 sentences (~130–180 words): one developed paragraph with a clear main idea. Moderate Tier-2 vocabulary.",
   5: "8–10 sentences (~200–260 words): an extended paragraph or two short paragraphs. Higher-register academic vocabulary, some inference required.",
@@ -94,6 +94,22 @@ export function toDisplayTextOrNull(value: unknown): string | null {
   if (value == null) return null;
   const text = toDisplayText(value);
   return text || null;
+}
+
+/** Keep the first N sentences so L1–2 audio stays short even if the model overwrites. */
+export function limitSentences(text: string, max: number): string {
+  const trimmed = text.replace(/\s+/g, " ").trim();
+  if (!trimmed) return "";
+  const parts = trimmed.match(/[^.!?]+[.!?]+|[^.!?]+$/g);
+  if (!parts || parts.length <= max) return trimmed;
+  return parts.slice(0, max).join(" ").replace(/\s+/g, " ").trim();
+}
+
+export function sentenceCount(text: string): number {
+  const trimmed = text.replace(/\s+/g, " ").trim();
+  if (!trimmed) return 0;
+  const parts = trimmed.match(/[^.!?]+[.!?]+|[^.!?]+$/g);
+  return parts?.filter((p) => p.trim()).length ?? 0;
 }
 
 // ── Claude API wrapper ────────────────────────────────────────────────────────

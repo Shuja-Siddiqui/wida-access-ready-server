@@ -16,19 +16,19 @@ import {
 } from "./client";
 import {
   buildSystemPrompt,
-  BASE_BLOCK,
-  LISTENING_CORE_BLOCK,
   OPTIONAL_LINE_VISUALS_BLOCK,
   SCIENCE_SUBJECT_BLOCK,
   SCIENCE_OUTPUT_SCHEMA,
+  contentGenPrompt,
 } from "./prompts";
 import { parseOptionDiagrams, parseVisual } from "./prompts/optional-line-visuals";
 import type { ListeningContent } from "./listening";
+import { serializeCanDoForPrompt } from "../listeningContentEngine";
+import { clampToThreeOptions } from "../choice-options";
 
 const SYSTEM_PROMPT = buildSystemPrompt(
-  "You are an academic listening content generator for Grade 6–8 English Language Learners. Generate a science passage presented as a teacher or scientist narrating a phenomenon to the class, plus comprehension questions that test whether the student understood the scientific language and reasoning — not whether they have memorized science facts.",
-  BASE_BLOCK,
-  LISTENING_CORE_BLOCK,
+  contentGenPrompt("listening", 3),
+  "Academic science listening: test scientific language and reasoning — not memorized facts.",
   OPTIONAL_LINE_VISUALS_BLOCK,
   SCIENCE_SUBJECT_BLOCK,
   SCIENCE_OUTPUT_SCHEMA,
@@ -50,7 +50,6 @@ export const FALLBACK_ACADEMIC_SCIENCE: ListeningContent = {
         "Sunlight, water, and carbon dioxide",
         "Sunlight, oxygen, and soil",
         "Water, nitrogen, and carbon dioxide",
-        "Sugar, sunlight, and oxygen",
       ],
       correct: 0,
       explanation: "The audio names sunlight, water, and carbon dioxide.",
@@ -59,8 +58,8 @@ export const FALLBACK_ACADEMIC_SCIENCE: ListeningContent = {
       id: "2",
       type: "multiple_choice",
       question: "What does the teacher say the plant releases as a result of photosynthesis?",
-      options: ["Carbon dioxide", "Sugar", "Water vapor", "Oxygen"],
-      correct: 3,
+      options: ["Carbon dioxide", "Sugar", "Oxygen"],
+      correct: 2,
       explanation: "The audio says the plant releases oxygen.",
     },
     {
@@ -71,7 +70,6 @@ export const FALLBACK_ACADEMIC_SCIENCE: ListeningContent = {
         "Making food from soil",
         "Putting together with light",
         "Taking in oxygen",
-        "Releasing carbon dioxide",
       ],
       correct: 1,
       explanation: "The teacher defines it as 'putting together with light.'",
@@ -104,11 +102,7 @@ export async function generateAcademicScienceListeningContent(params: {
     integer_level:          params.level,
     step_within_level:      params.stepWithinLevel,
     complexity_instruction: params.complexityInstruction,
-    can_do: {
-      key_use: params.canDo.keyUse,
-      action:  params.canDo.action,
-      items:   params.canDo.items,
-    },
+    can_do: serializeCanDoForPrompt(params.canDo, { level: params.level, domain: "LISTENING" }),
     oral_format:             params.oralFormat,
     science_unit:            params.scienceUnit,
     science_strand:          params.scienceStrand,
@@ -142,18 +136,21 @@ export async function generateAcademicScienceListeningContent(params: {
       topic:       result.topic ?? params.topic,
       context:     result.context ?? "Teacher explaining a science concept to the class",
       visual:      parseVisual((result as { visual?: unknown }).visual),
-      questions: (result.questions || []).map((q) => ({
+      questions: (result.questions || []).map((q) => {
+        const three = clampToThreeOptions(q.options, q.correct);
+        return {
         id:          q.id,
         type:        q.type,
         question:    toDisplayText(q.question),
-        options:     q.options,
-        correct:     q.correct,
+        options:     three.options,
+        correct:     three.correct,
         explanation: q.explanation,
-        optionDiagrams: parseOptionDiagrams((q as { option_diagrams?: unknown }).option_diagrams),
+        optionDiagrams: parseOptionDiagrams((q as { option_diagrams?: unknown }).option_diagrams)?.slice(0, 3),
         visual:      parseVisual((q as { visual?: unknown }).visual),
-      })),
+      };
+      }),
     };
-  } catch {
-    return FALLBACK_ACADEMIC_SCIENCE;
+  } catch (err) {
+    throw err;
   }
 }

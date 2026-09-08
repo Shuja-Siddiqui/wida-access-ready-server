@@ -15,7 +15,7 @@ A teacher reads a real-world word problem aloud. Must:
 • is_retry: change names, numbers, or setting; keep the same math_unit
 
 PERMITTED FORMATS (agree_disagree excluded — math claims don't map to that format)
-  multiple_choice    → 4 options; wrong options reflect mathematical misreadings (unit confusion, swapped quantities)
+  multiple_choice    → 3 options (1 correct + 2 distractors); wrong options reflect mathematical misreadings (unit confusion, swapped quantities)
   sequence_ordering  → 3–4 steps of a described procedure; tests whether the student followed the sequence
   pair_matching      → 3–4 pairs; match quantities to roles, terms to meanings, or steps to outcomes
 Vary formats. sequence_ordering and pair_matching are especially effective for multi-step problems.
@@ -48,7 +48,7 @@ export const MATH_OUTPUT_SCHEMA = `OUTPUT
       "id": "1",
       "type": "<multiple_choice|sequence_ordering|pair_matching>",
       "question": "<tests comprehension of math language — no computation>",
-      "options": ["A", "B", "C", "D"],
+      "options": ["A", "B", "C"],
       "correct": 0,
       "explanation": "<max 8 words>"
     }

@@ -27,6 +27,12 @@ export { generateSpeakingContent } from "./speaking";
 export type { WritingContent, WritingFeedback } from "./writing";
 export { generateWritingContent, getWritingFeedback } from "./writing";
 
+export type { AttemptFeedback, AttemptFeedbackItem } from "./attempt-feedback";
+export { generateAttemptFeedback } from "./attempt-feedback";
+
+export type { ItemFeedback, ItemFeedbackFormat, ItemFeedbackInput, SpeakingJudgment } from "./item-feedback";
+export { generateItemFeedback } from "./item-feedback";
+
 export type { ObjectDetectContent } from "./object-detect";
 export { generateObjectDetectContent } from "./object-detect";
 

@@ -6,9 +6,13 @@
  * scoring dimensions valid for this session.
  */
 
-import { callClaude, BASE_PROMPT, toDisplayText, toDisplayTextOrNull } from "./client";
-import { LIBRARY_IMAGE_GROUNDS_CONTENT, OPTIONAL_LINE_VISUALS_BLOCK, parseVisual } from "./prompts/optional-line-visuals";
+import { callClaude, toDisplayText, toDisplayTextOrNull } from "./client";
+import { logger } from "../../config/logger";
+import { OPTIONAL_LINE_VISUALS_BLOCK, parseVisual } from "./prompts/optional-line-visuals";
+import { buildSystemPrompt } from "./prompts/compose";
+import { contentGenPrompt } from "./prompts/content";
 import type { CanDoEntry } from "../listeningContentEngine";
+import { serializeCanDoForPrompt } from "../listeningContentEngine";
 
 // ── Per-level schema tables ───────────────────────────────────────────────────
 
@@ -71,14 +75,14 @@ function buildSpeakingOutputSchema(params: {
     `  "prompt_type": "${allowedPromptTypes[0]}",`,
     `  /* MUST be exactly one of: ${allowedPromptTypes.join(" | ")} */`,
     `  /* These values are derived from the CanDo for this level + key use:`,
-    `     wh_answer       → answer a Wh-question in 1–5 words (Recount L1)`,
+    `     wh_answer       → answer a Wh-question in 1–5 words (Inform/Narrate L1)`,
     `     yes_no          → yes/no with a brief reason (Argue L1)`,
     `     descriptive     → describe an object, person, or place (Explain L1–2)`,
-    `     narrative       → retell events with sequence (Recount L2–3)`,
+    `     narrative       → retell events with sequence (Narrate L2–3)`,
     `     explanatory     → explain how/why (Explain L3–6)`,
-    `     summary         → paraphrase/summarize content ideas (Recount L4)`,
+    `     summary         → paraphrase/summarize content ideas (Inform L4)`,
     `     argumentative   → state and defend a position with evidence (Argue L2–6)`,
-    `     extended_report → organized oral report from multiple sources (Recount L5–6) */`,
+    `     extended_report → organized oral report from multiple sources (Inform L5–6) */`,
     ``,
     `  "response_length": "${responseLength}",`,
     `  /* Echo this value exactly — do not change it */`,
@@ -114,77 +118,14 @@ function buildSpeakingOutputSchema(params: {
   ].join("\n");
 }
 
-// ── Base system prompt (static) ───────────────────────────────────────────────
-
-const BASE_SYSTEM = `You are a WIDA ACCESS Speaking prompt generator for Grade 6–8 ELL students.
-Your task: write one speaking prompt with scaffolding and scoring guidance calibrated to the student's WIDA ELP level and targeted Can Do descriptor.
-
-${BASE_PROMPT}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-PER-CALL INPUT FIELDS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-assessment              → assessment type (WIDA ACCESS, TELPAS, etc.)
-level                   → WIDA ELP level (1–6)
-grade_band              → student's grade band
-mode                    → "standard" | "exit_proximity" (exit = push harder toward next level)
-topic                   → pre-selected speaking topic — use only when has_library_image is false
-has_library_image       → true: a real photo is on screen; talk about THAT photo
-image_tags              → objects / labels in the photo
-image_description       → what the photo shows
-image_concept           → optional academic idea in the photo
-can_do                  → key_use (Recount|Explain|Argue), action (WIDA framing), items (sub-skills at this level)
-
-${LIBRARY_IMAGE_GROUNDS_CONTENT}
-complexity_instruction  → vocabulary, sentence complexity, scaffolding level — follow exactly
-discourse_type          → oral production length and register expected at this level
-scaffold_required       → true = sentence frame required; false = scaffold must be null
-response_length         → expected output size — see OUTPUT SCHEMA for interpretation
-allowed_prompt_types    → MUST pick exactly one value for prompt_type — see OUTPUT SCHEMA
-target_seconds          → speaking duration: { min, max } in seconds — echo in output
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-BUILD ORDER
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. SKILL TARGET
-   Pick the item from can_do.items that best fits the topic and key_use.
-   Write action + item as can_do_descriptor.
-
-2. PROMPT TYPE
-   Choose exactly one value from allowed_prompt_types (listed in OUTPUT SCHEMA).
-   The prompt type constrains how the student will respond.
-
-3. PROMPT
-   If has_library_image is true: ask the student to look at the picture and speak about what is in it.
-   If has_library_image is false: write one clear speaking task on the given topic.
-   Size the task precisely to response_length — do not ask for more language than the student can produce.
-   Match discourse_type exactly.
-
-4. SCAFFOLD
-   If scaffold_required is true (see OUTPUT SCHEMA): write a sentence frame that opens the response
-   and models the chosen prompt_type's discourse pattern.
-     Narrative     → "First, I… Then… Finally…"
-     Descriptive   → "I see… / It looks like…"
-     Explanatory   → "One reason is… because…"
-     Argumentative → "I believe… because…"
-     Wh-answer     → echo the question stem: "The setting is…"
-   If scaffold_required is false: scaffold must be null.
-
-5. SCORING DIMENSIONS — choose from the Level-specific list in OUTPUT SCHEMA.
-
-6. EXIT TIP — one coaching sentence for exit_proximity mode; null for standard.
-
-RULES
-- mode = "exit_proximity" → push complexity toward the next level's discourse type.
-- Do NOT set scaffold to null when scaffold_required is true.
-- Do NOT provide a scaffold when scaffold_required is false.
-
-${OPTIONAL_LINE_VISUALS_BLOCK}`;
-
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface SpeakingContent {
   canDoDescriptor: string;
+  /** Official WIDA Can Do used to generate this prompt (not Claude's paraphrase). */
+  keyUse?: string;
+  canDoAction?: string;
+  canDoItems?: string[];
   prompt: string;
   visual?: string;
   /** One of: wh_answer | yes_no | descriptive | narrative | explanatory | summary | argumentative | extended_report */
@@ -243,8 +184,12 @@ export async function generateSpeakingContent(params: {
     scaffoldRequired:   params.scaffoldRequired,
     targetSeconds:      params.targetSeconds,
   });
-  const academicLayer = params.academicContentLayer ? `\n\n${params.academicContentLayer}` : "";
-  const systemPrompt = `${BASE_SYSTEM}${academicLayer}\n\n${schemaSection}`;
+  const systemPrompt = buildSystemPrompt(
+    contentGenPrompt("speaking", params.level),
+    OPTIONAL_LINE_VISUALS_BLOCK,
+    params.academicContentLayer ?? "",
+    schemaSection,
+  );
 
   const userPrompt = JSON.stringify({
     domain:                 "speaking",
@@ -255,19 +200,39 @@ export async function generateSpeakingContent(params: {
     grade_band:             params.gradeBand,
     mode:                   params.mode,
     topic:                  params.topic,
-    can_do:                 params.canDo,
+    can_do:                 serializeCanDoForPrompt(params.canDo, { level: params.level, domain: "SPEAKING" }),
     complexity_instruction: params.complexityInstruction,
     discourse_type:         params.discourseType,
     scaffold_required:      params.scaffoldRequired,
     response_length:        params.responseLength,
     allowed_prompt_types:   params.allowedPromptTypes,
     target_seconds:         params.targetSeconds,
+    required_key_use:       params.canDo.keyUse,
     has_library_image:      params.hasLibraryImage ?? false,
     image_tags:             params.imageTags ?? [],
     image_description:      params.imageDescription ?? null,
     image_concept:          params.imageConcept ?? null,
     ...(params.academicSubject ? { academic_subject: params.academicSubject } : {}),
   });
+
+  logger.info(
+    {
+      stage: "speaking-content → Claude",
+      level: params.level,
+      keyUse: params.canDo?.keyUse ?? null,
+      canDoAction: params.canDo?.action ?? null,
+      canDoItems: params.canDo?.items ?? [],
+      canDoPresent: Boolean(params.canDo?.items?.length),
+      discourseType: params.discourseType,
+      responseLength: params.responseLength,
+      allowedPromptTypes: params.allowedPromptTypes,
+      topic: params.topic,
+      hasLibraryImage: params.hasLibraryImage ?? false,
+      imageTags: params.imageTags ?? [],
+      userPrompt: userPrompt.slice(0, 1200),
+    },
+    "speaking content request",
+  );
 
   try {
     const result = (await callClaude(systemPrompt, userPrompt)) as {
@@ -281,8 +246,23 @@ export async function generateSpeakingContent(params: {
       exit_tip: string | null;
     };
 
+    logger.info(
+      {
+        stage: "speaking-content ← Claude",
+        canDoDescriptor: result.can_do_descriptor ?? "",
+        prompt: toDisplayText(result.prompt).slice(0, 240),
+        scaffold: toDisplayTextOrNull(result.scaffold),
+        promptType: result.prompt_type,
+        responseLength: result.response_length,
+      },
+      "speaking content result",
+    );
+
     return {
       canDoDescriptor:   result.can_do_descriptor ?? "",
+      keyUse:            params.canDo.keyUse,
+      canDoAction:       params.canDo.action,
+      canDoItems:        params.canDo.items,
       prompt:            toDisplayText(result.prompt),
       visual:            parseVisual((result as { visual?: unknown }).visual),
       promptType:        result.prompt_type ?? params.allowedPromptTypes[0] ?? "descriptive",
@@ -292,9 +272,8 @@ export async function generateSpeakingContent(params: {
       scoringDimensions: result.scoring_dimensions ?? SPEAKING_SCORING_DIMENSIONS[params.level] ?? [],
       exitTip:           toDisplayTextOrNull(result.exit_tip),
     };
-  } catch {
-    const fallback = { ...FALLBACK_SPEAKING };
-    if (params.isTelpas) fallback.targetSeconds = { min: 45, max: 90 };
-    return fallback;
+  } catch (err) {
+    logger.error({ err, stage: "speaking-content", canDo: params.canDo }, "speaking content generation failed");
+    throw err;
   }
 }

@@ -1,0 +1,928 @@
+{
+  "whatThisIs": "Practice-content map for Grade 6–8 WIDA Can Dos (Key Uses Edition). Each cell uses the official Can Do text. Pictures only when the Can Do names a visual, or when sequencing events requires a picture strip.",
+  "pictureRules": {
+    "required": "The Can Do names a photo, poster, chart, diagram, icon, illustrated text, graphic, or sequenced visuals. Supply exactly what picture.count and picture.type say.",
+    "not_needed": "The Can Do is listening to talk, reading print, or producing speech/writing. Do not add a random library photo.",
+    "count": "1 = one scene. 2 = compare or cause/effect pair. 3 or 4 = a story or process in order (first → next → last). Never one photo when the skill is sequence."
+  },
+  "levels": [
+    {
+      "level": 1,
+      "name": "Entering",
+      "LISTENING": {
+        "Narrate": {
+          "canDo": ["Pointing to objects, people, or places based on short oral descriptions"],
+          "contentThatHelps": "One still photo of a real scene with a person AND a place visible. Audio: 1–2 spoken sentences that describe location (who is where), not a long story.",
+          "picture": {
+            "use": "required",
+            "count": 1,
+            "type": "One photograph of a school or community scene (hallway, cafeteria, playground) with people and places large enough to tap."
+          }
+        },
+        "Inform": {
+          "canDo": ["Identifying familiar objects or places from oral statements"],
+          "contentThatHelps": "One still photo of familiar objects (desk items, cafeteria food, classroom). Audio names one object. Student finds it. Fact naming, not a plot.",
+          "picture": {
+            "use": "required",
+            "count": 1,
+            "type": "One photograph of a room with 3+ familiar objects (pencil, book, chair). Not a story sequence."
+          }
+        },
+        "Explain": {
+          "canDo": [
+            "Matching instructional language, given orally, with visual representation (e.g., “Show me your schedule.”)",
+            "Identifying functions of content-related topics based on short oral statements reinforced visually (e.g., organisms in ecosystems)"
+          ],
+          "contentThatHelps": "One visual the oral line maps onto: a class schedule, a simple ecosystem poster, or a tool whose job is obvious. Audio is instruction or function (“Show me…”, “This is for sitting”), not only the object’s name.",
+          "picture": {
+            "use": "required",
+            "count": 1,
+            "type": "One schedule chart, one labeled ecosystem poster, OR one photo of a tool in use (chair, ruler, watering can). Not three story frames."
+          }
+        },
+        "Argue": {
+          "canDo": [
+            "Signaling agreement or disagreement of short oral statements or questions",
+            "Identifying points of view (e.g., first or third person) from short statements"
+          ],
+          "contentThatHelps": "Short spoken claims. First Can Do: student agrees/disagrees. Second Can Do: audio uses I vs he/she — no picture required. Do not invent a story strip.",
+          "picture": {
+            "use": "not_needed",
+            "count": 0,
+            "type": "None. If you add anything, it would only support agree/disagree about a visible object — that is extra, not the I/he skill."
+          }
+        }
+      },
+      "SPEAKING": {
+        "Narrate": {
+          "canDo": ["Naming and briefly describing past community or school events using visual support (e.g., posters, photographs)"],
+          "contentThatHelps": "Student names a past event from the visual (who, what happened). 1–2 words or a short phrase.",
+          "picture": {
+            "use": "required",
+            "count": 1,
+            "type": "One photograph or poster of a past school/community event (field trip, assembly, game) already finished — not a blank classroom still-life."
+          }
+        },
+        "Inform": {
+          "canDo": ["Answering select Wh-questions"],
+          "contentThatHelps": "Spoken Who / What / Where. Student answers in 1–2 words. The Can Do does not name a picture.",
+          "picture": {
+            "use": "not_needed",
+            "count": 0,
+            "type": "None. Do not add a random photo."
+          }
+        },
+        "Explain": {
+          "canDo": [
+            "Comparing attributes of real-life objects with a partner",
+            "Showing how to solve real-world problems using symbols, numerals, graphs, or diagrams"
+          ],
+          "contentThatHelps": "Compare two real objects (size, color, amount) OR point at a number/symbol on a simple graph. Student says the difference or names the number.",
+          "picture": {
+            "use": "required",
+            "count": 2,
+            "type": "Two side-by-side photos of the same kind of object that differ in one attribute (two bottles, two leaves) OR one simple bar graph / number diagram — not a story strip."
+          }
+        },
+        "Argue": {
+          "canDo": [
+            "Responding yes or no to short statements or questions related to a claim",
+            "Expressing personal points of view (in home language and English) in support of or against a claim"
+          ],
+          "contentThatHelps": "A short claim (school rule, food choice). Student says yes/no and I think… Home language allowed. No photo in the Can Do.",
+          "picture": {
+            "use": "not_needed",
+            "count": 0,
+            "type": "None."
+          }
+        }
+      },
+      "READING": {
+        "Narrate": {
+          "canDo": ["Identifying responses to Wh-questions in charts or illustrated text"],
+          "contentThatHelps": "A chart with Who/Where labels OR illustrated text (pictures with 2–4 words). Student answers Wh from the chart/pictures, not from a paragraph.",
+          "picture": {
+            "use": "required",
+            "count": 3,
+            "type": "Either one two-column chart (Who / Where) OR a 3-panel illustrated strip of an event (girl → bus → school) with labels. Not one unlabeled photo."
+          }
+        },
+        "Inform": {
+          "canDo": ["Identifying icons in graphs, charts, and environmental print related to familiar topics"],
+          "contentThatHelps": "Icons and environmental print (exit, recycle, restroom) or a pictograph. Student names the icon. Not a story.",
+          "picture": {
+            "use": "required",
+            "count": 3,
+            "type": "Three separate icons or signs on one sheet (or three icon cards). Or one pictograph with 3 icon types. Not a photograph of a room."
+          }
+        },
+        "Explain": {
+          "canDo": [
+            "Matching content-related objects, pictures, or media to words and phrases",
+            "Identifying social or academic topics highlighted in text"
+          ],
+          "contentThatHelps": "Match word to picture (first Can Do). Second Can Do is a 2–4 word caption: what is the topic? Use pictures only for the match skill.",
+          "picture": {
+            "use": "required",
+            "count": 3,
+            "type": "Three photos or drawings of content objects (leaf, rock, beaker) plus one printed word to match. Not a 3-panel story unless you are matching a process word."
+          }
+        },
+        "Argue": {
+          "canDo": [
+            "Identifying words or phrases associated with topic choices",
+            "Classifying true from false short statements"
+          ],
+          "contentThatHelps": "Printed choices (soccer / basketball) or a 5-word true/false sentence. The Can Do is print, not pictures.",
+          "picture": {
+            "use": "not_needed",
+            "count": 0,
+            "type": "None."
+          }
+        }
+      },
+      "WRITING": {
+        "Narrate": {
+          "canDo": ["Producing labeled illustrations of conclusions reached in problem-solving with a partner"],
+          "contentThatHelps": "Student writes labels on a picture of a solved problem (amounts, more/less), not a narrative paragraph.",
+          "picture": {
+            "use": "required",
+            "count": 1,
+            "type": "One illustration of a simple math/science conclusion (two groups of blocks, a full vs empty container). Student adds labels. Not three story photos."
+          }
+        },
+        "Inform": {
+          "canDo": ["Reproducing words and phrases related to topics (e.g., including cognates)"],
+          "contentThatHelps": "A printed word bank of topic words (including cognates). Student copies the words. Can Do does not require a photo.",
+          "picture": {
+            "use": "not_needed",
+            "count": 0,
+            "type": "None. Word bank on the page is enough."
+          }
+        },
+        "Explain": {
+          "canDo": [
+            "Indicating relationships by drawing and labeling content-related pictures on familiar topics",
+            "Describing processes or cycles by labeling diagrams and graphs"
+          ],
+          "contentThatHelps": "Student labels a diagram or cycle (arrows, parts). Not a paragraph.",
+          "picture": {
+            "use": "required",
+            "count": 1,
+            "type": "One blank diagram or cycle with empty label lines (water cycle, plant parts, simple bar graph). Not a photo of a random classroom."
+          }
+        },
+        "Argue": {
+          "canDo": [
+            "Generating words and phrases that represent opinions (e.g., \"I think…\")",
+            "Making lists of topic choices with peers"
+          ],
+          "contentThatHelps": "Sentence frame I think ___ and two printed topic choices. No picture.",
+          "picture": {
+            "use": "not_needed",
+            "count": 0,
+            "type": "None."
+          }
+        }
+      }
+    },
+    {
+      "level": 2,
+      "name": "Emerging",
+      "LISTENING": {
+        "Narrate": {
+          "canDo": [
+            "Sequencing labeled visuals per oral directions",
+            "Identifying settings or time frames in narrative or informational scenarios read aloud"
+          ],
+          "contentThatHelps": "Oral directions that put events in order. Student sequences labeled pictures of a STORY (trip, game). Second skill: audio of a story; student names setting (school/park) or time (morning/night).",
+          "picture": {
+            "use": "required",
+            "count": 3,
+            "type": "Three labeled stills of the SAME story in time order (pack bag → on the bus → at the zoo). Each picture is one moment. Do not use one photo."
+          }
+        },
+        "Inform": {
+          "canDo": [
+            "Sequencing labeled visuals per oral directions",
+            "Identifying settings or time frames in narrative or informational scenarios read aloud"
+          ],
+          "contentThatHelps": "Same sequence skill, but pictures show a FACT process (recycle, wash hands, lab steps), not a plotted story. Audio is a report.",
+          "picture": {
+            "use": "required",
+            "count": 3,
+            "type": "Three labeled stills of one process in order (bottle → bin → truck). Not a story with characters."
+          }
+        },
+        "Explain": {
+          "canDo": [
+            "Classifying content-related visuals per oral descriptions (e.g., environmental v. genetic factors)",
+            "Matching oral sentences of cause and effect to illustrations (e.g., weather or climate conditions)"
+          ],
+          "contentThatHelps": "Audio that sorts into two groups OR a because-sentence matched to pictures. Student classifies or matches cause → effect.",
+          "picture": {
+            "use": "required",
+            "count": 2,
+            "type": "For classify: two pictures that belong to two groups (rain cloud vs sun; plant vs animal). For cause/effect: two pictures — cause scene and effect scene (sun on puddle + dry ground). Not three story frames unless you are sequencing a process."
+          }
+        },
+        "Argue": {
+          "canDo": [
+            "Identifying claims from a series of oral statements",
+            "Identifying evidence to support claims from charts and tables"
+          ],
+          "contentThatHelps": "Spoken claims. Second Can Do needs a chart the audio refers to (numbers that support the claim).",
+          "picture": {
+            "use": "required",
+            "count": 1,
+            "type": "One simple chart or table (tally or 3-column: cats 3, dogs 1). Not a photograph. First Can Do (hear the claim) is audio-only if you split items."
+          }
+        }
+      },
+      "SPEAKING": {
+        "Narrate": {
+          "canDo": [
+            "Stating main ideas or points of classroom conversations",
+            "Restating details of content-related topics (in home language and English) in small groups"
+          ],
+          "contentThatHelps": "Student restates the main point of something just heard or read (a mini story). 1–2 sentences. Can Do is talk, not tapping pictures.",
+          "picture": {
+            "use": "not_needed",
+            "count": 0,
+            "type": "None."
+          }
+        },
+        "Inform": {
+          "canDo": [
+            "Stating main ideas or points of classroom conversations",
+            "Restating details of content-related topics (in home language and English) in small groups"
+          ],
+          "contentThatHelps": "Student restates a FACT from a short lesson (one main idea + one detail). Home language OK.",
+          "picture": {
+            "use": "not_needed",
+            "count": 0,
+            "type": "None."
+          }
+        },
+        "Explain": {
+          "canDo": [
+            "Describing situations from modeled sentences",
+            "Connecting two content-related ideas that define \"how\" or \"why\""
+          ],
+          "contentThatHelps": "A model sentence to copy/change. Student says how/why with because. No picture in the Can Do.",
+          "picture": {
+            "use": "not_needed",
+            "count": 0,
+            "type": "None."
+          }
+        },
+        "Argue": {
+          "canDo": [
+            "Answering simple questions related to claims",
+            "Stating evidence to support claims (in home language and English)"
+          ],
+          "contentThatHelps": "A claim plus Why? Student gives one reason. Print/speech only.",
+          "picture": {
+            "use": "not_needed",
+            "count": 0,
+            "type": "None."
+          }
+        }
+      },
+      "READING": {
+        "Narrate": {
+          "canDo": [
+            "Sequencing illustrated text of narrative or informational events",
+            "Locating main ideas in a series of simple sentences"
+          ],
+          "contentThatHelps": "Illustrated STORY events to put in order, plus simple sentences whose main idea they find. Sequence needs the pictures; main idea can be the same sentences under the pictures.",
+          "picture": {
+            "use": "required",
+            "count": 3,
+            "type": "Three illustrated panels of one story (each panel = one event with a short caption). Student orders them. Not one photo."
+          }
+        },
+        "Inform": {
+          "canDo": [
+            "Sequencing illustrated text of narrative or informational events",
+            "Locating main ideas in a series of simple sentences"
+          ],
+          "contentThatHelps": "Illustrated FACT sequence (life cycle, how paper is made) plus simple informational sentences.",
+          "picture": {
+            "use": "required",
+            "count": 3,
+            "type": "Three illustrated panels of one process (seed → sprout → plant), each with a caption. Not a story with characters."
+          }
+        },
+        "Explain": {
+          "canDo": [
+            "Comparing ideas on the same topic in a series of simple sentences",
+            "Identifying how content-related phenomena relate to one another in illustrated text or media"
+          ],
+          "contentThatHelps": "Two short texts on the same topic (compare) AND/OR illustrated text that shows how A relates to B.",
+          "picture": {
+            "use": "required",
+            "count": 2,
+            "type": "Two labeled diagrams or photos of the same topic that differ (mitosis vs meiosis; solid vs liquid). Each has 1–2 sentences. Not three story frames."
+          }
+        },
+        "Argue": {
+          "canDo": [
+            "Distinguishing facts from opinions in text",
+            "Identifying features associated with content-related claims"
+          ],
+          "contentThatHelps": "Printed sentences: one fact, one opinion. Words like should, best, I think. No picture.",
+          "picture": {
+            "use": "not_needed",
+            "count": 0,
+            "type": "None."
+          }
+        }
+      },
+      "WRITING": {
+        "Narrate": {
+          "canDo": [
+            "Completing sentences using word banks",
+            "Producing statements related to main ideas on familiar topics in home language and English"
+          ],
+          "contentThatHelps": "Word bank + frames for a mini-story (First… Then…). The Can Do is completing sentences, not drawing.",
+          "picture": {
+            "use": "not_needed",
+            "count": 0,
+            "type": "None. Printed word bank is the support WIDA names."
+          }
+        },
+        "Inform": {
+          "canDo": [
+            "Completing sentences using word banks",
+            "Producing statements related to main ideas on familiar topics in home language and English"
+          ],
+          "contentThatHelps": "Word bank of topic words. Student writes a fact sentence.",
+          "picture": {
+            "use": "not_needed",
+            "count": 0,
+            "type": "None. Printed word bank only."
+          }
+        },
+        "Explain": {
+          "canDo": [
+            "Connecting short sentences",
+            "Comparing illustrated descriptions of content-related concepts (e.g., mitosis v. meiosis)"
+          ],
+          "contentThatHelps": "Student joins two short sentences (because/so) AND compares two illustrated science ideas.",
+          "picture": {
+            "use": "required",
+            "count": 2,
+            "type": "Two labeled illustrations of related concepts (two cell-division diagrams, or ice vs water). Student writes compare sentences. Not a 3-panel story."
+          }
+        },
+        "Argue": {
+          "canDo": [
+            "Stating opinions using evaluative language related to content (e.g., \"I agree. Metric is better.\")",
+            "Connecting simple sentences to form content-related ideas"
+          ],
+          "contentThatHelps": "Frames: I agree/disagree because… Two linked sentences. Content opinion (metric, recess), not a photo.",
+          "picture": {
+            "use": "not_needed",
+            "count": 0,
+            "type": "None."
+          }
+        }
+      }
+    },
+    {
+      "level": 3,
+      "name": "Developing",
+      "LISTENING": {
+        "Narrate": {
+          "canDo": ["Stating the next event in a series based on clues from narrative or informational oral texts"],
+          "contentThatHelps": "Spoken story or oral report with a clear sequence. Stop before the last event. Student says/chooses what happens next. Clues are in the AUDIO.",
+          "picture": {
+            "use": "not_needed",
+            "count": 0,
+            "type": "None. Do not add a picture strip unless you are also testing L2 sequence; this Can Do is oral clues."
+          }
+        },
+        "Inform": {
+          "canDo": ["Matching main ideas of familiar text read aloud to visuals"],
+          "contentThatHelps": "Familiar informational paragraph read aloud. Student picks the visual that matches the MAIN IDEA (not a tiny detail).",
+          "picture": {
+            "use": "required",
+            "count": 3,
+            "type": "Three different stills: one matches the main idea, two are related but wrong (detail or different topic). Example: recycling talk → (1) sorting bins (2) a single plastic bottle (3) a forest. Not three frames of one story."
+          }
+        },
+        "Explain": {
+          "canDo": [
+            "Matching main ideas of familiar text read aloud with visuals",
+            "Showing differences between or among content-related phenomena described orally (e.g., descriptive statistics)"
+          ],
+          "contentThatHelps": "Spoken how/why or a comparison of two groups (numbers in the audio). Student matches main idea to a visual or says which group is larger.",
+          "picture": {
+            "use": "required",
+            "count": 2,
+            "type": "Two charts or two pictures that differ in the way the audio describes (week A vs week B rainfall bars). For main-idea match, three stills as in Inform. Not a story strip."
+          }
+        },
+        "Argue": {
+          "canDo": [
+            "Illustrating claims or reasons from oral narratives",
+            "Identifying opposing perspectives from oral text (e.g., sides in wars, regimes, or revolutions)"
+          ],
+          "contentThatHelps": "Oral text with a claim+reason, or two opposing sides. Student identifies the claim or which side. Illustrating = showing they understood, not drawing.",
+          "picture": {
+            "use": "not_needed",
+            "count": 0,
+            "type": "None."
+          }
+        }
+      },
+      "SPEAKING": {
+        "Narrate": {
+          "canDo": ["Relating a series of events by expressing time in multiple tenses"],
+          "contentThatHelps": "Student tells events using past and another time (yesterday / now). 3–5 sentences. No picture in the Can Do.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        },
+        "Inform": {
+          "canDo": ["Connecting ideas in content-related discourse using transitions"],
+          "contentThatHelps": "Student reports facts with first, also, for example. No picture.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        },
+        "Explain": {
+          "canDo": [
+            "Demonstrating how to conduct experiments, engage in processes, or solve problems with supports",
+            "Stating why events occur, phenomena exist, or some things happen"
+          ],
+          "contentThatHelps": "Spoken how-to (experiment steps) or why (because). Supports = sentence frame, not a photo.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        },
+        "Argue": {
+          "canDo": [
+            "Critiquing opposing claims",
+            "Evaluating the value of options in content-based situations"
+          ],
+          "contentThatHelps": "Two options or two claims. Student says which is weaker and why.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        }
+      },
+      "READING": {
+        "Narrate": {
+          "canDo": ["Connecting people to actions based on oral descriptions with details"],
+          "contentThatHelps": "WIDA lists this under reading; practice as print: a paragraph where people do actions. Question: who did what. (If you follow the word oral strictly, that is listening — for reading, use a written description with the same skill.)",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        },
+        "Inform": {
+          "canDo": ["Identifying topic sentences, main ideas, and details in paragraphs"],
+          "contentThatHelps": "One informational paragraph: topic sentence + 2 details. Questions on each.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        },
+        "Explain": {
+          "canDo": [
+            "Illustrating relationships between main ideas and details in paragraphs",
+            "Sequencing steps or events to describe processes (e.g., solving math problems)"
+          ],
+          "contentThatHelps": "A how-to or process paragraph. Student matches detail to main idea or orders steps. Illustrating = showing the relationship, not drawing.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None. Sequence the printed steps; do not add photos." }
+        },
+        "Argue": {
+          "canDo": [
+            "Identifying claims and the reasons for each claim",
+            "Identifying opposing points of view"
+          ],
+          "contentThatHelps": "A short opinion paragraph with because and another side (some people say).",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        }
+      },
+      "WRITING": {
+        "Narrate": {
+          "canDo": ["Composing dialogues or blogs based on personal experiences"],
+          "contentThatHelps": "Student writes a short blog or two-person dialogue about something that happened to them.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        },
+        "Inform": {
+          "canDo": ["Producing short paragraphs with main ideas and some details"],
+          "contentThatHelps": "Student writes one fact paragraph: main idea + 2 details.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        },
+        "Explain": {
+          "canDo": [
+            "Comparing and contrasting information, events, or characters",
+            "Producing descriptive paragraphs around a central idea"
+          ],
+          "contentThatHelps": "Write compare/contrast or one descriptive paragraph. Print prompt only.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        },
+        "Argue": {
+          "canDo": [
+            "Substantiating opinions with content-related examples and evidence",
+            "Providing feedback to peers on language used for claims and evidence"
+          ],
+          "contentThatHelps": "Opinion + a content example. Peer feedback is classroom talk; in solo practice, write claim + example only.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        }
+      }
+    },
+    {
+      "level": 4,
+      "name": "Expanding",
+      "LISTENING": {
+        "Narrate": {
+          "canDo": [
+            "Identifying main ideas and details in oral discourse",
+            "Evaluating oral presentations of peers based on criteria for success"
+          ],
+          "contentThatHelps": "Spoken narrative (story or personal recount). Questions: main idea vs detail. Second item: a peer-style oral presentation + a simple rubric (clear, complete).",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        },
+        "Inform": {
+          "canDo": [
+            "Identifying main ideas and details in oral discourse",
+            "Evaluating oral presentations of peers based on criteria for success"
+          ],
+          "contentThatHelps": "Same skills on a spoken information report, not a plotted story.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        },
+        "Explain": {
+          "canDo": [
+            "Identifying relationships between people, ideas, or events in oral discourse",
+            "Matching complex oral descriptions to images, graphs, or formulas"
+          ],
+          "contentThatHelps": "Spoken how/why relationships. Second Can Do: audio describes a graph or formula; student picks the matching visual.",
+          "picture": {
+            "use": "required",
+            "count": 3,
+            "type": "Three graphs or diagrams that look similar (line up vs down vs flat). Audio describes one. Student selects. Not photos of people."
+          }
+        },
+        "Argue": {
+          "canDo": [
+            "Matching evidence to claims in oral discourse",
+            "Formulating opinions based on evidence presented within oral discourse"
+          ],
+          "contentThatHelps": "Spoken argument: claim + evidence. Student matches evidence to claim or forms an opinion from the evidence given.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        }
+      },
+      "SPEAKING": {
+        "Narrate": {
+          "canDo": ["Connecting ideas with supporting details in a variety of oral venues"],
+          "contentThatHelps": "Student tells a story or history with supporting details (not a fact list).",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        },
+        "Inform": {
+          "canDo": ["Paraphrasing and summarizing content-related ideas presented orally"],
+          "contentThatHelps": "Student hears content, then paraphrases. No picture.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        },
+        "Explain": {
+          "canDo": [
+            "Comparing content-related concepts",
+            "Connecting ideas with supporting details to show relationships (e.g., characters’ actions to their feelings)"
+          ],
+          "contentThatHelps": "Compare two concepts, or explain action → feeling. Speech only.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        },
+        "Argue": {
+          "canDo": [
+            "Connecting ideas with supporting details or evidence",
+            "Taking stances and summarizing ideas supporting them"
+          ],
+          "contentThatHelps": "Take a stance; summarize supporting ideas. No picture.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        }
+      },
+      "READING": {
+        "Narrate": {
+          "canDo": [
+            "Ordering paragraphs in narrative and informational text",
+            "Identifying summaries of passages in a variety of genres"
+          ],
+          "contentThatHelps": "A NARRATIVE with paragraphs out of order, or a story plus summary choices. (Informational ordering is the Inform cell.)",
+          "picture": { "use": "not_needed", "count": 0, "type": "None. Sequence printed paragraphs." }
+        },
+        "Inform": {
+          "canDo": [
+            "Ordering paragraphs in narrative and informational text",
+            "Identifying summaries of passages in a variety of genres"
+          ],
+          "contentThatHelps": "An INFORMATIONAL text with scrambled paragraphs, or pick the best summary of a report.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        },
+        "Explain": {
+          "canDo": [
+            "Matching content-related cause to effect in graphically-supported text",
+            "Highlighting text evidence that points to how systems function (e.g., different forms of government)"
+          ],
+          "contentThatHelps": "Cause-effect with a graphic. Second skill: print about how a system works; student highlights the how.",
+          "picture": {
+            "use": "required",
+            "count": 1,
+            "type": "One flowchart or cause-effect graphic in the text (bill becomes law; water cycle arrows). Plus the printed paragraph. Not three photos."
+          }
+        },
+        "Argue": {
+          "canDo": [
+            "Identifying evidence to support analysis of what texts say (e.g., position papers)",
+            "Classifying pros and cons of claims and evidence presented within written texts"
+          ],
+          "contentThatHelps": "A short position paper. Mark evidence; sort pro vs con.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        }
+      },
+      "WRITING": {
+        "Narrate": {
+          "canDo": ["Reproducing a sequence of events or experiences using transitional words"],
+          "contentThatHelps": "Write a sequence with first, then, after that, finally.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        },
+        "Inform": {
+          "canDo": ["Producing content-related reports"],
+          "contentThatHelps": "Write a fact report, not a story.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        },
+        "Explain": {
+          "canDo": [
+            "Describing relationships between details or examples and supporting ideas",
+            "Connecting content-related themes or topics to main ideas"
+          ],
+          "contentThatHelps": "Write how details support an idea. No graphic required.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        },
+        "Argue": {
+          "canDo": [
+            "Crafting persuasive pieces (e.g., editorials) with a series of substantiated content-related claims",
+            "Composing scripts with protagonists and antagonists"
+          ],
+          "contentThatHelps": "Editorial with several claims, OR a short script of two opposing characters.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        }
+      }
+    },
+    {
+      "level": 5,
+      "name": "Bridging",
+      "LISTENING": {
+        "Narrate": {
+          "canDo": ["Sequencing a series of illustrated events from oral passages (e.g., historical recaps)"],
+          "contentThatHelps": "Spoken historical recap. Student orders the illustrated events as heard.",
+          "picture": {
+            "use": "required",
+            "count": 4,
+            "type": "Four stills of one historical event in time (before battle → during → after → result), unlabeled or numbered out of order. Audio is the recap. Not one photo."
+          }
+        },
+        "Inform": {
+          "canDo": ["Categorizing details of content-related main ideas seen and heard in videos or other technologies"],
+          "contentThatHelps": "Video-style spoken report (or real clip if you have it). Student sorts details under two main ideas. Seeing = the video; if you only have audio, do not add random photos.",
+          "picture": {
+            "use": "not_needed",
+            "count": 0,
+            "type": "None unless you play an actual short video. Do not fake video with unrelated library photos."
+          }
+        },
+        "Explain": {
+          "canDo": [
+            "Carrying out a series of oral directions to construct mathematical or scientific models",
+            "Connecting details to main ideas based on extended oral discourse"
+          ],
+          "contentThatHelps": "Step-by-step oral directions to build a model, or extended how/why talk. Second skill is audio-only.",
+          "picture": {
+            "use": "not_needed",
+            "count": 0,
+            "type": "None. The student constructs the model from directions; you do not show the finished picture first."
+          }
+        },
+        "Argue": {
+          "canDo": [
+            "Establishing connections among claims, arguments, and supporting evidence within oral discourse",
+            "Comparing opposing points-of-view presented within oral discourse"
+          ],
+          "contentThatHelps": "Debate audio: two views, each with evidence. Student links claim–evidence or compares sides.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        }
+      },
+      "SPEAKING": {
+        "Narrate": {
+          "canDo": ["Tracing the evolution of literary characters, themes, and plots from different venues (e.g., digital text or video)"],
+          "contentThatHelps": "After a short story (print). Student traces character/theme/plot change. Video is optional if you have a clip; do not add a random photo.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        },
+        "Inform": {
+          "canDo": ["Producing oral multimedia, content-related reports based on research from multiple sources"],
+          "contentThatHelps": "Give two short sources in print. Student gives an oral report using both. Multimedia in WIDA means the student’s report; you do not need to show photos.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        },
+        "Explain": {
+          "canDo": [
+            "Giving demonstrations with step-by-step details (e.g., converting Fahrenheit to Celsius)",
+            "Evaluating the significance of events, people, or phenomena in oral presentations"
+          ],
+          "contentThatHelps": "Step-by-step demonstration (F to C) or why an event mattered. Speech only.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        },
+        "Argue": {
+          "canDo": [
+            "Engaging in debates on content-related topics with claims and counterclaims along with reasonable evidence",
+            "Defending points of view with specific claims"
+          ],
+          "contentThatHelps": "Debate prompt: claim, counterclaim, evidence. No picture.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        }
+      },
+      "READING": {
+        "Narrate": {
+          "canDo": [
+            "Sequencing main ideas, events, and conclusions in narrative and informational text",
+            "Matching details of content-related topics to main ideas"
+          ],
+          "contentThatHelps": "A NARRATIVE: sequence events/conclusions; match details to main ideas.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None. Sequence in the text." }
+        },
+        "Inform": {
+          "canDo": [
+            "Sequencing main ideas, events, and conclusions in narrative and informational text",
+            "Matching details of content-related topics to main ideas"
+          ],
+          "contentThatHelps": "An INFORMATIONAL article: sequence conclusions; match details to headings.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        },
+        "Explain": {
+          "canDo": [
+            "Sorting grade-level text by highlighting elements of the genre (e.g., differentiating the \"how\" from the \"why\")",
+            "Sequencing events based on cause and effect (e.g., how machines operate)"
+          ],
+          "contentThatHelps": "Process text: label how vs why; order cause → effect. Print only.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        },
+        "Argue": {
+          "canDo": [
+            "Evaluating evidence presented in support of claims",
+            "Developing a stance in favor of or against claims presented within content-related text"
+          ],
+          "contentThatHelps": "Argumentative text. Judge evidence; take a stance.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        }
+      },
+      "WRITING": {
+        "Narrate": {
+          "canDo": ["Summarizing conclusions reached from steps in problem-solving or conducting experiments"],
+          "contentThatHelps": "Given experiment/problem steps in print, write the conclusion as what was found, in order.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        },
+        "Inform": {
+          "canDo": ["Producing research reports using multiple sources"],
+          "contentThatHelps": "Two printed sources in the prompt. Student writes a report using both.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        },
+        "Explain": {
+          "canDo": [
+            "Producing informational text around graphs and charts",
+            "Comparing content-related ideas from multiple sources in essays, reports, and narratives"
+          ],
+          "contentThatHelps": "Student writes about a graph/chart, or compares two printed sources.",
+          "picture": {
+            "use": "required",
+            "count": 1,
+            "type": "One graph or chart with a title and numbers (rainfall table, bar graph). Student writes from that graphic. Not a photograph."
+          }
+        },
+        "Argue": {
+          "canDo": [
+            "Presenting opinions in persuasive essays or reports backed by content-related research",
+            "Justifying ideas using multiple sources"
+          ],
+          "contentThatHelps": "Two printed sources. Persuasive essay using both.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        }
+      }
+    },
+    {
+      "level": 6,
+      "name": "Reaching",
+      "LISTENING": {
+        "Narrate": {
+          "canDo": [
+            "Identifying key ideas expressed orally",
+            "Identifying new information expressed by others"
+          ],
+          "contentThatHelps": "Extended spoken narrative or discussion with two speakers. Student IDs key idea and what was new.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        },
+        "Inform": {
+          "canDo": [
+            "Identifying key ideas expressed orally",
+            "Identifying new information expressed by others"
+          ],
+          "contentThatHelps": "Same, on a factual oral exchange (not a story).",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        },
+        "Explain": {
+          "canDo": [
+            "Evaluating main ideas and supporting details presented in diverse media and oral formats",
+            "Developing models from oral discourse and multimedia (e.g., YouTube videos)"
+          ],
+          "contentThatHelps": "Podcast-style explanation. Student evaluates main idea/details. Second Can Do: they build a model from the talk — you may show one diagram after, not as the question stem.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None required. A YouTube clip is the WIDA example, not a still photo." }
+        },
+        "Argue": {
+          "canDo": [
+            "Evaluating the soundness of opposing claims presented orally",
+            "Identifying bias within claims in oral discourse"
+          ],
+          "contentThatHelps": "Two oral claims, one weaker or biased. Student judges soundness and bias.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        }
+      },
+      "SPEAKING": {
+        "Narrate": {
+          "canDo": [
+            "Restating new information expressed by others in extended speech",
+            "Posing questions that elicit elaboration and responding to others’ questions and comments"
+          ],
+          "contentThatHelps": "After a story, restate and ask a follow-up question. No picture.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        },
+        "Inform": {
+          "canDo": [
+            "Restating new information expressed by others in extended speech",
+            "Posing questions that elicit elaboration and responding to others’ questions and comments"
+          ],
+          "contentThatHelps": "After a fact talk, restate and ask a clarifying question.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        },
+        "Explain": {
+          "canDo": [
+            "Adapting speech to a variety of contexts and tasks (e.g., use of register)",
+            "Posing questions that connect several speakers’ ideas and responding to others’ ideas"
+          ],
+          "contentThatHelps": "Same idea, two registers (friend vs principal), or connect two speakers’ ideas.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        },
+        "Argue": {
+          "canDo": [
+            "Paraphrasing new information expressed by others and, when warranted, modifying views or positions",
+            "Making presentations with multimedia components to clarify claims and emphasize salient points"
+          ],
+          "contentThatHelps": "New fact may change the student’s claim. Multimedia is what the student would present — do not show a library photo as the task.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        }
+      },
+      "READING": {
+        "Narrate": {
+          "canDo": ["Evaluating how a central event is introduced, illustrated, and elaborated in text (e.g., through examples or anecdotes)"],
+          "contentThatHelps": "Illustrated here means developed in writing (anecdotes, examples), not drawings. One event in a literary/historical passage.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None. Illustrated = author’s examples in print." }
+        },
+        "Inform": {
+          "canDo": ["Identifying a central idea of a text and how it is conveyed through particular details; summarizing text absent personal opinions or judgments"],
+          "contentThatHelps": "Informational text. Central idea, details, summary with no I think.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        },
+        "Explain": {
+          "canDo": [
+            "Comparing and contrasting information from experiments, simulations, videos, or multimedia sources with that of text on the same topics",
+            "Identifying factors that contribute to phenomena in explanations"
+          ],
+          "contentThatHelps": "Print text plus a second source described in print (what a simulation showed). Compare. Or list factors.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None unless you embed a real video; do not add random photos." }
+        },
+        "Argue": {
+          "canDo": [
+            "Identifying specific evidence to support analyses of content area text",
+            "Distinguishing among facts, reasoned judgment, and speculation in text"
+          ],
+          "contentThatHelps": "Content argument. Label fact / judgment / speculation.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        }
+      },
+      "WRITING": {
+        "Narrate": {
+          "canDo": ["Conveying sequence, signaling shifts from one time frame to another, and showing the relationships among experiences and events"],
+          "contentThatHelps": "Narrative with time shifts (years later) and how events connect.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        },
+        "Inform": {
+          "canDo": ["Providing a concluding statement or section that follows from and supports the information presented"],
+          "contentThatHelps": "Report whose conclusion uses only the facts already written.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        },
+        "Explain": {
+          "canDo": [
+            "Determining two or more central ideas in text and tracing their development",
+            "Evaluating the interactions between individuals, events, and ideas in text (e.g., how ideas influence individuals or events and the converse)"
+          ],
+          "contentThatHelps": "WIDA lists these as writing Explain; they read like analysis. For practice: write a text that traces two ideas and how people/events affect each other. No picture.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        },
+        "Argue": {
+          "canDo": [
+            "Introducing claims and opposing claims, along with their associated reasons and evidence",
+            "Closing with concluding statements or paragraphs that support claims"
+          ],
+          "contentThatHelps": "Full argument: your claim, opposing claim, evidence, conclusion that matches your claim.",
+          "picture": { "use": "not_needed", "count": 0, "type": "None." }
+        }
+      }
+    }
+  ]
+}

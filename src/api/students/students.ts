@@ -729,7 +729,7 @@ async function buildProgress(studentId: string, assessment: Assessment) {
     const domainKey = tier === "academic" ? `${domain}_academic` : domain;
     const levelRow = levels.find((l) => l.domain === domain && l.tier === tier);
     const currentLevel = levelRow ? parseFloat(levelRow.currentLevel) : config.scale.min;
-    const exitThreshold = levelRow ? parseFloat(levelRow.exitThreshold) : getExitThreshold(assessment, domain);
+    const exitThreshold = getExitThreshold(assessment, domain);
     const gap = Math.max(0, exitThreshold - currentLevel);
     const normalizedLevel = config.normalize(currentLevel);
 
@@ -906,10 +906,7 @@ router.get("/students/:studentId/pathway", requireStudentAccess("studentId"), as
   ) as Record<Domain, number>;
 
   const thresholdMap = Object.fromEntries(
-    DOMAINS.map((d) => {
-      const levelRow = levels.find((l) => l.domain === d);
-      return [d, levelRow ? parseFloat(levelRow.exitThreshold) : getExitThreshold(assessment, d)];
-    })
+    DOMAINS.map((d) => [d, getExitThreshold(assessment, d)]),
   ) as Record<Domain, number>;
 
   const gaps = calculateGaps(levelMap, thresholdMap, assessment);
