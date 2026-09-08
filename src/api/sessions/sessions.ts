@@ -48,6 +48,7 @@ import {
 } from "../../lib/academicElaEngine";
 import {
   generateListeningContent,
+  FALLBACK_LISTENING,
   generateAcademicMathListeningContent,
   generateAcademicScienceListeningContent,
   generateAcademicSocialStudiesListeningContent,
@@ -750,7 +751,7 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
 
     const listeningContent = listeningContentResult.status === "fulfilled"
       ? listeningContentResult.value
-      : (req.log.error({ err: listeningContentResult.reason }, "Listening content generation failed, using fallback"), null);
+      : (req.log.error({ err: listeningContentResult.reason }, "Listening content generation failed, using fallback"), FALLBACK_LISTENING);
 
     const illustrationUrl = illustrationResult.status === "fulfilled"
       ? illustrationResult.value
@@ -1216,6 +1217,11 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
       req.log.error({ err }, "Academic listening content generation failed, using fallback");
     }
 
+    if (!academicContent || typeof academicContent !== "object") {
+      sendError(res, 503, "Could not generate practice content. Please try again.");
+      return;
+    }
+
     sendSuccess(res, {
       sessionId:    earlySession.id,
       domain,
@@ -1579,6 +1585,11 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
   } catch (err) {
     req.log.error({ err }, "Content generation failed, using fallback");
     contentData = null;
+  }
+
+  if (!contentData || typeof contentData !== "object") {
+    sendError(res, 503, "Could not generate practice content. Please try again.");
+    return;
   }
 
   // Create session record — topic and keyUse are now stored for all domains

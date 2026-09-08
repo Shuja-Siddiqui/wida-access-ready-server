@@ -273,7 +273,19 @@ export async function generateSpeakingContent(params: {
       exitTip:           toDisplayTextOrNull(result.exit_tip),
     };
   } catch (err) {
-    logger.error({ err, stage: "speaking-content", canDo: params.canDo }, "speaking content generation failed");
-    throw err;
+    logger.error({ err, stage: "speaking-content", canDo: params.canDo }, "speaking content generation failed, using fallback");
+    return {
+      ...FALLBACK_SPEAKING,
+      canDoDescriptor: params.canDo.action || FALLBACK_SPEAKING.canDoDescriptor,
+      keyUse: params.canDo.keyUse,
+      canDoAction: params.canDo.action,
+      canDoItems: params.canDo.items,
+      prompt: (params.imageTags?.length)
+        ? `Look at the photo. Name ${params.imageTags.slice(0, 3).join(", ")}.`
+        : FALLBACK_SPEAKING.prompt,
+      scaffold: params.scaffoldRequired ? FALLBACK_SPEAKING.scaffold : null,
+      targetSeconds: params.isTelpas ? { min: 45, max: 90 } : params.targetSeconds,
+      responseLength: params.responseLength,
+    };
   }
 }

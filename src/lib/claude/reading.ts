@@ -12,6 +12,7 @@ import { buildSystemPrompt } from "./prompts/compose";
 import { contentGenPrompt } from "./prompts/content";
 import type { CanDoEntry } from "../listeningContentEngine";
 import { serializeCanDoForPrompt } from "../listeningContentEngine";
+import { logger } from "../../config/logger";
 
 // ── Per-level schema tables ───────────────────────────────────────────────────
 
@@ -470,6 +471,7 @@ export async function generateReadingContent(params: {
       })),
     };
   } catch (err) {
-    throw err;
+    logger.error({ err }, "generateReadingContent failed, using fallback");
+    return FALLBACK_READING;
   }
 }

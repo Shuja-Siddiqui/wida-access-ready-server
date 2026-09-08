@@ -15,6 +15,7 @@ import { contentGenPrompt } from "./prompts/content";
 import { feedbackCoachPrompt } from "./prompts/wida-feedback-guide";
 import type { CanDoEntry } from "../listeningContentEngine";
 import { serializeCanDoForPrompt } from "../listeningContentEngine";
+import { logger } from "../../config/logger";
 
 // ── Per-level schema tables ───────────────────────────────────────────────────
 
@@ -239,7 +240,7 @@ export async function generateWritingContent(params: {
   });
 
   try {
-    const result = (await callClaude(systemPrompt, userPrompt)) as {
+    const result = (await callClaude(systemPrompt, userPrompt, 2000)) as {
       can_do_descriptor: string;
       task_type: string;
       prompt: string;
@@ -257,7 +258,21 @@ export async function generateWritingContent(params: {
       minSentences:    result.min_sentences || params.minSentences,
     };
   } catch (err) {
-    throw err;
+    logger.error({ err }, "generateWritingContent failed, using fallback");
+    const tags = params.imageTags ?? [];
+    return {
+      ...FALLBACK_WRITING,
+      canDoDescriptor: params.canDo.action || FALLBACK_WRITING.canDoDescriptor,
+      taskType: params.taskType,
+      prompt: tags.length
+        ? `Write about what you see: ${tags.slice(0, 4).join(", ")}.`
+        : FALLBACK_WRITING.prompt,
+      wordBank: mergeWritingWordBank(null, tags, wordBankRequired),
+      sentenceFrame: params.sentenceFrameRequired
+        ? (tags[0] ? `I see ${tags[0]} and` : FALLBACK_WRITING.sentenceFrame)
+        : null,
+      minSentences: params.minSentences,
+    };
   }
 }
 

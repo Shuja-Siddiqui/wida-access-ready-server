@@ -25,6 +25,7 @@ import { parseOptionDiagrams, parseVisual } from "./prompts/optional-line-visual
 import type { ListeningContent } from "./listening";
 import { serializeCanDoForPrompt } from "../listeningContentEngine";
 import { clampToThreeOptions } from "../choice-options";
+import { logger } from "../../config/logger";
 
 const SYSTEM_PROMPT = buildSystemPrompt(
   contentGenPrompt("listening", 3),
@@ -151,6 +152,7 @@ export async function generateAcademicElaListeningContent(params: {
       }),
     };
   } catch (err) {
-    throw err;
+    logger.error({ err }, "academic ELA listening generation failed, using fallback");
+    return FALLBACK_ACADEMIC_ELA;
   }
 }

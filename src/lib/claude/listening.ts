@@ -391,7 +391,7 @@ export async function generateListeningContent(params: {
       questions,
     };
   } catch (err) {
-    logger.error({ err }, "generateListeningContent failed");
-    throw err;
+    logger.error({ err }, "generateListeningContent failed, using fallback");
+    return FALLBACK_LISTENING;
   }
 }

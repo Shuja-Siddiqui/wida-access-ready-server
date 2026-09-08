@@ -130,13 +130,8 @@ export async function callClaude(
       model: config.anthropic.model,
       max_tokens: maxTokens,
       temperature: 0.7,
-      system: [
-        {
-          type: "text",
-          text: systemPrompt,
-          cache_control: { type: "ephemeral" },
-        },
-      ],
+      // Plain string: some live proxies reject cache_control on short L1–2 prompts.
+      system: systemPrompt,
       messages: [{ role: "user", content: userPrompt }],
     });
 
