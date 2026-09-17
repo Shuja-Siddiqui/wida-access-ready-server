@@ -11,13 +11,14 @@
  */
 
 import { getClient } from "./client";
+import { runClaudeJob } from "./queue";
 import { db } from "../../../db";
 import { libraryTable } from "../../../db/schema/library";
 import { eq } from "drizzle-orm";
 import { logger } from "../../config/logger";
 import { config } from "../../config";
-import { ObjectStorageService } from "../objectStorage";
-import type { AcademicSubject } from "../listeningContentEngine";
+import { ObjectStorageService } from "../images/objectStorage";
+import type { AcademicSubject } from "../content";
 import type { AcademicVisionResult } from "../../../db/schema/library";
 
 export type { AcademicVisionResult };
@@ -59,7 +60,8 @@ Return exactly this JSON:
   "description": "2–3 sentences that TEACH the concept in simple present tense for Grade 6–8 ELL students. Name the concept first. Then explain it using generic classroom language (scientists, students, people). You may mention object types that appear (beaker, diagram, map) as tools of the concept — never as a photo caption. Example: 'Laboratory safety means protecting your eyes and skin during experiments. Scientists wear goggles and use beakers to hold liquids.'"
 }`;
 
-  const response = await claude.messages.create({
+  const response = await runClaudeJob("vision.academic", () =>
+    claude.messages.create({
     model:      config.anthropic.visionModel,
     max_tokens: 300,
     system:     SYSTEM_PROMPT,
@@ -70,7 +72,8 @@ Return exactly this JSON:
         { type: "text", text: userPrompt },
       ],
     }],
-  });
+  }),
+  );
 
   const text    = response.content[0].type === "text" ? response.content[0].text : "";
   const cleaned = text.replace(/^```(?:json)?\n?/i, "").replace(/\n?```\s*$/, "").trim();

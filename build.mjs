@@ -107,7 +107,7 @@ async function buildAll() {
       // package directory (like @google-cloud/secret-manager's .proto
       // files) — bundling breaks that lookup since the bundled __dirname
       // points at dist/, which doesn't contain the migrations folder.
-      "stripe-replit-sync",
+      "redis",
     ],
     sourcemap: "linked",
     plugins: [

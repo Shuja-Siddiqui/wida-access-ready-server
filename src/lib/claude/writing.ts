@@ -1,78 +1,47 @@
 /**
  * Writing content generators:
- *   - generateWritingContent  — produces a writing prompt with sentence frame
+ *   - generateWritingContent  — produces a writing prompt; scaffolding is the model's choice
  *   - getWritingFeedback      — scores a student's response and provides coaching
- *
- * Schema is built dynamically per call (level + taskType + wordBankRequired +
- * sentenceFrameRequired) so Claude always sees the exact field shapes and expected
- * structure for this session.
  */
 
-import { callClaude, toDisplayText, toDisplayTextOrNull } from "./client";
-import { OPTIONAL_LINE_VISUALS_BLOCK, parseVisual } from "./prompts/optional-line-visuals";
+import { callClaude, toDisplayText } from "./client";
+import { rethrowIfClaudeCapacity } from "./queue";
+import { parseVisual } from "./prompts/optional-line-visuals";
 import { buildSystemPrompt } from "./prompts/compose";
 import { contentGenPrompt } from "./prompts/content";
 import { feedbackCoachPrompt } from "./prompts/wida-feedback-guide";
-import type { CanDoEntry } from "../listeningContentEngine";
-import { serializeCanDoForPrompt } from "../listeningContentEngine";
+import {
+  formatExpressivePldBlock,
+  serializeFrameworkTask,
+  selectExpressivePld,
+  type FrameworkTask,
+} from "./standards/2020";
+import { mergePriorPractice, type PracticeReport } from "../practice-report";
+import { dumpContentGenRequest } from "./dump-content-gen";
 import { logger } from "../../config/logger";
+import {
+  applyWritingScore0,
+  serializeWritingRubricForPrompt,
+  writingDescriptorBullets,
+  writingScoreMeetsTask,
+  writingZeroCoach,
+  rubricPromptAudit,
+} from "../wida-access-rubric";
 
 // ── Per-level schema tables ───────────────────────────────────────────────────
-
-/**
- * Human-readable description of each task_type — embedded in the schema so
- * Claude understands the genre it must produce.
- */
-const TASK_TYPE_DESCRIPTIONS: Record<string, string> = {
-  word_phrase:              "labeled words and phrases; minimal sentence construction",
-  sentence_completion:      "complete 2–4 sentences using the provided word bank",
-  connected_sentences:      "2–3 short connected sentences with subject-area vocabulary",
-  opinion_sentence:         "one opinion statement with evaluative language (e.g. 'I believe…')",
-  paragraph:                "short paragraph: main idea + 2–3 supporting details",
-  comparison_paragraph:     "compare/contrast paragraph with at least two perspectives",
-  opinion_paragraph:        "opinion paragraph: claim + supporting examples/evidence",
-  report:                   "content-related report: 2 paragraphs with transitions",
-  explanatory_paragraphs:   "multi-paragraph: describes relationships between ideas",
-  persuasive:               "persuasive piece: claim + substantiated evidence",
-  research_report:          "research report drawing from multiple sources",
-  informational_essay:      "informational essay comparing ideas from multiple sources",
-  persuasive_essay:         "persuasive essay backed by research evidence",
-  analytical_essay:         "analytical essay: sequence + concluding analytical statement",
-  critical_essay:           "critical essay: central ideas + evaluation of interactions",
-  argumentative_essay:      "argumentative essay: claim + counterclaims + evidence",
-};
 
 // ── Schema builder ────────────────────────────────────────────────────────────
 
 /**
  * Builds the OUTPUT SCHEMA section for this specific call.
- * Shows the exact task_type, whether word_bank and sentence_frame are required,
- * and the minimum sentence count.
+ * word_bank and sentence_frame are the model's choice (array/string or null).
  */
 function buildWritingOutputSchema(params: {
   level: number;
-  taskType: string;
-  wordBankRequired: boolean;
-  sentenceFrameRequired: boolean;
   minSentences: number;
-  hasLibraryImage: boolean;
+  keyUse: string;
 }): string {
-  const { level, taskType, wordBankRequired, sentenceFrameRequired, minSentences } = params;
-
-  const wordBankShape = wordBankRequired
-    ? params.hasLibraryImage
-      ? `["<visible object from image_tags>", "<visible object>", "<useful verb>", "<connector>", "..."]`
-      + `\n  /* REQUIRED: 6–10 words. Start with objects actually visible in the photo (image_tags). */`
-      + `\n  /* Then add short verbs/connectors the student needs for this Can Do (see, look, because, and). */`
-      : `["<content word>", "<key phrase>", "<Tier-2 academic term>", "..."]`
-      + `\n  /* Level ${level}: provide 6–10 words the student needs to complete the task */`
-    : `null  /* Level ${level}: no word bank — student generates their own vocabulary */`;
-
-  const frameShape = sentenceFrameRequired
-    ? `"<sentence starter that models the genre — e.g. 'I think… because…'>"`
-    + `\n  /* Level ${level}: sentence frame required — model the ${taskType} genre */`
-    + `\n  /* NEVER include blank lines like '___ helps ___' — use a STARTER only */`
-    : `null  /* Level ${level}: no sentence frame — student opens independently */`;
+  const { level, minSentences } = params;
 
   return [
     `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
@@ -80,56 +49,34 @@ function buildWritingOutputSchema(params: {
     `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
     ``,
     `{`,
-    `  "can_do_descriptor": "<WIDA action + chosen can_do item>",`,
+    `  "task_descriptor": "<echo the 2–3 language_functions this prompt assesses>",`,
     ``,
-    `  "task_type": "${taskType}",`,
-    `  /* Echo this value exactly — do not change it */`,
-    `  /* Genre for this session: ${TASK_TYPE_DESCRIPTIONS[taskType] ?? taskType} */`,
-    `  /* Full task_type reference (key_use × level):`,
-    `       L1 all key uses   → word_phrase`,
-    `       L2 Inform/Narrate → sentence_completion`,
-    `       L2 Explain        → connected_sentences`,
-    `       L2 Argue          → opinion_sentence`,
-    `       L3 Inform/Narrate → paragraph`,
-    `       L3 Explain        → comparison_paragraph`,
-    `       L3 Argue          → opinion_paragraph`,
-    `       L4 Inform/Narrate → report`,
-    `       L4 Explain        → explanatory_paragraphs`,
-    `       L4 Argue          → persuasive`,
-    `       L5 Inform/Narrate → research_report`,
-    `       L5 Explain        → informational_essay`,
-    `       L5 Argue          → persuasive_essay`,
-    `       L6 Inform/Narrate → analytical_essay`,
-    `       L6 Explain        → critical_essay`,
-    `       L6 Argue          → argumentative_essay */`,
+    `  "task_type": "<short name for this writing job>",`,
+    `  /* Primary key_use: ${params.keyUse} */`,
     ``,
-    `  "prompt": "${params.hasLibraryImage
-      ? "<tell the student to look at the picture and write about what they see — match task_type>"
-      : "<writing task text — no mention of word bank or sentence frame>"}",`,
-    `  /* Genre must match task_type: ${TASK_TYPE_DESCRIPTIONS[taskType] ?? taskType} */`,
+    `  "prompt": "<one academic writing job on THIS topic — never say look/see/photo>",`,
+    `  /* Level ${level}: follow pld.level. Level 2 must not copy a level-1 name-objects pattern. */`,
+    `  /* If language_functions need two short sources, put two Grade 6–8 blurbs IN this prompt. Otherwise do not add sources. */`,
     `  /* Do NOT mention the word bank or sentence frame inside the prompt */`,
     `  "visual": null,`,
     ``,
-    `  "word_bank": ${wordBankShape},`,
+    `  "word_bank": null,`,
+    `  /* Default null. Only replace with a short word list if this student cannot reach the pld without it. Do not add a bank because the field exists. */`,
     ``,
-    `  "sentence_frame": ${frameShape},`,
+    `  "sentence_frame": null,`,
+    `  /* Default null. Only replace with a starter if needed. Do not invent fill-in-the-blank because this field exists. */`,
     ``,
-    `  "min_sentences": ${minSentences}`,
-    `  /* Echo this value exactly — the minimum sentences expected in student response */`,
+    `  "min_sentences": <number>`,
+    `  /* Suggested floor from our app: ${minSentences}. Raise it if the pld needs more connected text. Do not shrink below what the pld needs. */`,
     `}`,
     ``,
     `SCHEMA ENFORCEMENT RULES`,
-    `• task_type MUST be echoed as-is: "${taskType}".`,
-    `• min_sentences MUST be echoed as-is: ${minSentences}.`,
-    wordBankRequired
-      ? `• word_bank MUST be a non-null array of 6–10 items.`
-      : `• word_bank MUST be null at Level ${level}.`,
-    params.hasLibraryImage
-      ? `• A real library photo is on screen. The prompt MUST ask the student to look at the picture and write about it.`
-      : `• No library photo. Do not tell the student to look at a picture.`,
-    sentenceFrameRequired
-      ? `• sentence_frame MUST be a non-null starter string at Level ${level}.`
-      : `• sentence_frame MUST be null at Level ${level}.`,
+    `• Return task_descriptor, task_type, prompt, visual, word_bank, sentence_frame, min_sentences. word_bank and sentence_frame should be null unless you have a reason they are needed.`,
+    `• Do not add a word bank or fill-in-the-blank just because those keys exist. Prefer an open writing prompt that matches the pld (simple sentences the student writes).`,
+    `• Academic text-only. Do NOT say look, picture, photo, "what do you see", or "places you see". Write from the topic and academic_subject only.`,
+    ...(level >= 2
+      ? [`• ALIGN: prompt assesses language_functions for key_use ${params.keyUse}. Follow pld.level ${level}. Do not add printed sources unless the functions require them.`]
+      : []),
     `• prompt must NOT mention the word bank, sentence frame, or their absence.`,
   ].join("\n");
 }
@@ -138,7 +85,7 @@ function buildWritingOutputSchema(params: {
 
 export interface WritingContent {
   canDoDescriptor: string;
-  /** Writing task genre — derived from CanDo key use + level */
+  /** Writing task genre — size from key use × level, not a 2016 skill bullet */
   taskType: string;
   prompt: string;
   visual?: string;
@@ -149,19 +96,36 @@ export interface WritingContent {
 
 // ── Fallback ──────────────────────────────────────────────────────────────────
 
-function mergeWritingWordBank(
-  raw: unknown,
-  imageTags: string[] | undefined,
-  required: boolean,
-): string[] | null {
+function mergeWritingWordBank(raw: unknown): string[] | null {
   const fromModel = Array.isArray(raw)
     ? raw.filter((w): w is string => typeof w === "string" && w.trim().length > 0).map((w) => w.trim())
     : [];
-  const fromTags = (imageTags ?? []).filter((t) => t.trim().length > 0);
-  const merged = [...new Set([...fromModel, ...fromTags])].slice(0, 10);
-  if (merged.length > 0) return merged;
-  if (!required) return null;
-  return ["I see", "and", "because", "look", "picture"];
+  if (fromModel.length === 0) return null;
+  return [...new Set(fromModel)];
+}
+
+function tidyWritingPrompt(prompt: string): string {
+  return prompt
+    .replace(/\s*Use words from the (word )?bank\.?/gi, "")
+    .replace(/\s*Use the (word )?bank( and (the )?sentence frame)?( to help you)?\.?/gi, "")
+    .replace(/\s*Use the sentence frame( to help you)?\.?/gi, "")
+    .replace(/\s+to help you\.?\s*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function tidyWritingFrame(frame: string): string {
+  return frame.replace(/_+/g, "_____").replace(/\s+/g, " ").trim();
+}
+
+/** Keep the model's frame. Do not invent a frame if they sent null. */
+export function normalizeWritingSentenceFrame(
+  _prompt: string,
+  frame: string | null | undefined,
+): string | null {
+  const raw = toDisplayText(frame).trim();
+  if (!raw) return null;
+  return tidyWritingFrame(raw);
 }
 
 const FALLBACK_WRITING: WritingContent = {
@@ -186,36 +150,28 @@ export async function generateWritingContent(params: {
   minSentences: number;
   sentenceFrameRequired: boolean;
   wordBankRequired: boolean;
-  canDo: CanDoEntry;
+  framework: FrameworkTask;
   topic: string;
   gradeBand: string;
   mode: "standard" | "exit_proximity";
   academicContentLayer?: string;
-  academicSubject?: string;
-  hasLibraryImage?: boolean;
-  imageTags?: string[];
-  imageDescription?: string;
-  imageConcept?: string;
+  academicSubject: string;
+  priorPracticeReport?: PracticeReport | null;
 }): Promise<WritingContent> {
-  const hasLibraryImage = params.hasLibraryImage ?? false;
-  const wordBankRequired = params.wordBankRequired || hasLibraryImage;
-  // Build a level-specific output schema and combine with the static base prompt
+  const keyUse = params.framework.key_language_use;
   const schemaSection = buildWritingOutputSchema({
-    level:                 params.level,
-    taskType:              params.taskType,
-    wordBankRequired,
-    sentenceFrameRequired: params.sentenceFrameRequired,
-    minSentences:          params.minSentences,
-    hasLibraryImage,
+    level:        params.level,
+    minSentences: params.minSentences,
+    keyUse,
   });
   const systemPrompt = buildSystemPrompt(
-    contentGenPrompt("writing", params.level),
-    OPTIONAL_LINE_VISUALS_BLOCK,
+    contentGenPrompt("writing", params.level, "2020"),
+    formatExpressivePldBlock(params.framework.pld),
     params.academicContentLayer ?? "",
     schemaSection,
   );
 
-  const userPrompt = JSON.stringify({
+  const userPrompt = JSON.stringify(mergePriorPractice({
     domain:                  "writing",
     assessment:              params.assessment,
     level:                   params.level,
@@ -224,53 +180,61 @@ export async function generateWritingContent(params: {
     grade_band:              params.gradeBand,
     mode:                    params.mode,
     topic:                   params.topic,
-    can_do:                  serializeCanDoForPrompt(params.canDo, { level: params.level, domain: "WRITING" }),
+    framework:               serializeFrameworkTask(params.framework),
+    goal:                    "Create one writing task this student can do so they become able to produce the writing in framework.pld (end of this integer level). Default: no word bank and no fill-in-the-blank.",
     complexity_instruction:  params.complexityInstruction,
-    writing_format:          params.writingFormat,
-    task_type:               params.taskType,
-    min_sentences:           params.minSentences,
-    sentence_frame_required: params.sentenceFrameRequired,
-    word_bank_required:      wordBankRequired,
-    required_key_use:        params.canDo.keyUse,
-    has_library_image:        hasLibraryImage,
-    image_tags:              params.imageTags ?? [],
-    image_description:       params.imageDescription ?? "",
-    image_concept:           params.imageConcept ?? "",
-    ...(params.academicSubject ? { academic_subject: params.academicSubject } : {}),
-  });
+    size_hint: {
+      writing_format: params.writingFormat,
+      min_sentences:  params.minSentences,
+    },
+    required_key_use:        keyUse,
+    has_library_image:       false,
+    academic_subject:        params.academicSubject,
+  }, params.priorPracticeReport));
 
+  dumpContentGenRequest("writing", systemPrompt, userPrompt);
   try {
     const result = (await callClaude(systemPrompt, userPrompt, 2000)) as {
-      can_do_descriptor: string;
+      task_descriptor?: string;
+      can_do_descriptor?: string;
       task_type: string;
       prompt: string;
       word_bank: string[] | null;
       sentence_frame: string | null;
       min_sentences: number;
     };
+    const promptRaw = tidyWritingPrompt(toDisplayText(result.prompt));
+    logger.info(
+      {
+        stage:           "writing-content ← Claude",
+        topic:           params.topic,
+        academicSubject: params.academicSubject,
+        prompt:          promptRaw.slice(0, 240),
+        wordBank:        result.word_bank,
+      },
+      "writing content generated",
+    );
+    const modelMin = Number(result.min_sentences);
     return {
-      canDoDescriptor: result.can_do_descriptor ?? "",
+      canDoDescriptor: result.task_descriptor ?? result.can_do_descriptor
+        ?? params.framework.language_functions.map((f) => f.function).join("; "),
       taskType:        result.task_type ?? params.taskType,
-      prompt:          toDisplayText(result.prompt),
+      prompt:          promptRaw,
       visual:          parseVisual((result as { visual?: unknown }).visual),
-      wordBank:        mergeWritingWordBank(result.word_bank, params.imageTags, wordBankRequired),
-      sentenceFrame:   toDisplayTextOrNull(result.sentence_frame),
-      minSentences:    result.min_sentences || params.minSentences,
+      wordBank:        mergeWritingWordBank(result.word_bank),
+      sentenceFrame:   normalizeWritingSentenceFrame(promptRaw, result.sentence_frame),
+      minSentences:    Number.isFinite(modelMin) && modelMin > 0 ? modelMin : params.minSentences,
     };
   } catch (err) {
     logger.error({ err }, "generateWritingContent failed, using fallback");
-    const tags = params.imageTags ?? [];
     return {
       ...FALLBACK_WRITING,
-      canDoDescriptor: params.canDo.action || FALLBACK_WRITING.canDoDescriptor,
+      canDoDescriptor: params.framework.language_functions.map((f) => f.function).join("; ")
+        || FALLBACK_WRITING.canDoDescriptor,
       taskType: params.taskType,
-      prompt: tags.length
-        ? `Write about what you see: ${tags.slice(0, 4).join(", ")}.`
-        : FALLBACK_WRITING.prompt,
-      wordBank: mergeWritingWordBank(null, tags, wordBankRequired),
-      sentenceFrame: params.sentenceFrameRequired
-        ? (tags[0] ? `I see ${tags[0]} and` : FALLBACK_WRITING.sentenceFrame)
-        : null,
+      prompt: FALLBACK_WRITING.prompt,
+      wordBank: null,
+      sentenceFrame: null,
       minSentences: params.minSentences,
     };
   }
@@ -279,6 +243,7 @@ export async function generateWritingContent(params: {
 // ── Writing feedback scorer ───────────────────────────────────────────────────
 
 export interface WritingFeedback {
+  /** ACCESS writing score point 0–7 (not a 0–100 mix). */
   score: number;
   passed: boolean;
   strengths: string[];
@@ -294,44 +259,88 @@ export async function getWritingFeedback(params: {
   taskType: string;
   minSentences: number;
 }): Promise<WritingFeedback> {
+  const zero = applyWritingScore0({
+    response: params.studentResponse,
+    prompt: params.prompt,
+  });
+  if (zero.isZero) {
+    return {
+      score: 0,
+      passed: false,
+      strengths: [],
+      improvements: writingDescriptorBullets(0),
+      coachingNote: writingZeroCoach(),
+    };
+  }
+
   const userPrompt = JSON.stringify({
-    can_do_descriptor: params.canDoDescriptor,
-    prompt:            params.prompt,
-    student_response:  params.studentResponse,
-    level:             params.level,
-    task_type:         params.taskType,
-    min_sentences:     params.minSentences,
+    task_descriptor:        params.canDoDescriptor,
+    prompt:                 params.prompt,
+    student_response:       params.studentResponse,
+    level:                  params.level,
+    task_type:              params.taskType,
+    min_sentences:          params.minSentences,
+    end_of_level_writing:   selectExpressivePld(params.level),
+    key_language_uses:      ["Narrate", "Inform", "Explain", "Argue"],
   });
 
+  const systemPrompt = buildSystemPrompt(
+    serializeWritingRubricForPrompt(),
+    feedbackCoachPrompt("writing", params.level),
+    `Score holistically on ACCESS score points 0–7 only. Do not use a 100-point weighted mix.
+If the writing does not match THIS prompt's job, or has a teachable grammar/verb/spelling slip, set passed false.
+coaching_note for NOT YET must teach: what is wrong, why it is wrong in simple words, then You can write: plus one or two sentences about THIS prompt. Do not skip the why.
+OUTPUT SCHEMA — return every key. Never omit a field.
+{
+  "score_point": 4,
+  "passed": true,
+  "strengths": ["<Language Form they showed: Discourse, Sentence, or Word-Phrase>"],
+  "improvements": ["<Language Form to work on>"],
+  "coaching_note": "<student-facing; no 0–7 numbers>"
+}
+strengths and improvements must name Language Forms. Use [] only if there is nothing to say; do not drop the keys.
+coaching_note is required student coaching.`,
+  );
+  const audit = rubricPromptAudit(`${systemPrompt}\n${userPrompt}`);
+  logger.info(
+    {
+      stage: "writing/feedback → Claude",
+      level: params.level,
+      rubricKind: "writing",
+      rubricAttached: true,
+      ...audit,
+    },
+    "ACCESS rubric audit (writing/feedback)",
+  );
+
   try {
-    const result = (await callClaude(
-      buildSystemPrompt(
-        feedbackCoachPrompt("writing", params.level),
-        `Score 0–100 (Can Do 30, task 25, language 25, length 20). passed if ≥ 70.
-OUTPUT: { "score": 75, "passed": true, "strengths": [], "improvements": [], "coaching_note": "" }`,
-      ),
-      userPrompt,
-      800,
-    )) as {
-      score: number;
-      passed: boolean;
+    const result = (await callClaude(systemPrompt, userPrompt, 800)) as {
+      score_point?: number;
+      score?: number;
+      passed?: boolean;
       strengths: string[];
       improvements: string[];
       coaching_note: string;
     };
+    const scorePoint = Math.max(
+      1,
+      Math.min(7, Math.round(Number(result.score_point ?? result.score) || 1)),
+    );
+    const passed = writingScoreMeetsTask(scorePoint, params.level, params.minSentences);
     return {
-      score:         typeof result.score === "number" ? result.score : 50,
-      passed:        result.passed ?? result.score >= 70,
+      score:         scorePoint,
+      passed,
       strengths:     result.strengths ?? [],
-      improvements:  result.improvements ?? [],
+      improvements:  result.improvements ?? writingDescriptorBullets(Math.min(7, scorePoint + 1)).slice(0, 2),
       coachingNote:  result.coaching_note ?? "",
     };
-  } catch {
+  } catch (err) {
+    rethrowIfClaudeCapacity(err);
     return {
-      score: 65, passed: false,
-      strengths: ["Response submitted"],
-      improvements: ["Review the Can Do descriptor and try again"],
-      coachingNote: "Keep practicing — you can do it!",
+      score: 2, passed: writingScoreMeetsTask(2, params.level, params.minSentences),
+      strengths: [],
+      improvements: writingDescriptorBullets(3).slice(0, 2),
+      coachingNote: "Write one more connected sentence in English.",
     };
   }
 }

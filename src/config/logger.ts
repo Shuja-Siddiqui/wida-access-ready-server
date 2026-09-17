@@ -5,7 +5,7 @@ import { config } from "./index";
 const isProduction = config.nodeEnv === "production";
 
 // Logs are always written to disk (rotated daily via pino-roll) so that
-// src/lib/logCleanup.ts has files to enforce the retention window against.
+// src/lib/jobs/logCleanup.ts has files to enforce the retention window against.
 // In development we also pretty-print to the console for readability.
 const fileTarget = {
   target: "pino-roll",

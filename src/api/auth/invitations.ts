@@ -12,11 +12,11 @@ import {
   schoolsTable,
 } from "../../../db";
 import { ensureStudentLevels } from "../students/students";
-import { sendHtmlEmail } from "../../lib/mailer";
-import { invitationEmail, educatorInvitationEmail } from "../../lib/email-templates";
+import { sendHtmlEmail } from "../../lib/mail/mailer";
+import { invitationEmail, educatorInvitationEmail } from "../../lib/mail/email-templates";
 import { config } from "../../config/index";
 import type { Assessment } from "../../lib/assessments";
-import { sendError, sendSuccess } from "../../lib/api-response";
+import { sendError, sendSuccess } from "../../lib/http/api-response";
 
 const router: IRouter = Router();
 

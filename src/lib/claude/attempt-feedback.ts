@@ -5,8 +5,10 @@
  */
 
 import { callClaude, toDisplayText } from "./client";
+import { rethrowIfClaudeCapacity } from "./queue";
 import { logger } from "../../config/logger";
 import { feedbackCoachPrompt } from "./prompts/wida-feedback-guide";
+import { accessRubricBlockForDomain, rubricPromptAudit } from "../wida-access-rubric";
 
 const MAX_ANSWER_CHARS = 1200;
 const MAX_ITEMS = 8;
@@ -22,6 +24,8 @@ export interface AttemptFeedback {
   mistakes: AttemptFeedbackItem[];
   strengths: string[];
   nextSteps: string[];
+  /** For the next content generator only — not shown to the student. */
+  coachForNextSession: string;
 }
 
 const EMPTY_FEEDBACK: AttemptFeedback = {
@@ -29,6 +33,7 @@ const EMPTY_FEEDBACK: AttemptFeedback = {
   mistakes: [],
   strengths: ["You completed the session."],
   nextSteps: ["Practice the same skill again and read each question twice before answering."],
+  coachForNextSession: "Give another similar job at this same English level. Keep the WIDA factors. Practice clear, complete answers.",
 };
 
 function clip(value: unknown, max = MAX_ANSWER_CHARS): string {
@@ -70,16 +75,23 @@ export function serializeAttemptAnswers(
   }));
 }
 
-function attemptSystemPrompt(domain: string, level: number): string {
+function attemptSystemPrompt(domain: string, level: number, rubricBlock: string): string {
   return `${feedbackCoachPrompt(domain, level)}
 
+${rubricBlock}
+
 This is end-of-session feedback for ONE domain and ONE band only. Do not mix in other domains.
+If an ACCESS speaking or writing rubric is above, judge remarks against that rubric (Language Forms: Discourse, Sentence, Word-Phrase). Do not print 0–7 numbers or category names to the student.
 - Use only the answers given. Do not invent what the student said.
 - Do not mention photos that were not in the questions.
 - Correct items are not mistakes.
-- At most 4 mistakes. Do not write a strengths / "what went well" list.
+- At most 4 mistakes.
+- Always include every OUTPUT SCHEMA key. Do not omit summary, mistakes, strengths, or next_steps.
+- strengths: what they did well on correct items (Language Forms if speaking/writing). Use [] only if every item was missed.
+- next_steps: at least one concrete practice action unless they scored 100%.
+- coach_for_next_session: 2–4 sentences for the NEXT item generator (teacher voice, not student-facing). Name the language to practice more. Stay in this domain and this English level. Do not tell it to skip WIDA functions or jump a level.
 
-OUTPUT SCHEMA
+OUTPUT SCHEMA — every key required (use [] or "" if empty, never omit the key)
 {
   "summary": "<2–3 sentences about this attempt>",
   "mistakes": [
@@ -89,8 +101,9 @@ OUTPUT SCHEMA
       "how_to_improve": "<one specific action>"
     }
   ],
-  "strengths": [],
-  "next_steps": ["<what to practice next>"]
+  "strengths": ["<what they did well, or empty array>"],
+  "next_steps": ["<what to practice next>"],
+  "coach_for_next_session": "<2–4 sentences for the next content generator>"
 }`;
 }
 
@@ -114,6 +127,8 @@ export async function generateAttemptFeedback(params: {
   }>;
 }): Promise<AttemptFeedback> {
   const items = serializeAttemptAnswers(params.answers ?? []);
+  const rubric = accessRubricBlockForDomain(params.domain);
+  const systemPrompt = attemptSystemPrompt(params.domain, params.level, rubric.text);
   const userPrompt = JSON.stringify({
     domain: params.domain,
     tier: params.tier ?? "general",
@@ -123,13 +138,28 @@ export async function generateAttemptFeedback(params: {
     key_use: params.keyUse ?? null,
     answers: items,
   });
+  const audit = rubricPromptAudit(`${systemPrompt}\n${userPrompt}`);
+  logger.info(
+    {
+      stage: "session-complete → Claude",
+      domain: params.domain,
+      level: params.level,
+      rubricKind: rubric.kind,
+      rubricAttached: rubric.kind !== "none",
+      ...audit,
+      rubricPreview: rubric.text ? rubric.text.slice(0, 180) : null,
+      answerCount: items.length,
+    },
+    "ACCESS rubric audit (session submit)",
+  );
 
   try {
-    const result = (await callClaude(attemptSystemPrompt(params.domain, params.level), userPrompt, 900)) as {
+    const result = (await callClaude(systemPrompt, userPrompt, 900)) as {
       summary?: unknown;
       mistakes?: unknown;
       strengths?: unknown;
       next_steps?: unknown;
+      coach_for_next_session?: unknown;
     };
 
     const mistakesRaw = Array.isArray(result.mistakes) ? result.mistakes : [];
@@ -145,12 +175,15 @@ export async function generateAttemptFeedback(params: {
     return {
       summary: clip(result.summary ?? "", 500) || EMPTY_FEEDBACK.summary,
       mistakes,
-      strengths: [],
+      strengths: asStringArray(result.strengths),
       nextSteps: asStringArray(result.next_steps).length
         ? asStringArray(result.next_steps)
         : EMPTY_FEEDBACK.nextSteps,
+      coachForNextSession: clip(result.coach_for_next_session ?? "", 600)
+        || EMPTY_FEEDBACK.coachForNextSession,
     };
   } catch (err) {
+    rethrowIfClaudeCapacity(err);
     logger.error({ err }, "generateAttemptFeedback failed");
     return EMPTY_FEEDBACK;
   }

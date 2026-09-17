@@ -23,6 +23,9 @@ export * from "./invitations";
 // Billing & payments
 export * from "./billing";
 export * from "./billing_config";
+export * from "./rate_limit_settings";
+export * from "./rate_limit_buckets";
+export * from "./ai_usage_daily";
 
 // District seat allocations — tracks how many seats a district admin assigns to each school
 export * from "./district_seat_allocations";
@@ -37,6 +40,6 @@ export * from "./media_assets";
 export * from "./library";
 
 // Content hierarchy: Theme → Topic → Library images (via join table)
-export * from "./themes";
+export * from "./content_categories";
 export * from "./topics";
 export * from "./library_topics";

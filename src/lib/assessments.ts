@@ -8,8 +8,8 @@ export type Domain = typeof DOMAINS[number];
 
 /**
  * Curriculum tier — which instructional track a session belongs to.
- *   general  → everyday language / standard listening, speaking, reading, writing
- *   academic → content-area academic language (currently listening only)
+ *   general  → everyday language / standard listening, speaking, reading
+ *   academic → content-area WIDA language (listening + writing)
  *
  * Tier is stored as a separate column in sessions and student_levels so that
  * (domain="listening", tier="general") and (domain="listening", tier="academic")

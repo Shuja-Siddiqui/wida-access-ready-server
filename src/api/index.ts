@@ -12,8 +12,7 @@ import speechRouter from "./speech/speech";
 import districtsRouter from "./districts/districts";
 import districtPlanRouter from "./districts/district-plan";
 import schoolsRouter from "./schools/schools";
-import adminRouter       from "./admin/admin";
-import adminThemesRouter from "./admin/themes";
+import adminRouter from "./admin/admin";
 import agentRouter from "./agent/agent";
 import mediaRouter from "./media/media";
 import imageScansRouter from "./image-scans/image-scans";
@@ -43,7 +42,6 @@ router.use(districtsRouter);
 router.use(districtPlanRouter);
 router.use(schoolsRouter);
 router.use(adminRouter);
-router.use(adminThemesRouter);
 router.use(mediaRouter);
 router.use(imageScansRouter);
 

@@ -10,8 +10,10 @@
  *   POSTGRES_USER     — default: postgres
  *   POSTGRES_DATABASE — default: postgres
  */
+import dotenv from "dotenv";
 import { defineConfig } from "drizzle-kit";
-import path from "path";
+
+dotenv.config();
 
 const host = process.env.POSTGRES_HOST ?? "access-ready.c7yayquuwe8h.us-east-2.rds.amazonaws.com";
 const port = Number(process.env.POSTGRES_PORT ?? 5432);
@@ -24,7 +26,7 @@ if (!password) {
 }
 
 export default defineConfig({
-  schema: path.join(__dirname, "./schema/index.ts"),
+  schema: "./db/schema/*.ts",
   dialect: "postgresql",
   dbCredentials: {
     host,

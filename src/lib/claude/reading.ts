@@ -6,13 +6,15 @@
  */
 
 import { callClaude, toDisplayText } from "./client";
-import { clampToThreeOptions } from "../choice-options";
+import { clampToFourOptions } from "../choice-options";
 import { OPTIONAL_LINE_VISUALS_BLOCK } from "./prompts/optional-line-visuals";
 import { buildSystemPrompt } from "./prompts/compose";
 import { contentGenPrompt } from "./prompts/content";
-import type { CanDoEntry } from "../listeningContentEngine";
-import { serializeCanDoForPrompt } from "../listeningContentEngine";
+import type { CanDoEntry } from "../content";
+import { serializeCanDoForPrompt } from "../content";
+import { dumpContentGenRequest } from "./dump-content-gen";
 import { logger } from "../../config/logger";
+import { mergePriorPractice, type PracticeReport } from "../practice-report";
 
 // ── Per-level schema tables ───────────────────────────────────────────────────
 
@@ -111,8 +113,8 @@ function buildReadingOutputSchema(level: number, permittedFormats: string[], que
       "can_do_skill": "${mcSkills[0]}",
       /* valid can_do_skill values at Level ${level}: ${mcSkills.join(" | ")} */
       "question": "<question answerable from the passage>",
-      "options": ["<A>", "<B>", "<C>"],
-      "option_diagrams": ["<optional simple line marks for A>", null, null],
+      "options": ["<A>", "<B>", "<C>", "<D>"],
+      "option_diagrams": ["<optional simple line marks for A>", null, null, null],
       /* option_diagrams is OPTIONAL. Same length as options. Use only when a
          few keyboard marks make the choice easier to see (counts, tallies,
          2D outlines). Use null for a choice that stays words-only. Omit the
@@ -199,8 +201,9 @@ function buildReadingOutputSchema(level: number, permittedFormats: string[], que
   lines.push(`}`);
   lines.push(``);
   lines.push(`SCHEMA ENFORCEMENT RULES`);
+  lines.push(`• Return every key in this OUTPUT SCHEMA. Never omit a field. Use null only where this schema shows null.`);
   lines.push(`• Only these types are valid this session: ${permittedFormats.join(", ")}.`);
-  lines.push(`• multiple_choice: exactly 3 options (1 correct + 2 distractors).`);
+  lines.push(`• multiple_choice: exactly 4 options (1 correct + 3 distractors) — real WIDA ACCESS Reading format at grades 6-8.`);
   lines.push(`• "explanation" field ONLY on multiple_choice — omit it on all other types.`);
   lines.push(`• correct_order: correct_order[i] = the 0-based destination position of items[i].`);
   lines.push(`• correct_pairs: every pair [left_idx, right_idx]; cover every left item exactly once.`);
@@ -284,7 +287,7 @@ export const FALLBACK_READING: ReadingContent = {
     {
       id: "1", type: "multiple_choice", canDoSkill: "main_idea",
       question: "What is this passage mainly about?",
-      options: ["The water cycle", "Ocean animals", "Mountain weather"],
+      options: ["The water cycle", "Ocean animals", "Mountain weather", "Desert plants"],
       correct: 0, explanation: "The passage explains how water moves through the cycle.",
     },
     {
@@ -296,7 +299,7 @@ export const FALLBACK_READING: ReadingContent = {
     {
       id: "3", type: "multiple_choice", canDoSkill: "vocabulary",
       question: "What does 'evaporates' mean in the passage?",
-      options: ["Turns to ice", "Turns to vapor and rises", "Falls as rain"],
+      options: ["Turns to ice", "Turns to vapor and rises", "Falls as rain", "Stays the same"],
       correct: 1, explanation: "Evaporates means water turns into vapor and rises.",
     },
     {
@@ -309,7 +312,7 @@ export const FALLBACK_READING: ReadingContent = {
     {
       id: "5", type: "multiple_choice", canDoSkill: "detail",
       question: "What happens after water vapor cools?",
-      options: ["It evaporates again", "It becomes ice", "It forms clouds"],
+      options: ["It evaporates again", "It becomes ice", "It forms clouds", "It disappears"],
       correct: 2, explanation: "The passage says it 'cools and forms clouds.'",
     },
   ],
@@ -342,6 +345,7 @@ export async function generateReadingContent(params: {
   imageTags?: string[];
   imageDescription?: string;
   imageConcept?: string;
+  priorPracticeReport?: PracticeReport | null;
 }): Promise<ReadingContent> {
   // Build a level-specific output schema and combine with the static base prompt
   const questionCount = params.questionCount ?? (params.level <= 1 ? 2 : params.level <= 3 ? 3 : 5);
@@ -353,7 +357,7 @@ export async function generateReadingContent(params: {
     schemaSection,
   );
 
-  const userPrompt = JSON.stringify({
+  const userPrompt = JSON.stringify(mergePriorPractice({
     domain:                 "reading",
     assessment:             params.assessment,
     level:                  params.level,
@@ -375,8 +379,9 @@ export async function generateReadingContent(params: {
     image_description:      params.imageDescription ?? null,
     image_concept:          params.imageConcept ?? null,
     ...(params.academicSubject ? { academic_subject: params.academicSubject } : {}),
-  });
+  }, params.priorPracticeReport));
 
+  dumpContentGenRequest("reading", systemPrompt, userPrompt);
   try {
     const result = (await callClaude(systemPrompt, userPrompt, 2000)) as {
       can_do_descriptor: string;
@@ -441,17 +446,17 @@ export async function generateReadingContent(params: {
           } satisfies ReadingQuestionClassify;
 
         default: { // multiple_choice (fallback)
-          const three = clampToThreeOptions(q.options, q.correct);
+          const four = clampToFourOptions(q.options, q.correct);
           return {
             id: q.id,
             type: "multiple_choice" as const,
             canDoSkill: q.can_do_skill ?? "detail",
             question: toDisplayText(q.question ?? ""),
-            options: three.options,
+            options: four.options,
             optionDiagrams: Array.isArray(q.option_diagrams)
-              ? q.option_diagrams.slice(0, three.options.length)
+              ? q.option_diagrams.slice(0, four.options.length)
               : undefined,
-            correct: three.correct,
+            correct: four.correct,
             explanation: q.explanation ?? "",
           } satisfies ReadingQuestionMC;
         }

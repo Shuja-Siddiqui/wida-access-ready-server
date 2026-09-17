@@ -9,14 +9,20 @@ import {
   usersTable,
   invitationsTable,
 } from "../../../db";
-import { sendError, sendSuccess } from "../../lib/api-response";
+import { sendError, sendSuccess } from "../../lib/http/api-response";
 import { requireAuth } from "../../middlewares/auth";
-import { sendHtmlEmail } from "../../lib/mailer";
-import { educatorInvitationEmail } from "../../lib/email-templates";
+import {
+  assertDistrictAccess,
+  requireOrgStaff,
+  resolveOrgScope,
+  sendAccessDenied,
+} from "../../lib/auth/org-access";
+import { sendHtmlEmail } from "../../lib/mail/mailer";
+import { educatorInvitationEmail } from "../../lib/mail/email-templates";
 
 const router: IRouter = Router();
 
-router.use("/districts", requireAuth);
+router.use("/districts", requireAuth, requireOrgStaff);
 
 const CreateDistrictBody = z.object({
   name: z.string().min(1),
@@ -26,35 +32,56 @@ const CreateDistrictBody = z.object({
 
 const DistrictIdParam = z.object({ districtId: z.string().uuid() });
 
-// List all districts
-router.get("/districts", async (_req, res): Promise<void> => {
-  const rows = await db
-    .select({
-      id: districtsTable.id,
-      name: districtsTable.name,
-      state: districtsTable.state,
-      districtCode: districtsTable.districtCode,
-      adminId: districtsTable.adminId,
-      createdAt: districtsTable.createdAt,
-      schoolCount: count(schoolsTable.id),
-    })
-    .from(districtsTable)
-    .leftJoin(schoolsTable, eq(schoolsTable.districtId, districtsTable.id))
-    .groupBy(districtsTable.id)
-    .orderBy(districtsTable.name);
+const districtListQuery = db
+  .select({
+    id: districtsTable.id,
+    name: districtsTable.name,
+    state: districtsTable.state,
+    districtCode: districtsTable.districtCode,
+    adminId: districtsTable.adminId,
+    createdAt: districtsTable.createdAt,
+    schoolCount: count(schoolsTable.id),
+  })
+  .from(districtsTable)
+  .leftJoin(schoolsTable, eq(schoolsTable.districtId, districtsTable.id))
+  .groupBy(districtsTable.id)
+  .orderBy(districtsTable.name);
 
-  sendSuccess(res, rows);
+// List districts — super_admin sees all; district_admin sees their own
+router.get("/districts", async (req, res): Promise<void> => {
+  const scope = await resolveOrgScope(req.auth!);
+  if (!scope) {
+    sendError(res, 403, "Organization access required");
+    return;
+  }
+
+  if (scope.role === "super_admin") {
+    sendSuccess(res, await districtListQuery);
+    return;
+  }
+
+  if (scope.role === "district_admin") {
+    const rows = await districtListQuery.where(eq(districtsTable.id, scope.districtId));
+    sendSuccess(res, rows);
+    return;
+  }
+
+  sendError(res, 403, "You do not have access to district listings");
 });
 
-// Create a district
+// Create a district — super_admin only
 router.post("/districts", async (req, res): Promise<void> => {
+  const scope = await resolveOrgScope(req.auth!);
+  if (scope?.role !== "super_admin") {
+    sendError(res, 403, "Super admin access required to create districts");
+    return;
+  }
+
   const parsed = CreateDistrictBody.safeParse(req.body);
   if (!parsed.success) {
     sendError(res, 400, parsed.error.message);
     return;
   }
-
-  const userId = (req as any).user?.id as string | undefined;
 
   const [district] = await db
     .insert(districtsTable)
@@ -62,7 +89,7 @@ router.post("/districts", async (req, res): Promise<void> => {
       name: parsed.data.name,
       state: parsed.data.state ?? null,
       districtCode: parsed.data.districtCode ?? null,
-      adminId: userId ?? null,
+      adminId: null,
     })
     .returning();
 
@@ -76,6 +103,9 @@ router.get("/districts/:districtId", async (req, res): Promise<void> => {
     sendError(res, 400, "Invalid district ID");
     return;
   }
+
+  const denied = await assertDistrictAccess(req.auth!, params.data.districtId);
+  if (denied) { sendAccessDenied(res, denied); return; }
 
   const [district] = await db
     .select({
@@ -109,6 +139,9 @@ router.get("/districts/:districtId/schools", async (req, res): Promise<void> => 
     return;
   }
 
+  const denied = await assertDistrictAccess(req.auth!, params.data.districtId);
+  if (denied) { sendAccessDenied(res, denied); return; }
+
   const schools = await db
     .select()
     .from(schoolsTable)
@@ -118,13 +151,16 @@ router.get("/districts/:districtId/schools", async (req, res): Promise<void> => 
   sendSuccess(res, schools);
 });
 
-// Update a district
+// Update a district — super_admin any; district_admin own district only
 router.patch("/districts/:districtId", async (req, res): Promise<void> => {
   const params = DistrictIdParam.safeParse(req.params);
   if (!params.success) {
     sendError(res, 400, "Invalid district ID");
     return;
   }
+
+  const denied = await assertDistrictAccess(req.auth!, params.data.districtId);
+  if (denied) { sendAccessDenied(res, denied); return; }
 
   const parsed = CreateDistrictBody.partial().safeParse(req.body);
   if (!parsed.success) {
@@ -178,6 +214,15 @@ router.post("/districts/:districtId/schools", async (req, res): Promise<void> =>
     return;
   }
 
+  const scope = await resolveOrgScope(req.auth!);
+  if (scope?.role === "principal") {
+    sendError(res, 403, "Only district administrators can invite principals");
+    return;
+  }
+
+  const denied = await assertDistrictAccess(req.auth!, params.data.districtId);
+  if (denied) { sendAccessDenied(res, denied); return; }
+
   const parsed = CreateDistrictSchoolBody.safeParse(req.body);
   if (!parsed.success) {
     sendError(res, 400, parsed.error.message);
@@ -187,7 +232,6 @@ router.post("/districts/:districtId/schools", async (req, res): Promise<void> =>
   const { name, state, schoolCode, principal } = parsed.data;
   const { districtId } = params.data;
 
-  // Verify the district exists
   const [district] = await db
     .select({ id: districtsTable.id })
     .from(districtsTable)
@@ -200,7 +244,6 @@ router.post("/districts/:districtId/schools", async (req, res): Promise<void> =>
 
   const normalizedEmail = principal.email.toLowerCase();
 
-  // Block if principal already has an account
   const [existingUser] = await db
     .select({ id: usersTable.id })
     .from(usersTable)
@@ -211,7 +254,6 @@ router.post("/districts/:districtId/schools", async (req, res): Promise<void> =>
     return;
   }
 
-  // Block if an active principal invitation has already been sent to this email
   const [existingInvite] = await db
     .select({ id: invitationsTable.id })
     .from(invitationsTable)
@@ -229,7 +271,6 @@ router.post("/districts/:districtId/schools", async (req, res): Promise<void> =>
     return;
   }
 
-  // Resolve the district admin's name for the invitation
   const [adminUser] = await db
     .select({ name: usersTable.name })
     .from(usersTable)
@@ -242,7 +283,6 @@ router.post("/districts/:districtId/schools", async (req, res): Promise<void> =>
   const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
   const expiresAt = new Date(Date.now() + INVITE_TTL_MS);
 
-  // Store school details in metadata — the accept handler reads these to create everything
   const metadata = JSON.stringify({
     schoolName: name,
     state: state ?? null,
@@ -262,7 +302,6 @@ router.post("/districts/:districtId/schools", async (req, res): Promise<void> =>
     expiresAt,
   });
 
-  // Send invitation email (non-fatal)
   const proto = (req.headers["x-forwarded-proto"] as string)?.split(",")[0]?.trim() ?? req.protocol;
   const host  = (req.headers["x-forwarded-host"] as string)?.split(",")[0]?.trim() ?? req.get("host") ?? "";
   const inviteUrl = `${proto}://${host}/accept-invite?token=${token}`;

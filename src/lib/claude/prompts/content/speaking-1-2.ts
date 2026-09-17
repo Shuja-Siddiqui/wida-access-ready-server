@@ -7,7 +7,7 @@ DOMAIN: SPEAKING  |  BAND: 1–2  |  student SPEAKS one short turn
 
 ${ONE_PHOTO_L12}
 
-The can_do object is the skill goal. Prompt and scaffold must train THAT Can Do. L1: word, phrase, or one filled frame. L2: 1–2 short sentences. Do not ask for a paragraph.
+L1: word, phrase, or one filled frame. L2: 1–2 short sentences. Do not ask for a paragraph.
 
 LEVEL 1
 Narrate → name a past event from the photo (who / what happened). Visual required. Fill the scaffold with a short visible word from image_tags.
@@ -21,5 +21,5 @@ Explain → how/why with because, using two visible tags if a photo is present; 
 Argue → a claim plus Why? One reason. Print/speech; photo not required.
 
 If has_library_image: the oral task must be answerable from image_tags / description. Fill the scaffold with a short visible tag. Do not leave an empty blank. Do not use a long photo title as the word to say.
-Pick exactly one allowed_prompt_type. echo target_seconds.
+Pick exactly one allowed_prompt_type. echo target_seconds. Return every OUTPUT SCHEMA key.
 `.trim();

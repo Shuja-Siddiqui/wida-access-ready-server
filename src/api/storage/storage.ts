@@ -1,12 +1,18 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { Readable } from "stream";
+import { z } from "zod/v4";
 import {
   RequestUploadUrlBody,
   RequestUploadUrlResponse,
 } from "../../generated";
-import { ObjectStorageService, ObjectNotFoundError } from "../../lib/objectStorage";
-import { ObjectPermission } from "../../lib/objectAcl";
-import { sendError, sendSuccess } from "../../lib/api-response";
+import { ObjectStorageService, ObjectNotFoundError } from "../../lib/images/objectStorage";
+import {
+  canAccessPrivateObject,
+  isUserUploadKey,
+  normalizeStorageObjectPath,
+  s3KeyFromObjectPath,
+} from "../../lib/images/privateObjectAccess";
+import { sendError, sendSuccess } from "../../lib/http/api-response";
 import { requireAuth } from "../../middlewares/auth";
 
 const router: IRouter = Router();
@@ -27,9 +33,10 @@ router.post("/storage/uploads/request-url", requireAuth, async (req: Request, re
   }
 
   try {
+    const auth = req.auth!;
     const { name, size, contentType } = parsed.data;
 
-    const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+    const uploadURL = await objectStorageService.getObjectEntityUploadURL(auth.userId);
     const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
 
     sendSuccess(
@@ -43,6 +50,55 @@ router.post("/storage/uploads/request-url", requireAuth, async (req: Request, re
   } catch (error) {
     req.log.error({ err: error }, "Error generating upload URL");
     sendError(res, 500, "Failed to generate upload URL");
+  }
+});
+
+const CompleteUploadBody = z.object({
+  objectPath: z.string().min(1),
+});
+
+/**
+ * POST /storage/uploads/complete
+ *
+ * Called after the client PUTs to the presigned URL. Stamps the object with
+ * an ACL policy so GET /storage/objects/* can enforce per-user access.
+ */
+router.post("/storage/uploads/complete", requireAuth, async (req: Request, res: Response) => {
+  const parsed = CompleteUploadBody.safeParse(req.body);
+  if (!parsed.success) {
+    sendError(res, 400, "Missing or invalid objectPath");
+    return;
+  }
+
+  try {
+    const auth = req.auth!;
+    const objectPath = normalizeStorageObjectPath(parsed.data.objectPath);
+    const key = s3KeyFromObjectPath(objectPath);
+
+    if (!isUserUploadKey(key)) {
+      sendError(res, 400, "Invalid upload path");
+      return;
+    }
+
+    const expectedPrefix = `uploads/${auth.userId}/`;
+    if (!key.startsWith(expectedPrefix)) {
+      sendError(res, 403, "You do not have access to this upload");
+      return;
+    }
+
+    const normalizedPath = await objectStorageService.trySetObjectEntityAclPolicy(objectPath, {
+      owner: auth.userId,
+      visibility: "private",
+    });
+
+    sendSuccess(res, { objectPath: normalizedPath });
+  } catch (error) {
+    if (error instanceof ObjectNotFoundError) {
+      sendError(res, 404, "Upload not found — finish the PUT before completing");
+      return;
+    }
+    req.log.error({ err: error }, "Error completing upload");
+    sendError(res, 500, "Failed to finalize upload");
   }
 });
 
@@ -89,25 +145,17 @@ router.get("/storage/public-objects/*filePath", async (req: Request, res: Respon
  */
 router.get("/storage/objects/*path", requireAuth, async (req: Request, res: Response) => {
   try {
+    const auth = req.auth!;
     const raw = req.params.path;
     const wildcardPath = Array.isArray(raw) ? raw.join("/") : raw;
-    const objectPath = `/objects/${wildcardPath}`;
+    const objectPath = normalizeStorageObjectPath(`/objects/${wildcardPath}`);
     const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
 
-    // --- Protected route example (uncomment when using replit-auth) ---
-    // if (!req.isAuthenticated()) {
-    //   res.status(401).json({ error: "Unauthorized" });
-    //   return;
-    // }
-    // const canAccess = await objectStorageService.canAccessObjectEntity({
-    //   userId: req.user.id,
-    //   objectFile,
-    //   requestedPermission: ObjectPermission.READ,
-    // });
-    // if (!canAccess) {
-    //   res.status(403).json({ error: "Forbidden" });
-    //   return;
-    // }
+    const canAccess = await canAccessPrivateObject(auth, objectFile, objectPath);
+    if (!canAccess) {
+      sendError(res, 403, "You do not have access to this object");
+      return;
+    }
 
     const response = await objectStorageService.downloadObject(objectFile);
 

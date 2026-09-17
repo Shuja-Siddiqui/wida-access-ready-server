@@ -12,7 +12,7 @@ import { logger } from "../../config/logger";
 import { requireAuth } from "../../middlewares/auth";
 import { db } from "../../../db";
 import { libraryTable } from "../../../db/schema";
-import { ObjectStorageService } from "../../lib/objectStorage";
+import { ObjectStorageService } from "../../lib/images/objectStorage";
 
 const router: IRouter = Router();
 const storage = new ObjectStorageService();

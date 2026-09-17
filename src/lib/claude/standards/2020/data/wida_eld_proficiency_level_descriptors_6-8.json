@@ -1,0 +1,121 @@
+{
+  "grade_band": "6-8",
+  "source": "WIDA English Language Development Standards Framework, 2020 Edition, Kindergarten-Grade 12 -- Section 3, Proficiency Level Descriptors",
+  "source_pages_in_file": "173-177",
+  "source_pages_as_labeled_in_document": "171-175",
+  "note_on_relationship_to_language_expectations": "Per the source document (doc-labeled p.171): 'Whereas Language Expectations offer goals for how all students might use language to meet academic content standards, PLDs offer a succinct description of how multilingual learners might develop language across levels of language proficiency in moving toward meeting Language Expectations.' PLDs are designed to be used IN COORDINATION WITH Language Expectations, Language Functions, and Language Features (see wida_eld_language_functions_6-8.json) -- not as a standalone item-generation source. Each level includes and builds on previous levels (PL4 = PL1+PL2+PL3+PL4); PL6 is open-ended.",
+  "caution": "These are capability descriptors (what a student's language looks like at a level), not task templates -- same caution as Can-Do Descriptors. Use PLDs to drive the COMPLEXITY/scaffolding layer of item generation only; task-frame/instruction content should come from wida_eld_language_functions_6-8.json.",
+  "possible_duplicate_source_flag": "wida_language_charts_data.json already contains PLD-like content for this grade band, but sourced from a DIFFERENT WIDA publication (Language Charts: Tying WIDA ACCESS Scores to Classroom Assessment, 2025), not this 2020 Framework PDF. Cross-check the two -- if they diverge, this file (native to the same document as the Language Expectations/Functions/Features) is likely the one to standardize on.",
+  "interpretive_communication_mode": {
+    "modes_covered": "Listening, Reading, Viewing",
+    "framing": "Toward the end of each proficiency level, when scaffolded appropriately, multilingual learners will...",
+    "dimensions": [
+      {
+        "dimension": "Discourse - Organization of language",
+        "criterion_prompt": "Understand how coherent texts (spoken, written, multimodal) are created…",
+        "end_of_level_1": "to meet a purpose (to inform, narrate, entertain, argue, explain) in a series of topic-related sentences",
+        "end_of_level_2": "to meet a purpose in a short, connected text",
+        "end_of_level_3": "to meet a purpose through generic (not genre-specific) organizational patterns in texts (introduction, body, conclusion)",
+        "end_of_level_4": "to meet a purpose through genre-specific organizational patterns (orientation and explanation sequence)",
+        "end_of_level_5": "to meet a purpose through genre-specific organizational patterns (claim, evidence, reasoning) linking ideas, events, and reasons",
+        "level_6": "to meet a purpose reflective of genre and discipline, linking ideas, events, and reasons in a variety of ways (causes and effects, factors and outcomes, events and consequences)"
+      },
+      {
+        "dimension": "Discourse - Cohesion of language",
+        "criterion_prompt": "Understand how ideas are connected across a whole text through…",
+        "end_of_level_1": "a few different types of cohesive devices (repetition, pronoun referencing, demonstratives, etc.)",
+        "end_of_level_2": "multiple cohesive devices (synonyms, antonyms)",
+        "end_of_level_3": "a variety of cohesive devices that connect larger meaningful chunks of text (class/subclass, whole/part)",
+        "end_of_level_4": "a wide variety of cohesive devices that connect ideas throughout text (whole/part, substitution, ellipsis)",
+        "end_of_level_5": "cohesive devices and common strategies that connect ideas throughout text (given/new)",
+        "level_6": "various types of cohesive devices and strategies that connect ideas throughout text"
+      },
+      {
+        "dimension": "Discourse - Density of language",
+        "criterion_prompt": "Understand how ideas are elaborated or condensed through…",
+        "end_of_level_1": "expanded noun groups with classifiers (crescent moon)",
+        "end_of_level_2": "expanded noun groups with prepositional phrases (waxing crescent moon in the second half of the month)",
+        "end_of_level_3": "expanded noun groups with embedded clauses (waxing crescent moon that was growing each day)",
+        "end_of_level_4": "expanded noun groups with a variety of embedded clauses (predictable and observable moon phases in your particular time zone)",
+        "end_of_level_5": "expanded noun groups with a wide variety of embedded clauses and compacted noun groups (nominalization)",
+        "level_6": "multiple ways of elaborating and condensing text to enrich the meaning and add details characteristic of genres and content areas (the relative positions of the sun, earth, and moon cause these changes)"
+      },
+      {
+        "dimension": "Sentence - Grammatical complexity",
+        "criterion_prompt": "Understand how meanings are extended or enhanced through…",
+        "end_of_level_1": "related simple sentences (African savannas are full of wildlife.)",
+        "end_of_level_2": "multiple related simple sentences (African savannas are full of life. Explore Tanzania.)",
+        "end_of_level_3": "simple or compound sentences with familiar ways of combining clauses through using coordinating conjunctions (African savannas are unique and they have amazing wildlife.)",
+        "end_of_level_4": "compound sentences with frequently used ways of combining clauses (A variety of wildlife live in the savanna such as…)",
+        "end_of_level_5": "compound and complex sentences with a variety of ways of combining clauses addressing genre, audience, and content area (Since it's an ecosystem, it has a variety of…)",
+        "level_6": "a wide variety of sentence types that show a variety of increasingly complex relationships (condition, concession, contrast) addressing genre, audience, and content area (The Black Rhino is at risk of extinction, unless…)"
+      },
+      {
+        "dimension": "Word, Phrase - Precision of language",
+        "criterion_prompt": "Understand how precise meanings are created through everyday, cross-disciplinary, and technical language through…",
+        "end_of_level_1": "an increasing number of words and phrases (don't be late for class)",
+        "end_of_level_2": "a growing number of words and phrases in a variety of contexts (inside the membrane)",
+        "end_of_level_3": "an expanding number of words and phrases including idioms and collocations (gravity is bringing me down)",
+        "end_of_level_4": "a variety of words and phrases such as adverbials of time, manner, and place; verb types; and abstract nouns (at the speed of light)",
+        "end_of_level_5": "a wide variety of words, phrases, and expressions with multiple meanings across content areas",
+        "level_6": "strategic use of various words, phrases, and expressions with shades of meaning across content areas (trembling in the corner, pounding rain, the whisper of dragonfly wings)"
+      }
+    ]
+  },
+  "expressive_communication_mode": {
+    "modes_covered": "Speaking, Writing, Representing",
+    "framing": "Toward the end of each proficiency level, when scaffolded appropriately, multilingual learners will...",
+    "dimensions": [
+      {
+        "dimension": "Discourse - Organization of language",
+        "criterion_prompt": "Create coherent texts (spoken, written, multimodal) using…",
+        "end_of_level_1": "sentences that convey intended purpose with emerging organization (topic sentence, supporting details)",
+        "end_of_level_2": "short text that conveys intended purpose using predictable organization (signaled with some paragraph openers: First…Finally, In 1842, This is how volcanos form)",
+        "end_of_level_3": "expanding text that conveys intended purpose using generic (not genre-specific) organizational patterns (introduction, body, conclusion)",
+        "end_of_level_4": "text that conveys intended purpose using genre-specific organizational patterns (statement of position, arguments, call to action) with a variety of paragraph openers",
+        "end_of_level_5": "text that conveys intended purpose using genre-specific organizational patterns with strategic ways of signaling relationships between paragraphs and throughout text (the first reason, the second reason, the evidence…)",
+        "level_6": "text that conveys intended purpose using genre-specific organizational patterns using a wide range of ways to signal relationships throughout the text"
+      },
+      {
+        "dimension": "Discourse - Cohesion of language",
+        "criterion_prompt": "Connect ideas across a whole text through…",
+        "end_of_level_1": "some formulaic cohesive devices (repetition, pronoun referencing, etc.)",
+        "end_of_level_2": "a growing number of cohesive devices (emerging use of articles to refer to the same word, synonyms, antonyms)",
+        "end_of_level_3": "an expanding number of cohesive devices (given/new, whole/part, class/subclass)",
+        "end_of_level_4": "a flexible number of cohesive devices (ellipsis, substitution/omission)",
+        "end_of_level_5": "a variety of cohesive devices used in genre- and discipline-specific ways",
+        "level_6": "a wide variety of cohesive devices (substitution, omission, synonyms, antonyms, whole/part, class/subclass) used in genre- and discipline-specific ways"
+      },
+      {
+        "dimension": "Discourse - Density of language",
+        "criterion_prompt": "Elaborate or condense ideas through…",
+        "end_of_level_1": "some types of elaboration (adding a newly learned adjective to a noun)",
+        "end_of_level_2": "a growing number of types of elaboration (adding articles or demonstratives to a noun: the or these clouds)",
+        "end_of_level_3": "a variety of types of elaboration (adding classifiers: cumulus and cumulonimbus clouds)",
+        "end_of_level_4": "a wide variety of elaboration (adding in embedded clauses after the noun: those storm clouds that we saw yesterday)",
+        "end_of_level_5": "a flexible range of elaboration and some ways to condense ideas (scary looking storm clouds that turned dark in a matter of minutes and condensing through nominalization: that storm system)",
+        "level_6": "multiple types of elaboration and a growing number of ways to condense ideas throughout a text"
+      },
+      {
+        "dimension": "Sentence - Grammatical complexity",
+        "criterion_prompt": "Extend or enhance meanings through…",
+        "end_of_level_1": "simple sentences (The main character is Harry. He is a wizard.)",
+        "end_of_level_2": "sentences with emerging use of clauses (no conjunctions: The main character is Harry. His friends are… They go to Hogwarts.)",
+        "end_of_level_3": "simple or compound sentences with familiar ways of combining clauses (with some coordinating conjunctions: He goes to Hogwarts School and his friends are…)",
+        "end_of_level_4": "compound sentences with frequently used ways of combining clauses (They fight the forces of evil, yet they can't overcome them.)",
+        "end_of_level_5": "compound and complex sentences with a variety of ways of combining clauses characteristic of the genre and content area (with a range of techniques to extend, or shorten sentences: Harry has a lightning bolt scar because he was attacked when…)",
+        "level_6": "a wide variety of sentence types with increasingly complex clause relationships (condition, cause, concession, contrast) addressing genre, audience, and content area (When Harry is close to Voldemort, his scar throbs.)"
+      },
+      {
+        "dimension": "Word, Phrase - Precision of language",
+        "criterion_prompt": "Create precise meanings through everyday, cross-disciplinary, and technical language with…",
+        "end_of_level_1": "a small repertoire of words and phrases with developing precision (order of operations, on page 12)",
+        "end_of_level_2": "a growing repertoire of words and phrases with growing precision (kinetic energy, law of motion)",
+        "end_of_level_3": "an expanding repertoire of words and phrases including idioms and collocations with expanding precision (love-hate relationship)",
+        "end_of_level_4": "a flexible repertoire of words and phrases such as adverbials of time, manner, and place; verb types; and abstract nouns with consistent precision (fill the beaker to the top line)",
+        "end_of_level_5": "a variety of words and phrases, including evaluation and obligation, with precision (stupid test, we should figure this out)",
+        "level_6": "a wide variety of words and phrases with precision (weighing 4.4 pounds on Earth, wrong answer) according to the genre, purpose and discipline"
+      }
+    ]
+  }
+}

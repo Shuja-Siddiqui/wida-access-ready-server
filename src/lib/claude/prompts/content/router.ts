@@ -1,4 +1,5 @@
 import { buildSystemPrompt } from "../compose";
+import { frameworkDomainSlice, frameworkPromptSlice, type WidaFrameworkVersion } from "../../standards";
 import { CONTENT_KERNEL } from "./kernel";
 import { LISTENING_CONTENT_1_2 } from "./listening-1-2";
 import { LISTENING_CONTENT_3_6 } from "./listening-3-6";
@@ -23,8 +24,17 @@ export function contentBand(level: number): ContentBand {
   return level <= 2 ? "1_2" : "3_6";
 }
 
-/** Kernel + exactly one domain×band slice. Pass extra blocks (schema, subject) separately. */
-export function contentGenPrompt(domain: ContentDomain, level: number): string {
+/** kernel + edition shared + domain schema + edition domain extras */
+export function contentGenPrompt(
+  domain: ContentDomain,
+  level: number,
+  version?: WidaFrameworkVersion,
+): string {
   const band = contentBand(level);
-  return buildSystemPrompt(CONTENT_KERNEL, SLICES[domain][band]);
+  return buildSystemPrompt(
+    CONTENT_KERNEL,
+    frameworkPromptSlice(version),
+    SLICES[domain][band],
+    frameworkDomainSlice(domain, band, version),
+  );
 }

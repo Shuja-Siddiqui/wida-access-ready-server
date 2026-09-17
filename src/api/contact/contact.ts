@@ -1,8 +1,8 @@
 import { Router, type IRouter } from "express";
 import { SubmitContactMessageBody, SubmitContactMessageResponse } from "../../generated";
-import { sendHtmlEmail } from "../../lib/mailer";
+import { sendHtmlEmail } from "../../lib/mail/mailer";
 import { config } from "../../config/index";
-import { sendError, sendSuccess } from "../../lib/api-response";
+import { sendError, sendSuccess } from "../../lib/http/api-response";
 
 const router: IRouter = Router();
 

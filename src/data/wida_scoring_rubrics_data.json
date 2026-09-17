@@ -1,0 +1,94 @@
+{
+  "_source": "Fetched directly from wida.wisc.edu official PDFs on 2026-09-02: ACCESS-Speaking-Scoring-Rubric-Grades-1-12.pdf and ACCESS-Writing-Scoring-Rubric-Grades-1-12.pdf. This is primary WIDA rubric text (not paraphrased), superseding the extrapolated/unconfirmed portions of the earlier 'goELprep Synthetic Anchor Responses' research doc.",
+  "speaking_rubric": {
+    "categories_high_to_low": ["Exemplary", "Strong", "Adequate", "Attempted", "No Response"],
+    "descriptors": {
+      "Exemplary": [
+        "Language use comparable to or going beyond the model in sophistication",
+        "Clear, automatic, and fluent delivery",
+        "Precise and appropriate word choice"
+      ],
+      "Strong": [
+        "Language use approaching that of model in sophistication, though not as rich",
+        "Clear delivery",
+        "Appropriate word choice"
+      ],
+      "Adequate": [
+        "Language use not as sophisticated as that of model",
+        "Generally comprehensible use of oral language",
+        "Adequate word choice"
+      ],
+      "Attempted": [
+        "Language use does not support an adequate response",
+        "Comprehensibility may be compromised",
+        "Word choice may not be fully adequate"
+      ],
+      "No Response": [
+        "Does not respond (in English)"
+      ]
+    },
+    "task_level_guidance": {
+      "P1_tasks": "Assign Attempted for single English words (including verbatim repetition from model); assign Adequate for two or more words in English.",
+      "grades_1_3": "Award Strong or higher for original simple oral sentences.",
+      "grades_4_12": "Award Strong or higher for at least two original simple sentences or one sentence with sophistication matching the model.",
+      "P3_P5_tasks": "Students may use language from the model without penalty."
+    },
+    "scoring_notes": [
+      "Simply repeating the task question scores Attempted",
+      "\"I don't know\" responses score Attempted",
+      "Off-task responses score Attempted",
+      "Off-topic responses score a maximum of Adequate"
+    ],
+    "note_vs_app": "goELprep's current speaking.ts defines its own per-level scoring dimensions rather than scoring against these 5 official categories directly, and has no P1/P3/P5 task-level rules (single-word=Attempted, 2-sentence Strong threshold, off-topic cap, etc). Not yet reconciled."
+  },
+  "writing_rubric": {
+    "scale": "0-7 (score point 0 is a set of disqualifying conditions, not a quality descriptor)",
+    "score_points": {
+      "7": [
+        "Ideas are coherently organized, using language that connects ideas together smoothly throughout the response achieving a clear flow of text.",
+        "Response clearly demonstrates features of the intended key language use (Narrate, Inform, Explain, Argue) and content area.",
+        "Response contains a wide variety of sentence structures whose meaning is always clear. Response demonstrates control of complex sentence structures, though sentences may not always be error-free.",
+        "Response uses a wide variety of words and phrases appropriately and precisely, with choices that are relevant to the task context."
+      ],
+      "6": [
+        "Ideas are well organized and elaborated, using a variety of connectors to create some cohesion.",
+        "Response demonstrates some features of the intended key language use (Narrate, Inform, Explain, Argue).",
+        "Response contains a variety of sentence structures with consistently clear meaning, though occasional errors may be present.",
+        "Response uses a variety of words and phrases with some precision that are usually appropriate to the task context."
+      ],
+      "5": [
+        "Response has a clear organizational pattern with some elaboration. Response uses connectors that join ideas together and these are usually used appropriately.",
+        "Response contains some compound or complex sentence structures with generally clear meaning, though they may include some errors.",
+        "Response uses a range of words and phrases that are generally appropriate and show emerging precision, including some words and phrases related to the task context."
+      ],
+      "4": [
+        "Response uses connectors and may have some evidence of an organizational pattern, though longer responses in particular may lack coherence.",
+        "Response contains some compound or complex sentences, though errors may obscure meaning.",
+        "Response uses a range of words and phrases from beyond the stimulus that generally convey the intended meaning."
+      ],
+      "3": [
+        "Response shows connected text, which may include some simple connectors (e.g., and, then, but), though they may be used repetitively and may not always be used accurately.",
+        "Response contains some complete sentences, though frequent errors may obscure meaning.",
+        "Response uses some original words and phrases, in addition to language drawn from the stimulus."
+      ],
+      "2": [
+        "Response includes at least one clear, complete sentence, but does not include connected text.",
+        "Response uses a small number of original words and phrases, in addition to language drawn from the stimulus."
+      ],
+      "1": [
+        "Response includes at least one recognizable word in English, and may contain attempts at phrases or sentences, but does not include any clear, complete sentences."
+      ],
+      "0": [
+        "Multiple conditions warrant a score of 0, including: no discernible English words, entirely off-task content, entirely in non-English language, verbatim copying without reformulation, blank responses, and plagiarized content."
+      ]
+    },
+    "confirms_current_klu_taxonomy": "Score points 6 and 7 explicitly name 'the intended key language use (Narrate, Inform, Explain, Argue)' verbatim from the official rubric — confirms the CURRENT (2020 Edition) WIDA Key Language Use taxonomy used in actual ACCESS scoring is Narrate/Inform/Explain/Argue, not Recount/Explain/Argue/Discuss.",
+    "note_vs_app": "goELprep's current writing.ts rubric is an independently-invented weighted point system (Can-Do alignment 30pts / task completion 25pts / language production 25pts / length-format 20pts), which does not map onto WIDA's actual 0-7 score-point scale or its descriptor language at all — not just a different weighting, a structurally different rubric. Not yet reconciled. Score point 0's disqualifying conditions (off-task, non-English, copied, blank, plagiarized) also don't appear to have an equivalent in the app's current scoring logic."
+  },
+  "klu_taxonomy_note": {
+    "current_2020_edition": ["Narrate", "Inform", "Explain", "Argue"],
+    "superseded_2016_can_do_key_uses_edition": ["Recount", "Explain", "Argue", "Discuss"],
+    "relationship": "Per WIDA's own Key Language Uses FAQ: 'Recount (2016) was divided into Narrate and Inform (2020) to better differentiate among the characteristics of the wide varieties of texts that were found under Recount.' 'Discuss (2016) is technically not a genre family' and was embedded across all four current uses rather than retained standalone. WIDA's own FAQ also states: 'The Can Do Descriptors have not yet been updated to reflect the 2020 Edition; however, they remain available as a valuable tool' — meaning there is no official Narrate/Inform-edition Can Do Descriptors document to swap in; splitting Recount into Narrate vs Inform per Can Do item would be original content-authoring work, not a data swap.",
+    "correction_to_earlier_claim": "An earlier pass in this project incorrectly stated 'Recount isn't a WIDA Key Language Use at all.' That was wrong — Recount is a real, WIDA-published Key Use, just from the superseded 2016 Can Do Descriptors Key Uses Edition. The app's KEY_USE_ROTATION (Recount/Explain/Argue) is outdated relative to current ACCESS scoring terminology (Narrate/Inform/Explain/Argue), not simply incorrect."
+  }
+}

@@ -1,13 +1,12 @@
-/** Writing levels 3–6: connected and organized text. Not oral frames. */
+/** Writing levels 3–6: connected and organized text. Scaffolding is the model's choice. */
 
 export const WRITING_CONTENT_3_6 = `
-DOMAIN: WRITING  |  BAND: 3–6  |  student WRITES organized text
+DOMAIN: WRITING  |  BAND: 3–6  |  Grade 6–8 ELL  |  ACCESS-style PRACTICE
 
-Prompt: one task matching task_type and writing_format. NEVER mention word bank or sentence frame in the prompt.
-If has_library_image: write about that photo. If not: topic only.
-Follow OUTPUT SCHEMA for word_bank / sentence_frame (usually null at higher levels).
-echo min_sentences (floor, not cap).
-L3: one paragraph, details. L4: two paragraphs. L5–6: intro/body/conclusion or argue with reasons.
-exit_proximity → richer prompt, still writing.
-Do not generate a speaking oral scaffold as the main task.
+Size the prompt so a student can finish at this pld. task_type and min_sentences are size hints, not a different job.
+Do not mention a word bank or frame in the prompt.
+Default: word_bank and sentence_frame are null. Add them only if this pld needs that help.
+If you use a frame or bank, they must be the same job as the prompt.
+
+Return ONLY the JSON in OUTPUT SCHEMA.
 `.trim();

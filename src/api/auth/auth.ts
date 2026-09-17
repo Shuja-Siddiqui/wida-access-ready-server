@@ -16,11 +16,11 @@ import {
 } from "../../../db";
 import { ensureStudentLevels } from "../students/students";
 import { getAssessmentConfig, getExitThreshold, getExitThresholdForTrack, type Assessment, type Domain, type StudentTrack } from "../../lib/assessments";
-import { sendHtmlEmail } from "../../lib/mailer";
-import { verificationEmail, passwordResetEmail } from "../../lib/email-templates";
+import { sendHtmlEmail } from "../../lib/mail/mailer";
+import { verificationEmail, passwordResetEmail } from "../../lib/mail/email-templates";
 import { config } from "../../config/index";
-import { sendError, sendSuccess } from "../../lib/api-response";
-import { getRequestOrigin } from "../../lib/request-origin";
+import { sendError, sendSuccess } from "../../lib/http/api-response";
+import { getRequestOrigin } from "../../lib/http/request-origin";
 
 const router: IRouter = Router();
 

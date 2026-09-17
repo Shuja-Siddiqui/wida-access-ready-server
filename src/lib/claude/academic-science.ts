@@ -23,9 +23,11 @@ import {
 } from "./prompts";
 import { parseOptionDiagrams, parseVisual } from "./prompts/optional-line-visuals";
 import type { ListeningContent } from "./listening";
-import { serializeCanDoForPrompt } from "../listeningContentEngine";
+import { serializeCanDoForPrompt } from "../content";
 import { clampToThreeOptions } from "../choice-options";
 import { logger } from "../../config/logger";
+import { dumpContentGenRequest } from "./dump-content-gen";
+import { mergePriorPractice, type PracticeReport } from "../practice-report";
 
 const SYSTEM_PROMPT = buildSystemPrompt(
   contentGenPrompt("listening", 3),
@@ -96,10 +98,11 @@ export async function generateAcademicScienceListeningContent(params: {
   isRetry?: boolean;
   lastSessionScore?: number | null;
   hasLibraryImage?: boolean;
+  priorPracticeReport?: PracticeReport | null;
 }): Promise<ListeningContent> {
   const { questionCount, passageSentenceTarget, maxTokens } = academicSessionScale(params.level);
 
-  const prompt = JSON.stringify({
+  const prompt = JSON.stringify(mergePriorPractice({
     integer_level:          params.level,
     step_within_level:      params.stepWithinLevel,
     complexity_instruction: params.complexityInstruction,
@@ -115,8 +118,9 @@ export async function generateAcademicScienceListeningContent(params: {
     question_count:          questionCount,
     passage_sentence_target: passageSentenceTarget,
     has_library_image:       params.hasLibraryImage ?? false,
-  });
+  }, params.priorPracticeReport));
 
+  dumpContentGenRequest("academic-science", SYSTEM_PROMPT, prompt);
   try {
     const result = (await callClaude(SYSTEM_PROMPT, prompt, maxTokens)) as {
       audio_script: string;

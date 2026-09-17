@@ -10,7 +10,9 @@ import { logger } from "../../config/logger";
 import { contentGenPrompt } from "./prompts/content";
 import { buildSystemPrompt } from "./prompts/compose";
 import { clampToThreeOptions } from "../choice-options";
-import { serializeCanDoForPrompt } from "../listeningContentEngine";
+import { serializeCanDoForPrompt } from "../content";
+import { dumpContentGenRequest } from "./dump-content-gen";
+import { mergePriorPractice, type PracticeReport } from "../practice-report";
 
 /** Prefer Claude's own stem. Do not invent student-facing question text. */
 export function resolvePictureListeningQuestion(
@@ -79,6 +81,7 @@ export async function generateImagePassageContent(params: {
   canDo: { keyUse: string; action: string; items: string[] };
   topic: string;
   lastSessionScore?: number | null;
+  priorPracticeReport?: PracticeReport | null;
 }): Promise<ImagePassageContent> {
   const {
     imageDescription,
@@ -90,6 +93,7 @@ export async function generateImagePassageContent(params: {
     canDo,
     topic,
     lastSessionScore,
+    priorPracticeReport,
   } = params;
 
   const canDoDescriptor =
@@ -98,8 +102,8 @@ export async function generateImagePassageContent(params: {
       : "Level 2 (Emerging): locate specific objects in a scene after hearing a short descriptive passage";
 
   const BASE_SENTENCE_TARGETS: Record<number, string> = {
-    1: "1–3 very short sentences (~12–35 words). Subject-verb-object. No extra background.",
-    2: "1–3 short sentences (~18–45 words). One idea each. Do not write a paragraph.",
+    1: "3–4 short sentences (~40–70 words). Subject-verb-object. Minimal extra background.",
+    2: "4–5 short sentences (~55–90 words). One idea each. Still short — this is not a full paragraph.",
   };
   const base = BASE_SENTENCE_TARGETS[level] ?? BASE_SENTENCE_TARGETS[2];
   const ku = canDo.keyUse;
@@ -119,7 +123,7 @@ export async function generateImagePassageContent(params: {
     passageSentenceTarget = `${base} Each target object must be named by its exact label AND its function must be stated (e.g. "People sit on chairs." / "Students write with pencils."). The question will ask about the FUNCTION — never repeat the object label in the question text.`;
   }
 
-  const prompt = JSON.stringify({
+  const prompt = JSON.stringify(mergePriorPractice({
     required_key_use: canDo.keyUse,
     integer_level: level,
     current_score: fractionalLevel,
@@ -133,18 +137,20 @@ export async function generateImagePassageContent(params: {
     question_count: 2,
     image_description: imageDescription,
     image_tags: imageTags,
-  });
+  }, priorPracticeReport));
 
+  const systemPrompt = buildSystemPrompt(contentGenPrompt("listening", Math.max(1, Math.min(level, 2))));
+  dumpContentGenRequest("listening-image", systemPrompt, prompt);
   try {
     const result = (await callClaude(
-      buildSystemPrompt(contentGenPrompt("listening", Math.max(1, Math.min(level, 2)))),
+      systemPrompt,
       prompt,
       2000,
     )) as Record<string, unknown>;
     const questions = (result.questions as Array<Record<string, unknown>>) ?? [];
 
     const rawPassage = result.audio_script ?? result.passage;
-    const passage = limitSentences(toDisplayText(rawPassage), 3);
+    const passage = limitSentences(toDisplayText(rawPassage), 6);
 
     logger.info(
       { keyUse: canDo.keyUse, passage: passage.slice(0, 120), questionCount: questions.length },

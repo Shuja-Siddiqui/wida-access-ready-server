@@ -1,18 +1,22 @@
 import { Router, type IRouter, type Request } from "express";
-import { eq, and, sql, count, desc } from "drizzle-orm";
+import { eq, and, or, sql, count, desc } from "drizzle-orm";
 import crypto from "node:crypto";
+import { z } from "zod/v4";
 import {
   db,
   studentsTable,
   studentLevelsTable,
   sessionsTable,
-   invitationsTable,
+  invitationsTable,
   profilesTable,
   usersTable,
   districtSeatAllocationsTable,
+  districtAdminsTable,
+  schoolsTable,
+  type AccountType,
 } from "../../../db";
-import { sendHtmlEmail } from "../../lib/mailer";
-import { invitationEmail } from "../../lib/email-templates";
+import { sendHtmlEmail } from "../../lib/mail/mailer";
+import { invitationEmail } from "../../lib/mail/email-templates";
 import {
   CreateStudentBody,
   GetStudentParams,
@@ -45,9 +49,14 @@ import {
   projectExitDate,
   generateNudgeMessage,
 } from "../../lib/adaptive-engine";
-import { sendError, sendSuccess } from "../../lib/api-response";
+import { sendError, sendSuccess } from "../../lib/http/api-response";
+import {
+  resolveDistrictSchoolTeacherForAssign,
+  resolveSchoolTeacherForAssign,
+} from "../../lib/auth/org-access";
 import { requireAuth, requireStudentAccess } from "../../middlewares/auth";
-import { resolveStudentAccess } from "../../lib/subscription";
+import { resolveStudentAccess } from "../../lib/billing/subscription";
+import { getStudentAiUsage } from "../../lib/rate-limit/usage";
 
 const router: IRouter = Router();
 
@@ -60,7 +69,7 @@ const DOMAIN_TIER_PAIRS: Array<{ domain: Domain; tier: Tier }> = [
   { domain: "listening", tier: "academic" },
   { domain: "speaking",  tier: "general"  },
   { domain: "reading",   tier: "general"  },
-  { domain: "writing",   tier: "general"  },
+  { domain: "writing",   tier: "academic" },
 ];
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -166,11 +175,11 @@ async function applyGuardianScores(
           consecutiveFailCount: "0",
           updatedAt: new Date(),
         })
-        // Guardian scores only apply to the general tier (no academic-specific official score).
+        // Guardian scores: general tier for L/S/R; writing is academic WIDA only.
         .where(and(
           eq(studentLevelsTable.studentId, studentId),
           eq(studentLevelsTable.domain, domain),
-          eq(studentLevelsTable.tier, "general"),
+          eq(studentLevelsTable.tier, domain === "writing" ? "academic" : "general"),
         ));
     }
   }
@@ -326,62 +335,243 @@ router.post("/students", async (req, res): Promise<void> => {
   }, 201);
 });
 
-// Bulk-import students from a pre-parsed list (frontend sends JSON, not a file)
-router.post("/students/bulk-import", async (req, res): Promise<void> => {
-  const { teacherId, students } = req.body as {
-    teacherId: string;
-    students: Array<{
-      name: string;
-      email?: string;
-      gradeBand: string;
-      stateAssessment: string;
-      homeLanguage?: string;
-      listening?: number;
-      speaking?: number;
-      reading?: number;
-      writing?: number;
-      telpasListening?: string;
-      telpasSpeaking?: string;
-      telpasReading?: string;
-      telpasWriting?: string;
-    }>;
-  };
+const BulkImportRowSchema = z.object({
+  name: z.string().min(1),
+  email: z.string().optional(),
+  gradeBand: z.string(),
+  stateAssessment: z.string(),
+  homeLanguage: z.string().optional(),
+  guardianId: z.string().uuid().optional(),
+  schoolId: z.string().uuid().optional(),
+  listening: z.number().optional(),
+  speaking: z.number().optional(),
+  reading: z.number().optional(),
+  writing: z.number().optional(),
+  telpasListening: z.string().optional(),
+  telpasSpeaking: z.string().optional(),
+  telpasReading: z.string().optional(),
+  telpasWriting: z.string().optional(),
+});
 
-  if (!teacherId || !Array.isArray(students) || students.length === 0) {
-    sendError(res, 400, "teacherId and a non-empty students array are required");
-    return;
-  }
-  if (students.length > 300) {
-    sendError(res, 400, "Maximum 300 students per import");
-    return;
-  }
+const BulkImportBodySchema = z.object({
+  students: z.array(BulkImportRowSchema).min(1).max(300),
+});
 
-  const auth = req.auth!;
-  if (auth.role !== "super_admin" && (auth.userType === "student" || auth.id !== teacherId)) {
-    sendError(res, 403, "You can only bulk-import students to your own roster");
-    return;
-  }
+type BulkImportContext =
+  | { kind: "teacher"; guardianId: string }
+  | { kind: "principal"; schoolId: string; districtId: string | null }
+  | { kind: "district_admin"; districtId: string }
+  | { kind: "super_admin" };
 
-  // Block school-managed teachers
+async function resolveBulkImportContext(auth: NonNullable<Request["auth"]>): Promise<BulkImportContext | string> {
+  if (auth.role === "super_admin") return { kind: "super_admin" };
+
   if (auth.userType === "teacher") {
-    const [guardianRow] = await db
+    const [row] = await db
       .select({ schoolId: profilesTable.schoolId })
       .from(profilesTable)
       .where(eq(profilesTable.id, auth.id))
       .limit(1);
-    if (guardianRow?.schoolId) {
-      sendError(res, 403, "Teachers managed by a school cannot import students. Ask your principal.");
-      return;
+    if (row?.schoolId) {
+      return "Teachers managed by a school cannot import students. Ask your principal.";
     }
+    return { kind: "teacher", guardianId: auth.id };
   }
 
-  const [teacherRow] = await db
-    .select({ name: usersTable.name })
-    .from(profilesTable)
-    .innerJoin(usersTable, eq(profilesTable.userId, usersTable.id))
-    .where(eq(profilesTable.id, teacherId))
+  if (auth.userType === "principal") {
+    const [row] = await db
+      .select({ schoolId: profilesTable.schoolId })
+      .from(profilesTable)
+      .where(eq(profilesTable.id, auth.id))
+      .limit(1);
+    if (!row?.schoolId) {
+      return "Your account is not linked to a school.";
+    }
+    const [school] = await db
+      .select({ districtId: schoolsTable.districtId })
+      .from(schoolsTable)
+      .where(eq(schoolsTable.id, row.schoolId))
+      .limit(1);
+    return { kind: "principal", schoolId: row.schoolId, districtId: school?.districtId ?? null };
+  }
+
+  if (auth.userType === "district_admin") {
+    const [row] = await db
+      .select({ districtId: districtAdminsTable.districtId })
+      .from(districtAdminsTable)
+      .where(eq(districtAdminsTable.id, auth.id))
+      .limit(1);
+    if (!row?.districtId) {
+      return "Your account is not linked to a district.";
+    }
+    return { kind: "district_admin", districtId: row.districtId };
+  }
+
+  return "You do not have permission to bulk-import students.";
+}
+
+async function resolveSchoolInDistrict(
+  schoolId: string,
+  districtId: string,
+): Promise<boolean> {
+  const [school] = await db
+    .select({ id: schoolsTable.id })
+    .from(schoolsTable)
+    .where(and(eq(schoolsTable.id, schoolId), eq(schoolsTable.districtId, districtId)))
     .limit(1);
-  const teacherName = teacherRow?.name ?? "Your teacher";
+  return !!school;
+}
+
+async function resolveBulkImportRow(
+  row: z.infer<typeof BulkImportRowSchema>,
+  ctx: BulkImportContext,
+): Promise<
+  | { ok: true; guardianId: string | null; schoolId: string | null; districtId: string | null; accountType: AccountType }
+  | { ok: false; error: string }
+> {
+  if (ctx.kind === "teacher") {
+    return {
+      ok: true,
+      guardianId: ctx.guardianId,
+      schoolId: null,
+      districtId: null,
+      accountType: "teacher_managed",
+    };
+  }
+
+  if (ctx.kind === "principal") {
+    let guardianId: string | null = null;
+    if (row.guardianId) {
+      guardianId = await resolveSchoolTeacherForAssign(row.guardianId, ctx.schoolId);
+      if (!guardianId) {
+        return { ok: false, error: "Teacher ID not found in your school" };
+      }
+    }
+    return {
+      ok: true,
+      guardianId,
+      schoolId: ctx.schoolId,
+      districtId: ctx.districtId,
+      accountType: guardianId ? "teacher_managed" : "school_managed",
+    };
+  }
+
+  if (ctx.kind === "district_admin") {
+    let schoolId: string | null = null;
+    if (row.schoolId) {
+      const valid = await resolveSchoolInDistrict(row.schoolId, ctx.districtId);
+      if (!valid) return { ok: false, error: "School ID not found in your district" };
+      schoolId = row.schoolId;
+    }
+
+    let guardianId: string | null = null;
+    if (row.guardianId) {
+      const resolved = await resolveDistrictSchoolTeacherForAssign(row.guardianId, ctx.districtId);
+      if (!resolved) return { ok: false, error: "Teacher ID not found in your district" };
+      guardianId = resolved.guardianId;
+      if (!schoolId) schoolId = resolved.schoolId;
+    }
+
+    const accountType: AccountType = guardianId
+      ? "teacher_managed"
+      : schoolId
+        ? "school_managed"
+        : "district_managed";
+
+    return {
+      ok: true,
+      guardianId,
+      schoolId,
+      districtId: ctx.districtId,
+      accountType,
+    };
+  }
+
+  // super_admin — trust optional row fields when present
+  let schoolId = row.schoolId ?? null;
+  let districtId: string | null = null;
+  if (schoolId) {
+    const [school] = await db
+      .select({ districtId: schoolsTable.districtId })
+      .from(schoolsTable)
+      .where(eq(schoolsTable.id, schoolId))
+      .limit(1);
+    if (!school) return { ok: false, error: "School ID not found" };
+    districtId = school.districtId;
+  }
+
+  let guardianId: string | null = null;
+  if (row.guardianId) {
+    const [g] = await db
+      .select({ id: profilesTable.id, role: usersTable.role })
+      .from(profilesTable)
+      .innerJoin(usersTable, eq(profilesTable.userId, usersTable.id))
+      .where(eq(profilesTable.id, row.guardianId))
+      .limit(1);
+    if (!g || (g.role !== "teacher" && g.role !== "parent")) {
+      return { ok: false, error: "Teacher ID not found" };
+    }
+    guardianId = g.id;
+  }
+
+  const accountType: AccountType = guardianId
+    ? "teacher_managed"
+    : schoolId
+      ? "school_managed"
+      : "solo";
+
+  return { ok: true, guardianId, schoolId, districtId, accountType };
+}
+
+async function getSchoolSeatsRemaining(schoolId: string): Promise<number | null> {
+  const allocResult = await db.execute(sql`
+    select coalesce(sum(seats_allocated), 0) as total_allocated
+    from district_seat_allocations
+    where school_id = ${schoolId}
+  `);
+  const seatsAllocated = Number(
+    (allocResult.rows as Record<string, unknown>[])[0]?.total_allocated ?? 0,
+  );
+  if (seatsAllocated <= 0) return null;
+
+  const [countRow] = await db
+    .select({ n: count(studentsTable.id) })
+    .from(studentsTable)
+    .leftJoin(profilesTable, eq(studentsTable.guardianId, profilesTable.id))
+    .where(or(eq(studentsTable.schoolId, schoolId), eq(profilesTable.schoolId, schoolId)));
+
+  const seatsUsed = Number(countRow?.n ?? 0);
+  return Math.max(0, seatsAllocated - seatsUsed);
+}
+
+// Bulk-import students from a pre-parsed list (frontend sends JSON, not a file)
+router.post("/students/bulk-import", async (req, res): Promise<void> => {
+  const parsed = BulkImportBodySchema.safeParse(req.body);
+  if (!parsed.success) {
+    sendError(res, 400, parsed.error.message);
+    return;
+  }
+
+  const auth = req.auth!;
+  const ctxOrError = await resolveBulkImportContext(auth);
+  if (typeof ctxOrError === "string") {
+    sendError(res, 403, ctxOrError);
+    return;
+  }
+  const ctx = ctxOrError;
+  const { students } = parsed.data;
+
+  const [importerRow] = await db
+    .select({ name: usersTable.name })
+    .from(usersTable)
+    .where(eq(usersTable.id, auth.userId))
+    .limit(1);
+  const importerName = importerRow?.name ?? "ACCESS Ready";
+
+  let seatsRemaining: number | null = null;
+  if (ctx.kind === "principal") {
+    seatsRemaining = await getSchoolSeatsRemaining(ctx.schoolId);
+  }
 
   const results: Array<{
     row: number;
@@ -394,12 +584,31 @@ router.post("/students/bulk-import", async (req, res): Promise<void> => {
   for (let i = 0; i < students.length; i++) {
     const s = students[i];
     try {
+      if (seatsRemaining !== null && seatsRemaining <= 0) {
+        results.push({
+          row: i + 1,
+          name: s.name,
+          status: "failed",
+          error: "Seat limit reached for this school",
+        });
+        continue;
+      }
+
+      const resolved = await resolveBulkImportRow(s, ctx);
+      if (!resolved.ok) {
+        results.push({ row: i + 1, name: s.name, status: "failed", error: resolved.error });
+        continue;
+      }
+
       const normalizedEmail = s.email?.trim().toLowerCase() || null;
 
       const [student] = await db
         .insert(studentsTable)
         .values({
-          guardianId: teacherId,
+          guardianId: resolved.guardianId,
+          schoolId: resolved.schoolId,
+          districtId: resolved.districtId,
+          accountType: resolved.accountType,
           name: s.name.trim(),
           gradeBand: s.gradeBand,
           stateAssessment: s.stateAssessment,
@@ -407,6 +616,8 @@ router.post("/students/bulk-import", async (req, res): Promise<void> => {
           email: normalizedEmail,
         })
         .returning();
+
+      if (seatsRemaining !== null) seatsRemaining--;
 
       const hasScores =
         s.listening != null || s.speaking != null ||
@@ -431,14 +642,28 @@ router.post("/students/bulk-import", async (req, res): Promise<void> => {
 
       let inviteSent = false;
       if (normalizedEmail) {
+        const inviterId = resolved.guardianId ?? auth.id;
+        const inviterType =
+          auth.userType === "district_admin" ? "district_admin" as const : "teacher" as const;
+        let inviterName = importerName;
+        if (resolved.guardianId) {
+          const [g] = await db
+            .select({ name: usersTable.name })
+            .from(profilesTable)
+            .innerJoin(usersTable, eq(profilesTable.userId, usersTable.id))
+            .where(eq(profilesTable.id, resolved.guardianId))
+            .limit(1);
+          inviterName = g?.name ?? inviterName;
+        }
+
         try {
           const token = generateToken();
           const tokenHash = sha256(token);
           const expiresAt = new Date(Date.now() + INVITE_TTL_MS);
           await db.insert(invitationsTable).values({
-            inviterId: teacherId,
-            inviterType: "teacher",
-            inviterName: teacherName,
+            inviterId,
+            inviterType,
+            inviterName,
             inviteeEmail: normalizedEmail,
             inviteeName: s.name.trim(),
             inviteeRole: "student",
@@ -451,11 +676,11 @@ router.post("/students/bulk-import", async (req, res): Promise<void> => {
           const inviteUrl = `${getAppUrl(req)}/accept-invite?token=${token}`;
           await sendHtmlEmail({
             to: normalizedEmail,
-            subject: `${teacherName} invited you to ACCESS Ready`,
+            subject: `${inviterName} invited you to ACCESS Ready`,
             html: invitationEmail({
               inviteeName: s.name.trim(),
-              inviterName: teacherName,
-              inviterRole: "teacher",
+              inviterName,
+              inviterRole: inviterType === "district_admin" ? "district admin" : "teacher",
               assessment: s.stateAssessment,
               inviteUrl,
             }),
@@ -563,7 +788,20 @@ router.patch("/students/:studentId", requireStudentAccess("studentId"), async (r
   if (parsed.data.name) updateData.name = parsed.data.name;
   if (parsed.data.gradeBand) updateData.gradeBand = parsed.data.gradeBand;
   if (parsed.data.homeLanguage) updateData.homeLanguage = parsed.data.homeLanguage;
-  if (parsed.data.avatarUrl !== undefined) updateData.avatarUrl = parsed.data.avatarUrl;
+  if (parsed.data.avatarUrl !== undefined) {
+    const [studentRow] = await db
+      .select({ userId: studentsTable.userId, guardianId: studentsTable.guardianId })
+      .from(studentsTable)
+      .where(eq(studentsTable.id, params.data.studentId))
+      .limit(1);
+    const isStudentOwner = auth.userType === "student" && auth.id === params.data.studentId;
+    const isGuardianForManagedAccount = !studentRow?.userId && studentRow?.guardianId === auth.id;
+    if (!isStudentOwner && !isGuardianForManagedAccount) {
+      sendError(res, 403, "Only the student can update their profile photo");
+      return;
+    }
+    updateData.avatarUrl = parsed.data.avatarUrl;
+  }
 
   // assignedTeacherId — principal-only field to reassign a student to a different teacher
   if (parsed.data.assignedTeacherId !== undefined) {
@@ -571,29 +809,30 @@ router.patch("/students/:studentId", requireStudentAccess("studentId"), async (r
       sendError(res, 403, "Only a principal can reassign a student to a different teacher");
       return;
     }
-    const newGuardianId = parsed.data.assignedTeacherId ?? auth.id;
     if (parsed.data.assignedTeacherId !== null) {
-      // Verify the target teacher belongs to the same school as the principal
       const [principal] = await db
         .select({ schoolId: profilesTable.schoolId })
         .from(profilesTable)
         .where(eq(profilesTable.id, auth.id))
         .limit(1);
-      const [targetTeacher] = await db
-        .select({ schoolId: profilesTable.schoolId })
-        .from(profilesTable)
-        .where(eq(profilesTable.id, parsed.data.assignedTeacherId))
-        .limit(1);
-      if (!targetTeacher) {
-        sendError(res, 404, "Target teacher not found");
+      if (!principal?.schoolId) {
+        sendError(res, 403, "Your account is not linked to a school");
         return;
       }
-      if (principal?.schoolId && targetTeacher.schoolId !== principal.schoolId) {
+      const teacherId = await resolveSchoolTeacherForAssign(
+        parsed.data.assignedTeacherId,
+        principal.schoolId,
+      );
+      if (!teacherId) {
         sendError(res, 403, "Target teacher does not belong to your school");
         return;
       }
+      updateData.guardianId = teacherId;
+      updateData.schoolId = principal.schoolId;
+      updateData.accountType = "teacher_managed";
+    } else {
+      updateData.guardianId = null;
     }
-    updateData.guardianId = newGuardianId;
   }
 
   const [student] = await db
@@ -710,6 +949,20 @@ router.get("/students/:studentId/progress", requireStudentAccess("studentId"), a
   sendSuccess(res, progress);
 });
 
+// Daily AI usage series for parent/teacher graphs (UTC days).
+router.get("/students/:studentId/ai-usage", requireStudentAccess("studentId"), async (req, res): Promise<void> => {
+  const params = GetStudentProgressParams.safeParse(req.params);
+  if (!params.success) {
+    sendError(res, 400, params.error.message);
+    return;
+  }
+
+  const daysRaw = Number(req.query.days);
+  const days = Number.isFinite(daysRaw) ? daysRaw : 30;
+  const usage = await getStudentAiUsage(params.data.studentId, days);
+  sendSuccess(res, usage);
+});
+
 async function buildProgress(studentId: string, assessment: Assessment) {
   const config = getAssessmentConfig(assessment);
 
@@ -723,10 +976,9 @@ async function buildProgress(studentId: string, assessment: Assessment) {
   ]);
 
   const domainData = DOMAIN_TIER_PAIRS.map(({ domain, tier }) => {
-    // UI key: "listening_academic" for academic listening, plain domain for everything else.
-    // This preserves frontend compatibility — the dashboard can call onStartSession(domainKey)
-    // and home.tsx maps it back to { apiDomain, tier } via DOMAIN_CONFIG.
-    const domainKey = tier === "academic" ? `${domain}_academic` : domain;
+    // UI key: "listening_academic" for academic listening; writing stays "writing" (academic-only).
+    const domainKey =
+      tier === "academic" && domain === "listening" ? `${domain}_academic` : domain;
     const levelRow = levels.find((l) => l.domain === domain && l.tier === tier);
     const currentLevel = levelRow ? parseFloat(levelRow.currentLevel) : config.scale.min;
     const exitThreshold = getExitThreshold(assessment, domain);
@@ -961,7 +1213,8 @@ router.post("/students/:studentId/demo-jump", requireStudentAccess("studentId"),
   await ensureStudentLevels(student.id, assessment);
 
   const domainStr  = typeof domain === "string" ? domain : "listening";
-  const tierStr    = domainStr === "listening_academic" ? "academic" : "general";
+  const tierStr    =
+    domainStr === "listening_academic" || domainStr === "writing" ? "academic" : "general";
   const coreDomain = domainStr === "listening_academic" ? "listening" : domainStr;
 
   const [levelRow] = await db

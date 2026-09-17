@@ -7,7 +7,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
-const file = path.join(dir, "../src/data/canDo.json");
+const file = path.join(dir, "../src/lib/claude/standards/2016/data/canDo.json");
 const data = JSON.parse(fs.readFileSync(file, "utf8"));
 
 data.keyUseDefinitions = [

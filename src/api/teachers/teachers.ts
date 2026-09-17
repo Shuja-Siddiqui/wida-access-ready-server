@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, or } from "drizzle-orm";
 import { z } from "zod/v4";
 import { db, profilesTable, studentsTable, sessionsTable, studentLevelsTable, usersTable, schoolsTable, districtsTable } from "../../../db";
 import {
@@ -12,8 +12,9 @@ import {
 } from "../../generated";
 import { Assessment, Domain, getAssessmentConfig, getLevelLabel, getExitThreshold } from "../../lib/assessments";
 import { calculateGaps, rankDomains, calculateGrowthRate, projectExitDate } from "../../lib/adaptive-engine";
-import { sendError, sendSuccess } from "../../lib/api-response";
+import { sendError, sendSuccess } from "../../lib/http/api-response";
 import { requireAuth, requireTeacherAccess } from "../../middlewares/auth";
+import { assertTeacherBulkAssignAccess, sendAccessDenied } from "../../lib/auth/org-access";
 
 const router: IRouter = Router();
 
@@ -86,7 +87,13 @@ router.patch("/teachers/:teacherId", requireTeacherAccess("teacherId"), async (r
   const guardianUpdates: Record<string, unknown> = {};
   if (parsed.data.school !== undefined) guardianUpdates.school = parsed.data.school;
   if (parsed.data.schoolId !== undefined) guardianUpdates.schoolId = parsed.data.schoolId;
-  if (parsed.data.avatarUrl !== undefined) guardianUpdates.avatarUrl = parsed.data.avatarUrl;
+  if (parsed.data.avatarUrl !== undefined) {
+    if (req.auth!.id !== params.data.teacherId) {
+      sendError(res, 403, "Only the profile owner can update their photo");
+      return;
+    }
+    guardianUpdates.avatarUrl = parsed.data.avatarUrl;
+  }
   if (Object.keys(guardianUpdates).length > 0) {
     await db.update(profilesTable).set(guardianUpdates as any).where(eq(profilesTable.id, teacher.id));
   }
@@ -414,13 +421,24 @@ router.post("/teachers/:teacherId/students/bulk-assign", async (req, res): Promi
   }
 
   const [teacher] = await db
-    .select({ id: profilesTable.id, schoolId: profilesTable.schoolId })
+    .select({
+      id: profilesTable.id,
+      schoolId: profilesTable.schoolId,
+      role: usersTable.role,
+    })
     .from(profilesTable)
+    .innerJoin(usersTable, eq(profilesTable.userId, usersTable.id))
     .where(eq(profilesTable.id, teacherId))
     .limit(1);
 
-  if (!teacher) {
+  if (!teacher || teacher.role !== "teacher") {
     sendError(res, 404, "Teacher not found");
+    return;
+  }
+
+  const denied = await assertTeacherBulkAssignAccess(req.auth!, teacher.schoolId);
+  if (denied) {
+    sendAccessDenied(res, denied);
     return;
   }
 
@@ -430,24 +448,37 @@ router.post("/teachers/:teacherId/students/bulk-assign", async (req, res): Promi
     return;
   }
 
-  // Safety: only update students whose guardian is in the same school
+  const schoolId = teacher.schoolId!;
+
+  // Only students in this school (via student.schoolId or guardian's school)
+  const eligible = await db
+    .select({ id: studentsTable.id })
+    .from(studentsTable)
+    .leftJoin(profilesTable, eq(studentsTable.guardianId, profilesTable.id))
+    .where(
+      and(
+        inArray(studentsTable.id, studentIds),
+        or(
+          eq(studentsTable.schoolId, schoolId),
+          eq(profilesTable.schoolId, schoolId),
+        ),
+      ),
+    );
+
+  const eligibleIds = eligible.map((r) => r.id);
+  if (eligibleIds.length === 0) {
+    sendSuccess(res, { assigned: 0 });
+    return;
+  }
+
   const updated = await db
     .update(studentsTable)
-    .set({ guardianId: teacherId })
-    .where(
-      teacher.schoolId
-        ? inArray(
-            studentsTable.id,
-            db
-              .select({ id: studentsTable.id })
-              .from(studentsTable)
-              .innerJoin(profilesTable, eq(studentsTable.guardianId, profilesTable.id))
-              .where(
-                inArray(studentsTable.id, studentIds),
-              ),
-          )
-        : inArray(studentsTable.id, studentIds),
-    )
+    .set({
+      guardianId: teacherId,
+      schoolId,
+      accountType: "teacher_managed",
+    })
+    .where(inArray(studentsTable.id, eligibleIds))
     .returning({ id: studentsTable.id });
 
   sendSuccess(res, { assigned: updated.length });

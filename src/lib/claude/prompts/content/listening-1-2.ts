@@ -11,7 +11,7 @@ image_description → PASSAGE context only. Never copy actions/poses into questi
 image_tags → QUESTIONS only. Every tap target and option is an exact tag string.
 integer_level → 1 or 2. Follow that level's object count below.
 
-ONE PHOTO RULE: picture.count means how many DINO tags to build the item around. Never invent a second image file. If the Can Do would use two side-by-side photos, pick TWO tags in this photo (two bottles, cup and pitcher) and talk about both.
+ONE PHOTO RULE: picture.count means how many DINO tags to build the item around. Never invent a second image file. If the task needs two objects, pick TWO tags in this photo (two bottles, cup and pitcher) and talk about both.
 
 Pick the required tags BEFORE writing the passage. You must have that many tags in image_tags; if not, pick the closest count you can.
 
@@ -36,7 +36,7 @@ last_session_score < 70 → name each target twice, simple words.
 explanation: max 8 words.
 Audio must not say "as you can see".
 
-OUTPUT fields: can_do_descriptor, audio_script, topic, context, questions[].
+OUTPUT fields: audio_script, topic, context, questions[]. Include every OUTPUT SCHEMA key.
 Tap items: type image_object_tap, exactly 3 options from image_tags (1 correct + 2 other tags), target_label, correct index, explanation.
 Argue items: type image_yes_no, question (required claim sentence), correct_answer agree|disagree, target_label, explanation.
 `.trim();

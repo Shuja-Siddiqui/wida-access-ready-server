@@ -19,8 +19,10 @@ import { clampToThreeOptions } from "../choice-options";
 import { OPTIONAL_LINE_VISUALS_BLOCK, parseOptionDiagrams, parseVisual } from "./prompts/optional-line-visuals";
 import { buildSystemPrompt } from "./prompts/compose";
 import { contentGenPrompt } from "./prompts/content";
-import { serializeCanDoForPrompt } from "../listeningContentEngine";
+import { serializeCanDoForPrompt } from "../content";
+import { dumpContentGenRequest } from "./dump-content-gen";
 import { logger } from "../../config/logger";
+import { mergePriorPractice, type PracticeReport } from "../practice-report";
 
 // ── Per-level schema tables ───────────────────────────────────────────────────
 
@@ -210,6 +212,7 @@ function buildListeningOutputSchema(
   lines.push(`}`);
   lines.push(``);
   lines.push(`SCHEMA ENFORCEMENT RULES`);
+  lines.push(`• Return every key in this OUTPUT SCHEMA. Never omit a field. Use null only where this schema shows null.`);
   lines.push(`• Only these question formats are valid: ${permittedFormats.join(", ")}.`);
   lines.push(`• Produce exactly ${questionCount} questions.`);
   lines.push(`• The "type" field in each question MUST match one of the permitted formats.`);
@@ -314,6 +317,7 @@ export async function generateListeningContent(params: {
   isRetry?: boolean;
   lastSessionScore?: number | null;
   hasLibraryImage?: boolean;
+  priorPracticeReport?: PracticeReport | null;
 }): Promise<ListeningContent> {
   // Levels 0–2 use image_library sessions; levels 3–6 scale question count with level.
   const clampedLevel          = Math.min(Math.max(params.level, 3), 6);
@@ -329,7 +333,7 @@ export async function generateListeningContent(params: {
     schemaSection,
   );
 
-  const userPrompt = JSON.stringify({
+  const userPrompt = JSON.stringify(mergePriorPractice({
     current_score:           params.fractionalLevel,
     integer_level:           params.level,
     step_within_level:       params.stepWithinLevel,
@@ -343,8 +347,9 @@ export async function generateListeningContent(params: {
     question_count:           questionCount,
     passage_sentence_target:  passageSentenceTarget,
     has_library_image:        params.hasLibraryImage ?? false,
-  });
+  }, params.priorPracticeReport));
 
+  dumpContentGenRequest("listening", systemPrompt, userPrompt);
   try {
     const result = (await callClaude(systemPrompt, userPrompt, maxTokens)) as {
       audio_script: string;

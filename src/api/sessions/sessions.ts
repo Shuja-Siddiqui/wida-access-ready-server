@@ -14,38 +14,33 @@ import {
   topicsTable,
   studentObjectMasteryTable,
 } from "../../../db/schema";
-import { ObjectStorageService } from "../../lib/objectStorage";
+import { ObjectStorageService } from "../../lib/images/objectStorage";
 import {
   buildListeningContext,
   buildAcademicListeningContext,
   ACADEMIC_SUBJECT_LABELS,
-} from "../../lib/listeningContentEngine";
-import { buildReadingContext } from "../../lib/readingContentEngine";
-import { buildSpeakingContext } from "../../lib/speakingContentEngine";
-import { buildWritingContext } from "../../lib/writingContentEngine";
-import { getContentPortrayal } from "../../lib/listeningContentEngine";
+  buildReadingContext,
+  buildSpeakingContext,
+  buildWritingContext,
+  nextWritingAcademicSubject,
+  nextWritingKeyUseForSubject,
+  lastWritingKeyUseForSubject,
+  getContentPortrayal,
+} from "../../lib/content";
 import {
   nextKeyUse,
   pickSubjectForKeyUse,
   buildAcademicContentLayer,
   pickAcademicTopicLabel,
-} from "../../lib/academicSubjectContent";
-import {
   buildMathSessionContext,
   MATH_PERMITTED_FORMATS,
-} from "../../lib/academicMathEngine";
-import {
   buildScienceSessionContext,
   SCIENCE_PERMITTED_FORMATS,
-} from "../../lib/academicScienceEngine";
-import {
   buildSocialStudiesSessionContext,
   SS_PERMITTED_FORMATS,
-} from "../../lib/academicSocialStudiesEngine";
-import {
   buildElaSessionContext,
   ELA_PERMITTED_FORMATS,
-} from "../../lib/academicElaEngine";
+} from "../../lib/academic";
 import {
   generateListeningContent,
   FALLBACK_LISTENING,
@@ -61,6 +56,8 @@ import {
   generateAttemptFeedback,
   generateItemFeedback,
   generateImagePassageContent,
+  isClaudeCapacityError,
+  getClaudeQueueSnapshot,
 } from "../../lib/claude";
 import { SUBJECT_VISUAL_ANCHOR_TAGS } from "../../lib/claude/prompts";
 import {
@@ -84,11 +81,43 @@ import {
 } from "../../lib/assessments";
 import { calculateLevelUpdate } from "../../lib/adaptive-engine";
 // (generateListeningContent and others imported above alongside generateImagePassageContent)
-import { sendError, sendSuccess } from "../../lib/api-response";
+import { sendError, sendSuccess } from "../../lib/http/api-response";
 import { requireAuth, requireStudentAccess } from "../../middlewares/auth";
-import { resolveStudentAccess } from "../../lib/subscription";
+import { rateLimitStudentAi } from "../../middlewares/rate-limit";
+import {
+  filterAttemptFeedbackForStudent,
+  filterItemFeedbackForStudent,
+  filterWritingFeedbackForStudent,
+} from "../../lib/ai-output-filter";
+import { resolveStudentAccess } from "../../lib/billing/subscription";
+import { buildPracticeReport, parsePracticeReport } from "../../lib/practice-report";
 
 const storage = new ObjectStorageService();
+
+function sendClaudeBusy(
+  req: { log: { warn: (obj: object, msg: string) => void } },
+  res: Parameters<typeof sendError>[0],
+  err: unknown,
+): void {
+  if (!isClaudeCapacityError(err)) return;
+  req.log.warn(
+    {
+      stage: "claude-queue",
+      code: err.code,
+      jobId: err.jobId,
+      kind: err.kind,
+      retryAfterSeconds: err.retryAfterSeconds,
+      queue: getClaudeQueueSnapshot(),
+    },
+    "Claude capacity — student asked to retry (request not dropped)",
+  );
+  res.setHeader("Retry-After", String(err.retryAfterSeconds));
+  sendError(res, 503, err.message, {
+    code: err.code,
+    retryAfterSeconds: err.retryAfterSeconds,
+    jobId: err.jobId,
+  });
+}
 
 const ItemFeedbackBody = z.object({
   domain: z.string().min(1),
@@ -116,6 +145,7 @@ const ItemFeedbackBody = z.object({
   tryCount: z.number().optional(),
   lastJudgment: z.enum(["agree", "partial", "rejected"]).optional(),
   lastCoachTip: z.string().optional(),
+  lastStudentAnswer: z.string().optional(),
 });
 
 function dinoLabels(row: { detectionResults: unknown }): string[] {
@@ -165,11 +195,12 @@ type LibraryAnchorRow = {
   description: string | null;
   imageConcept: string | null;
   detectionResults: unknown;
+  contexts?: string[] | null;
 };
 
-function toDomainAnchor(row: LibraryAnchorRow, preferDino = false) {
+function toDomainAnchor(row: LibraryAnchorRow, _preferDino = false) {
   const dino = dinoLabels(row);
-  const tags = preferDino && dino.length >= 2 ? dino : writingImageTags(row);
+  const tags = dino.length >= 2 ? dino : writingImageTags(row);
   return {
     id: row.id,
     tags,
@@ -177,6 +208,7 @@ function toDomainAnchor(row: LibraryAnchorRow, preferDino = false) {
     description: row.description,
     imageConcept: row.imageConcept,
     detectionResults: row.detectionResults,
+    contexts: row.contexts ?? [],
   };
 }
 
@@ -187,6 +219,7 @@ const LIBRARY_ANCHOR_COLS = {
   description:      libraryTable.description,
   imageConcept:     libraryTable.imageConcept,
   detectionResults: libraryTable.detectionResults,
+  contexts:         libraryTable.contexts,
 };
 
 // ── Object-mastery helpers ─────────────────────────────────────────────────────
@@ -394,7 +427,7 @@ router.get("/students/:studentId/sessions", requireStudentAccess("studentId"), a
 });
 
 // Start session
-router.post("/students/:studentId/sessions/start", requireStudentAccess("studentId"), async (req, res): Promise<void> => {
+router.post("/students/:studentId/sessions/start", requireStudentAccess("studentId"), rateLimitStudentAi(), async (req, res): Promise<void> => {
   const params = StartSessionParams.safeParse(req.params);
   if (!params.success) {
     sendError(res, 400, params.error.message);
@@ -436,6 +469,10 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
   // Both are independent axes stored in separate columns — no composite strings.
   const domain = parsed.data.domain as Domain;
   const tier   = parsed.data.tier as Tier;
+  if (domain === "writing" && tier !== "academic") {
+    sendError(res, 400, 'Writing practice uses the academic WIDA track only (tier: "academic").');
+    return;
+  }
   const configDomain = domain; // domain is always a core Domain — no mapping needed
   const config = getAssessmentConfig(assessment);
 
@@ -496,7 +533,7 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
   if (domain === "listening" && tier === "general") {
     // Reuse topic only if the student's MOST RECENT completed session was a failure.
     const [lastCompletedSession] = await db
-      .select({ topic: sessionsTable.topic, scorePct: sessionsTable.scorePct, keyUse: sessionsTable.keyUse })
+      .select({ topic: sessionsTable.topic, scorePct: sessionsTable.scorePct, keyUse: sessionsTable.keyUse, practiceReport: sessionsTable.practiceReport })
       .from(sessionsTable)
       .where(and(
         eq(sessionsTable.studentId, student.id),
@@ -508,6 +545,7 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
       .limit(1);
 
     const lastScore      = lastCompletedSession?.scorePct ?? 100;
+    const priorPracticeReport = parsePracticeReport(lastCompletedSession?.practiceReport);
     const persistedTopic =
       lastCompletedSession && lastScore < 70
         ? lastCompletedSession.topic
@@ -605,6 +643,7 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
               canDo:                 imageCtx.canDo,
               topic:                 chosenTopic.name,
               lastSessionScore:      lastScore,
+              priorPracticeReport,
             });
 
             // Hard filter: drop any question whose targetLabel is not in cleanTags.
@@ -725,6 +764,7 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
         topic:                  listeningCtx.selectedTopic,
         isRetry:                persistedTopic !== null,
         lastSessionScore:       lastScore,
+        priorPracticeReport,
       }),
       // Pick a random general library image whose topic category matches
       (async () => {
@@ -774,11 +814,12 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
     // Retrieve last completed academic session to drive keyUse + subject rotation
     const recentAcademicSessions = await db
       .select({
-        topic:     sessionsTable.topic,
-        scorePct:  sessionsTable.scorePct,
-        keyUse:    sessionsTable.keyUse,
-        subject:   sessionsTable.subject,
-        completed: sessionsTable.completed,
+        topic:          sessionsTable.topic,
+        scorePct:       sessionsTable.scorePct,
+        keyUse:         sessionsTable.keyUse,
+        subject:        sessionsTable.subject,
+        completed:      sessionsTable.completed,
+        practiceReport: sessionsTable.practiceReport,
       })
       .from(sessionsTable)
       .where(and(
@@ -797,6 +838,7 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
     const lastKeyUse = persistedTopic
       ? (lastAcademicSession?.keyUse ?? null)
       : (lastAnyAcademic?.keyUse ?? null);
+    const priorPracticeReport = parsePracticeReport(lastAcademicSession?.practiceReport);
 
     const academicCtx = buildAcademicListeningContext(
       currentLevel,
@@ -934,6 +976,7 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
             // Anti-repetition signals
             avoidTargets:          recentTargets.length > 0 ? recentTargets : undefined,
             variationSeed:         Math.floor(Math.random() * 100000),
+            priorPracticeReport,
           });
 
           // Hard filter: drop questions whose targetLabel is not a DINO-confirmed object.
@@ -1139,6 +1182,7 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
           isRetry:               persistedTopic !== null,
           lastSessionScore:      lastScore,
           hasLibraryImage:       Boolean(anchorImage),
+          priorPracticeReport,
         });
       } else if (sciCtx) {
         // ── Science ──────────────────────────────────────────────────────────
@@ -1158,6 +1202,7 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
           isRetry:               persistedTopic !== null,
           lastSessionScore:      lastScore,
           hasLibraryImage:       Boolean(anchorImage),
+          priorPracticeReport,
         });
       } else if (ssCtx) {
         // ── Social Studies ────────────────────────────────────────────────────
@@ -1177,6 +1222,7 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
           isRetry:               persistedTopic !== null,
           lastSessionScore:      lastScore,
           hasLibraryImage:       Boolean(anchorImage),
+          priorPracticeReport,
         });
       } else if (elaCtx) {
         // ── English Language Arts ─────────────────────────────────────────────
@@ -1196,6 +1242,7 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
           isRetry:               persistedTopic !== null,
           lastSessionScore:      lastScore,
           hasLibraryImage:       Boolean(anchorImage),
+          priorPracticeReport,
         });
       } else {
         // ── Fallback (unexpected subject) → general listening ─────────────────
@@ -1211,6 +1258,7 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
           isRetry:               persistedTopic !== null,
           lastSessionScore:      lastScore,
           hasLibraryImage:       Boolean(anchorImage),
+          priorPracticeReport,
         });
       }
     } catch (err) {
@@ -1251,10 +1299,11 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
   // rotation and topic persistence (reuse topic if last session score < 70).
   const recentDomainSessions = await db
     .select({
-      topic:    sessionsTable.topic,
-      scorePct: sessionsTable.scorePct,
-      keyUse:   sessionsTable.keyUse,
-      subject:  sessionsTable.subject,
+      topic:          sessionsTable.topic,
+      scorePct:       sessionsTable.scorePct,
+      keyUse:         sessionsTable.keyUse,
+      subject:        sessionsTable.subject,
+      practiceReport: sessionsTable.practiceReport,
     })
     .from(sessionsTable)
     .where(and(
@@ -1267,6 +1316,7 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
     .limit(16);
 
   const lastDomainSession = recentDomainSessions[0];
+  const domainPriorPracticeReport = parsePracticeReport(lastDomainSession?.practiceReport);
 
   const lastDomainScore    = lastDomainSession?.scorePct ?? 100;
   const lastDomainKeyUse   = lastDomainSession?.keyUse   ?? null;
@@ -1299,11 +1349,26 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
     ? (domain as "reading" | "speaking" | "writing")
     : null;
   const academicIsRetry = domainPersistedTopic !== null;
-  const academicKeyUse = academicDomain
+  const lastWritingSubject =
+    academicDomain === "writing"
+    && ACADEMIC_SUBJECT_LABELS[lastDomainSession?.subject as keyof typeof ACADEMIC_SUBJECT_LABELS]
+      ? (lastDomainSession?.subject as "math" | "science" | "social_studies" | "ela")
+      : null;
+  let academicSubject: "math" | "science" | "social_studies" | "ela" | null = null;
+  if (academicDomain === "writing") {
+    academicSubject = nextWritingAcademicSubject(recentDomainSessions, academicIsRetry, lastWritingSubject);
+  } else if (academicDomain) {
+    academicSubject = pickSubjectForKeyUse(nextKeyUse(lastDomainKeyUse, academicIsRetry), recentDomainSessions, academicIsRetry);
+  }
+  const academicKeyUse = academicDomain === "writing" && academicSubject
+    ? nextWritingKeyUseForSubject(
+        recentDomainSessions,
+        academicSubject,
+        academicIsRetry,
+        lastDomainKeyUse,
+      )
+    : academicDomain
     ? nextKeyUse(lastDomainKeyUse, academicIsRetry)
-    : null;
-  const academicSubject = academicDomain
-    ? pickSubjectForKeyUse(academicKeyUse, recentDomainSessions, academicIsRetry)
     : null;
   const academicTopic = academicSubject
     ? pickAcademicTopicLabel(academicSubject, currentLevel, domainPersistedTopic, topicsUsedToday)
@@ -1334,12 +1399,13 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
         lastDomainKeyUse,
         isTelpas,
       ).selectedTopic;
-    } else if (domain === "writing") {
+    } else if (domain === "writing" && academicSubject) {
       preferredTopic = buildWritingContext(
         currentLevel,
         topicsUsedToday,
         domainPersistedTopic,
-        lastDomainKeyUse,
+        lastWritingKeyUseForSubject(recentDomainSessions, academicSubject),
+        academicSubject,
       ).selectedTopic;
     }
   }
@@ -1351,6 +1417,7 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
     description?: string | null;
     imageConcept?: string | null;
     detectionResults?: unknown;
+    contexts?: string[];
   } | null = null;
   let domainAnchorUrl: string | null = null;
   const skipRecentImage = excludeImageIds.length
@@ -1363,7 +1430,7 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
   const skipLibraryPhoto = elpFloor <= 2 && pictureUse === "not_needed";
   const requireLibraryPhoto = elpFloor <= 2 && pictureUse === "required";
   try {
-    if (!skipLibraryPhoto) {
+    if (domain !== "writing" && !skipLibraryPhoto) {
     const terms = preferredTopic ? topicSearchTerms(preferredTopic) : [];
     const metaMatch = terms.length
       ? or(
@@ -1438,7 +1505,8 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
       ? sql`jsonb_array_length(COALESCE(${libraryTable.detectionResults}->'detections', '[]'::jsonb)) >= 2`
       : sql`jsonb_array_length(COALESCE(${libraryTable.detectionResults}->'detections', '[]'::jsonb)) >= 1
               OR jsonb_array_length(COALESCE(${libraryTable.tags}, '[]'::jsonb)) >= 1`;
-    if (!domainAnchor && (domain === "writing" || elpFloor <= 2)) {
+    const allowRandomPhoto = requireLibraryPhoto || elpFloor <= 2;
+    if (!domainAnchor && allowRandomPhoto) {
       const [row] = await db
         .select(LIBRARY_ANCHOR_COLS)
         .from(libraryTable)
@@ -1447,7 +1515,7 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
         .limit(1);
       if (row?.s3Key) domainAnchor = toDomainAnchor(row, requireLibraryPhoto);
     }
-    if (!domainAnchor && (domain === "writing" || elpFloor <= 2) && skipRecentImage) {
+    if (!domainAnchor && allowRandomPhoto && skipRecentImage) {
       const [row] = await db
         .select(LIBRARY_ANCHOR_COLS)
         .from(libraryTable)
@@ -1460,7 +1528,7 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
       domainAnchor = null;
     }
     if (domainAnchor) {
-      if (domain !== "writing" && domain !== "speaking") {
+      if (domain !== "speaking") {
         preferredTopic = topicFromAnchor(domainAnchor);
       }
       req.log.info(
@@ -1508,6 +1576,7 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
           imageTags:              domainAnchor?.tags,
           imageDescription:       domainAnchor?.description ?? undefined,
           imageConcept:           domainAnchor?.imageConcept ?? undefined,
+          priorPracticeReport:    domainPriorPracticeReport,
         });
         break;
       }
@@ -1544,18 +1613,23 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
           imageTags:              domainAnchor?.tags,
           imageDescription:       domainAnchor?.description ?? undefined,
           imageConcept:           domainAnchor?.imageConcept ?? undefined,
+          priorPracticeReport:    domainPriorPracticeReport,
         });
         break;
       }
       case "writing": {
+        if (!academicSubject) {
+          throw new Error("Writing requires an academic subject");
+        }
         const writingCtx = buildWritingContext(
           currentLevel,
           topicsUsedToday,
           domainPersistedTopic,
-          lastDomainKeyUse,
+          lastWritingKeyUseForSubject(recentDomainSessions, academicSubject),
+          academicSubject,
         );
         sessionTopic  = academicTopic ?? writingCtx.selectedTopic;
-        sessionKeyUse = writingCtx.canDo.keyUse;
+        sessionKeyUse = writingCtx.keyUse;
         sessionSubject = academicSubject;
         contentData   = await generateWritingContent({
           assessment,
@@ -1568,16 +1642,13 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
           minSentences:           writingCtx.minSentences,
           sentenceFrameRequired:  writingCtx.sentenceFrameRequired,
           wordBankRequired:       writingCtx.wordBankRequired,
-          canDo:                  writingCtx.canDo,
+          framework:              writingCtx.framework,
           topic:                  sessionTopic,
           gradeBand:              student.gradeBand,
           mode,
           academicContentLayer:   academicLayer,
-          academicSubject:        academicSubject ?? undefined,
-          hasLibraryImage,
-          imageTags:              domainAnchor?.tags,
-          imageDescription:       domainAnchor?.description ?? undefined,
-          imageConcept:           domainAnchor?.imageConcept ?? undefined,
+          academicSubject,
+          priorPracticeReport:    domainPriorPracticeReport,
         });
         break;
       }
@@ -1867,23 +1938,59 @@ router.post("/students/:studentId/sessions/:sessionId/complete", requireStudentA
 
   const message = getSessionEndMessage(domain, levelUpdate.delta, scorePct, student.name);
 
-  const attemptFeedback =
-    domain === "speaking" || domain === "writing"
-      ? null
-      : await generateAttemptFeedback({
-          domain,
-          tier,
-          level: currentLevel,
-          scorePct,
-          topic: session.topic,
-          keyUse: session.keyUse,
-          answers: parsed.data.answers ?? [],
-        }).catch(() => ({
-          summary: "You finished this practice. Review missed items and try again soon.",
-          mistakes: [],
-          strengths: ["You completed the session."],
-          nextSteps: ["Practice the same skill again tomorrow."],
-        }));
+  req.log.info(
+    {
+      stage: "session-complete",
+      domain,
+      accessRubricExpected: domain === "speaking" || domain === "writing",
+    },
+    "session submit — end-of-session feedback",
+  );
+
+  let attemptFeedback;
+  try {
+    attemptFeedback = await generateAttemptFeedback({
+      domain,
+      tier,
+      level: currentLevel,
+      scorePct,
+      topic: session.topic,
+      keyUse: session.keyUse,
+      answers: parsed.data.answers ?? [],
+    });
+  } catch (err) {
+    req.log.error(
+      {
+        err,
+        stage: "session-complete",
+        domain,
+        code: isClaudeCapacityError(err) ? err.code : "ATTEMPT_FEEDBACK_FAILED",
+        jobId: isClaudeCapacityError(err) ? err.jobId : null,
+        queue: getClaudeQueueSnapshot(),
+      },
+      "End-of-session coach failed — session already saved, using fallback notes",
+    );
+    attemptFeedback = {
+      summary: "You finished this practice. Review missed items and try again soon.",
+      mistakes: [],
+      strengths: ["You completed the session."],
+      nextSteps: ["Practice the same skill again tomorrow."],
+      coachForNextSession: "Give another similar job at this same English level. Keep the WIDA factors. Practice clear, complete answers.",
+    };
+  }
+
+  const practiceReport = buildPracticeReport({
+    domain,
+    level: Math.floor(currentLevel),
+    scorePct,
+    keyUse: session.keyUse,
+    topic: session.topic,
+    feedback: attemptFeedback,
+  });
+  await db
+    .update(sessionsTable)
+    .set({ practiceReport })
+    .where(eq(sessionsTable.id, session.id));
 
   sendSuccess(res, {
     sessionId: session.id,
@@ -1899,7 +2006,7 @@ router.post("/students/:studentId/sessions/:sessionId/complete", requireStudentA
     xpEarned,
     streakBonus,
     totalXp: newTotalXp,
-    attemptFeedback,
+    attemptFeedback: attemptFeedback ? filterAttemptFeedbackForStudent(attemptFeedback) : attemptFeedback,
   });
 });
 
@@ -1949,7 +2056,7 @@ router.get("/students/:studentId/sessions/:sessionId/answers", requireStudentAcc
 });
 
 // Writing feedback
-router.post("/students/:studentId/writing/feedback", requireStudentAccess("studentId"), async (req, res): Promise<void> => {
+router.post("/students/:studentId/writing/feedback", requireStudentAccess("studentId"), rateLimitStudentAi(), async (req, res): Promise<void> => {
   const params = GetWritingFeedbackParams.safeParse(req.params);
   if (!params.success) {
     sendError(res, 400, params.error.message);
@@ -1980,7 +2087,8 @@ router.post("/students/:studentId/writing/feedback", requireStudentAccess("stude
     .where(
       and(
         eq(studentLevelsTable.studentId, student.id),
-        eq(studentLevelsTable.domain, "writing")
+        eq(studentLevelsTable.domain, "writing"),
+        eq(studentLevelsTable.tier, "academic"),
       )
     )
     .orderBy(desc(studentLevelsTable.updatedAt))
@@ -1992,19 +2100,28 @@ router.post("/students/:studentId/writing/feedback", requireStudentAccess("stude
   const gap = Math.max(0, exitThreshold - currentLevel);
   const mode = gap <= 0.5 && gap > 0 ? "exit_proximity" : "standard";
 
-  const feedback = await getWritingFeedback({
-    canDoDescriptor: "",                   // not available in feedback route — scored generically
-    prompt:          parsed.data.prompt,
-    studentResponse: parsed.data.response,
-    level:           parsed.data.level,
-    taskType:        "",                   // not available in feedback route — graded on content
-    minSentences:    parsed.data.level <= 2 ? 3 : parsed.data.level <= 3 ? 4 : parsed.data.level <= 4 ? 6 : parsed.data.level <= 5 ? 8 : 12,
-  });
+  let feedback;
+  try {
+    feedback = await getWritingFeedback({
+      canDoDescriptor: "",                   // not available in feedback route — scored generically
+      prompt:          parsed.data.prompt,
+      studentResponse: parsed.data.response,
+      level:           parsed.data.level,
+      taskType:        "",                   // not available in feedback route — graded on content
+      minSentences:    parsed.data.level <= 2 ? 3 : parsed.data.level <= 3 ? 4 : parsed.data.level <= 4 ? 6 : parsed.data.level <= 5 ? 8 : 12,
+    });
+  } catch (err) {
+    if (isClaudeCapacityError(err)) {
+      sendClaudeBusy(req, res, err);
+      return;
+    }
+    throw err;
+  }
 
-  sendSuccess(res, feedback);
+  sendSuccess(res, filterWritingFeedbackForStudent(feedback));
 });
 
-router.post("/students/:studentId/item-feedback", requireStudentAccess("studentId"), async (req, res): Promise<void> => {
+router.post("/students/:studentId/item-feedback", requireStudentAccess("studentId"), rateLimitStudentAi(), async (req, res): Promise<void> => {
   const studentId = typeof req.params.studentId === "string" ? req.params.studentId : "";
   if (!studentId) {
     sendError(res, 400, "Missing student id");
@@ -2017,8 +2134,48 @@ router.post("/students/:studentId/item-feedback", requireStudentAccess("studentI
     return;
   }
 
-  const feedback = await generateItemFeedback(parsed.data);
-  sendSuccess(res, feedback);
+  if (parsed.data.format === "writing" || parsed.data.format === "speaking") {
+    req.log.info(
+      {
+        stage: "item-feedback HTTP in",
+        format: parsed.data.format,
+        level: parsed.data.level,
+        studentAnswer: parsed.data.studentAnswer,
+        prompt: parsed.data.prompt ?? parsed.data.question,
+        scaffold: parsed.data.scaffold ?? null,
+        wordBank: parsed.data.options ?? [],
+        imageTags: parsed.data.imageTags ?? [],
+        minSentences: parsed.data.minSentences ?? null,
+        canDo: parsed.data.canDo ?? null,
+        keyUse: parsed.data.keyUse ?? null,
+      },
+      "WRITING_FEEDBACK_HTTP",
+    );
+  }
+
+  let feedback;
+  try {
+    feedback = await generateItemFeedback(parsed.data);
+  } catch (err) {
+    if (isClaudeCapacityError(err)) {
+      sendClaudeBusy(req, res, err);
+      return;
+    }
+    throw err;
+  }
+  if (parsed.data.format === "writing" || parsed.data.format === "speaking") {
+    req.log.info(
+      {
+        stage: "item-feedback HTTP out",
+        format: parsed.data.format,
+        meetsTask: feedback.meetsTask,
+        judgment: feedback.judgment,
+        spokenText: feedback.spokenText,
+      },
+      "WRITING_FEEDBACK_HTTP_OUT",
+    );
+  }
+  sendSuccess(res, filterItemFeedbackForStudent(feedback));
 });
 
 export default router;
