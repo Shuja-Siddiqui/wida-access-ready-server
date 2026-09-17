@@ -1,0 +1,96 @@
+{
+  "_read_me": "Simplified picture of a writing generate() call. Not the live dump (that also has photo rules, word-bank schema, academic world). Claude gets SYSTEM text + USER json.",
+
+  "from_pld_file": {
+    "source": "standards/2020/data/wida_eld_proficiency_level_descriptors_6-8.json",
+    "we_do_not_send": "the whole file, interpretive tables, other levels, criterion_prompt",
+    "we_send_only": "expressive_communication_mode, and only the column for THIS integer level",
+    "level_column_names": {
+      "1": "end_of_level_1",
+      "2": "end_of_level_2",
+      "3": "end_of_level_3",
+      "4": "end_of_level_4",
+      "5": "end_of_level_5",
+      "6": "level_6"
+    },
+    "example_student_level": 3,
+    "pld_object_that_goes_in_user_json": {
+      "level": 3,
+      "framing": "Toward the end of each proficiency level, when scaffolded appropriately, multilingual learners will...",
+      "discourse_organization": "expanding text that conveys intended purpose using generic (not genre-specific) organizational patterns (introduction, body, conclusion)",
+      "discourse_cohesion": "an expanding number of cohesive devices (given/new, whole/part, class/subclass)",
+      "discourse_density": "a variety of types of elaboration (adding classifiers: cumulus and cumulonimbus clouds)",
+      "sentence": "simple or compound sentences with familiar ways of combining clauses (with some coordinating conjunctions: He goes to Hogwarts School and his friends are…)",
+      "word_phrase": "an expanding repertoire of words and phrases including idioms and collocations with expanding precision (love-hate relationship)"
+    }
+  },
+
+  "system_prompt_wida_part_only": [
+    "The user JSON contains framework with six parts. Use them in this order.",
+    "1. eld_standard = school subject world. Stay in it.",
+    "2. key_language_use = the language job (Narrate / Inform / Explain / Argue). Do not switch jobs.",
+    "3. mode = interpretive (take language in) or expressive (put language out). Writing = expressive.",
+    "4. language_expectations = official goal list. The prompt must aim at these goals.",
+    "5. language_functions = steps the student must do. language_features = word tools for those steps. Do not invent functions.",
+    "6. pld = five lines for THIS level only. This is the writing the student should reach by the end of this level. You choose the help (frame, word bank, both, or neither). Not the topic. Not the job."
+  ],
+
+  "user_json_wida_part": {
+    "framework": {
+      "edition": "2020",
+      "eld_standard": { "id": "2", "name": "Language for Language Arts" },
+      "key_language_use": "Inform",
+      "mode": "expressive",
+      "reference_code": "ELD-LA 6-8 Inform Expressive",
+      "language_expectations": [
+        "Introduce and define topic and/or entity for audience",
+        "Establish objective or neutral stance",
+        "Add precision, details, and clarity about relevant attributes, qualities, characteristics, activities, and behaviors",
+        "Develop coherence and cohesion throughout text"
+      ],
+      "language_functions": [
+        {
+          "function": "Introduce and define topic and/or entity for audience",
+          "language_features": [
+            "Generalized nouns and descriptive titles to introduce topic (Revolutions, Environmental Disasters, Mining the Earth)",
+            "Opening statements to identify type of information (describing, comparing/contrasting, classifying)",
+            "Relating verbs (have, be, belong to) to link an entity with its attributes; define, describe, and classify (It was a cultural and intellectual movement.)",
+            "Timeless present verbs (rises, shapes, determines) to indicate generalizable nature of information"
+          ]
+        },
+        {
+          "function": "Establish objective or neutral stance",
+          "language_features": [
+            "Declarative statements to provide objective, factual information",
+            "Technical word choices to add precise and descriptive information without evaluative language (the effects versus devastating effects)",
+            "Generalized nouns to maintain neutrality (millennials, stringed instruments, marsupials)",
+            "Variety of structures to define and describe entities (embedded clauses, relating verbs, nominalizations, given/new patterns)"
+          ]
+        },
+        {
+          "function": "Add precision, details, and clarity about relevant attributes, qualities, characteristics, activities, and behaviors",
+          "language_features": [
+            "Adverbial and prepositional phrases to specify time and location (in 1592, following the Middle Ages, during the spring, along the ridge, located within the Earth's core)",
+            "Expanded noun groups to add precision (strummed or plucked vibration of the strings)",
+            "Adjectives and adverbs to answer questions about quantity, size, shape, manner (microscopic, right-angled, voraciously, precisely)",
+            "Contrasting connectors to differentiate between entities or components (unlike, as opposed to, however)"
+          ]
+        }
+      ],
+      "pld": {
+        "level": 3,
+        "framing": "Toward the end of each proficiency level, when scaffolded appropriately, multilingual learners will...",
+        "discourse_organization": "expanding text that conveys intended purpose using generic (not genre-specific) organizational patterns (introduction, body, conclusion)",
+        "discourse_cohesion": "an expanding number of cohesive devices (given/new, whole/part, class/subclass)",
+        "discourse_density": "a variety of types of elaboration (adding classifiers: cumulus and cumulonimbus clouds)",
+        "sentence": "simple or compound sentences with familiar ways of combining clauses (with some coordinating conjunctions: He goes to Hogwarts School and his friends are…)",
+        "word_phrase": "an expanding repertoire of words and phrases including idioms and collocations with expanding precision (love-hate relationship)"
+      }
+    }
+  },
+
+  "also_in_real_request_but_not_wida_layers": {
+    "system": "ACCESS practice kernel, writing L1-2 or L3-6 photo/frame/bank rules, JSON output schema, optional academic-world block",
+    "user": "topic, complexity_instruction, task_type, min_sentences, photo tags if any"
+  }
+}

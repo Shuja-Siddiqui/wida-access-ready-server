@@ -11,7 +11,7 @@
 
 import { Router, type IRouter } from "express";
 import { logger } from "../../config/logger";
-import { runImagePipeline, type SupportedMediaType } from "../../lib/image-pipeline";
+import { runImagePipeline, type SupportedMediaType } from "../../lib/images/image-pipeline";
 
 const router: IRouter = Router();
 

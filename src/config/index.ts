@@ -9,7 +9,7 @@ export const config = {
 
   // ── File logging + retention ────────────────────────────────────────────
   // Logs are rotated daily to disk and auto-deleted after `retentionDays`
-  // by a node-cron job (see src/lib/logCleanup.ts).
+  // by a node-cron job (see src/lib/jobs/logCleanup.ts).
   logging: {
     dir: process.env.LOG_DIR ?? "logs",
     retentionDays: Number(process.env.LOG_RETENTION_DAYS ?? 20),
@@ -57,6 +57,18 @@ export const config = {
     // Separate model for the cheap vision-description step (Step 1 of object-detect).
     // Defaults to Haiku — it only lists 8 nouns so Sonnet quality is not needed.
     visionModel: process.env.ANTHROPIC_VISION_MODEL ?? "claude-haiku-4-5",
+    /**
+     * In-process FIFO. Caps concurrent Anthropic calls; extra work waits.
+     * Saturated / wait-timeout throw ClaudeCapacityError (503) — never silent drop.
+     */
+    queue: {
+      maxConcurrent: Math.max(1, Number(process.env.CLAUDE_MAX_CONCURRENT ?? 24)),
+      maxQueued: Math.max(1, Number(process.env.CLAUDE_MAX_QUEUED ?? 512)),
+      /** Must stay under nginx proxy_read_timeout (180s). */
+      waitTimeoutMs: Math.max(5_000, Number(process.env.CLAUDE_QUEUE_WAIT_MS ?? 150_000)),
+      retryMax: Math.max(1, Number(process.env.CLAUDE_RETRY_MAX ?? 3)),
+      retryBaseMs: Math.max(100, Number(process.env.CLAUDE_RETRY_BASE_MS ?? 400)),
+    },
   },
 
   // ── Pixabay (free image search for listening image_grid questions) ──────
@@ -90,6 +102,18 @@ export const config = {
   dino: {
     sidecarUrl: (process.env.DINO_SIDECAR_URL ?? "http://localhost:8000").replace(/\/$/, ""),
     sidecarToken: process.env.DINO_SIDECAR_TOKEN ?? "",
+  },
+
+  // ── Per-student AI rate limit (sessions, scoring, speech, agent) ────────
+  rateLimit: {
+    enabled: process.env.RATE_LIMIT_ENABLED !== "false",
+    /** Rolling window length. */
+    windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS ?? 60_000),
+    /** Max AI/speech calls per student per window. */
+    aiMaxPerWindow: Number(process.env.RATE_LIMIT_AI_MAX ?? 30),
+    /** memory = one process; postgres = shared (default); redis = set REDIS_URL. */
+    store: (process.env.RATE_LIMIT_STORE ?? "postgres") as "memory" | "postgres" | "redis",
+    redisUrl: process.env.REDIS_URL ?? "",
   },
 } as const;
 

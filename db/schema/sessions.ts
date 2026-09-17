@@ -29,6 +29,9 @@ export const sessionsTable = pgTable("sessions", {
   // Null for general-tier sessions.
   subject: text("subject"),
 
+  // AI practice report from session complete (strengths, weaknesses, coach note for next generate).
+  practiceReport: jsonb("practice_report"),
+
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

@@ -39,3 +39,10 @@ export { generateObjectDetectContent } from "./object-detect";
 // Shared utilities — re-exported for any file that currently imports them
 // directly from claude-content (e.g. visionVerify.ts if it ever needs them).
 export { callClaude, BASE_PROMPT, toDisplayText, toDisplayTextOrNull } from "./client";
+export {
+  runClaudeJob,
+  getClaudeQueueSnapshot,
+  isClaudeCapacityError,
+  rethrowIfClaudeCapacity,
+  ClaudeCapacityError,
+} from "./queue";

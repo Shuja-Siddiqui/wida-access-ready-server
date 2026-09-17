@@ -11,25 +11,19 @@ import { logger } from "../../config/logger";
 import { OPTIONAL_LINE_VISUALS_BLOCK, parseVisual } from "./prompts/optional-line-visuals";
 import { buildSystemPrompt } from "./prompts/compose";
 import { contentGenPrompt } from "./prompts/content";
-import type { CanDoEntry } from "../listeningContentEngine";
-import { serializeCanDoForPrompt } from "../listeningContentEngine";
+import type { CanDoEntry } from "../content";
+import { serializeCanDoForPrompt } from "../content";
+import { dumpContentGenRequest } from "./dump-content-gen";
+import { ACCESS_LANGUAGE_FORMS } from "../wida-access-rubric";
+import { mergePriorPractice, type PracticeReport } from "../practice-report";
 
 // ── Per-level schema tables ───────────────────────────────────────────────────
 
 /**
- * Scoring dimensions appropriate for each WIDA level.
- * L1–2: pronunciation + vocabulary (limited production).
- * L3–4: full linguistic measure (pronunciation, fluency, vocabulary, grammar).
- * L5–6: discourse-level measures (fluency, vocabulary, grammar, organization, accuracy).
+ * ACCESS Language Forms (Discourse / Sentence / Word-Phrase), not homemade
+ * pronunciation/fluency checklists. Category scoring is Exemplary–No Response.
  */
-const SPEAKING_SCORING_DIMENSIONS: Record<number, string[]> = {
-  1: ["pronunciation", "vocabulary"],
-  2: ["pronunciation", "vocabulary"],
-  3: ["pronunciation", "fluency", "vocabulary", "grammar"],
-  4: ["pronunciation", "fluency", "vocabulary", "grammar"],
-  5: ["fluency", "vocabulary", "grammar", "discourse_organization", "content_accuracy"],
-  6: ["fluency", "vocabulary", "grammar", "discourse_organization", "content_accuracy"],
-};
+const ACCESS_SCORING_DIMENSIONS = [...ACCESS_LANGUAGE_FORMS];
 
 /**
  * Whether the scaffold field should be a string or null at each level.
@@ -55,7 +49,7 @@ function buildSpeakingOutputSchema(params: {
   targetSeconds: { min: number; max: number };
 }): string {
   const { level, allowedPromptTypes, responseLength, scaffoldRequired, targetSeconds } = params;
-  const scoringDims = SPEAKING_SCORING_DIMENSIONS[level] ?? ["pronunciation", "vocabulary"];
+  const scoringDims = ACCESS_SCORING_DIMENSIONS;
   const scaffoldShape = scaffoldRequired
     ? `"<sentence frame / starter that models the prompt_type — e.g. 'First… Then… Finally…'>"`
     : `null  /* Level ${level}: no scaffold; student generates their own opening */`;
@@ -99,18 +93,17 @@ function buildSpeakingOutputSchema(params: {
     `  /* Echo these values — do not modify */`,
     ``,
     `  "scoring_dimensions": ${JSON.stringify(scoringDims)},`,
-    `  /* Valid scoring dimensions at Level ${level}:`,
-    `       L1–2: pronunciation, vocabulary`,
-    `       L3–4: pronunciation, fluency, vocabulary, grammar`,
-    `       L5–6: fluency, vocabulary, grammar, discourse_organization, content_accuracy */`,
+    `  /* ACCESS Language Forms: Discourse, Sentence, Word-Phrase.`,
+    `     Score the response later on Exemplary / Strong / Adequate / Attempted / No Response. */`,
     ``,
     `  "exit_tip": "<one coaching sentence for exit_proximity mode — or null for standard mode>"`,
     `}`,
     ``,
     `SCHEMA ENFORCEMENT RULES`,
+    `• Return every key in this OUTPUT SCHEMA. Never omit a field. Use null only where this schema shows null.`,
     `• prompt_type MUST be one of: ${allowedPromptTypes.join(", ")}.`,
     `• response_length MUST be echoed as-is: "${responseLength}".`,
-    `• scoring_dimensions MUST be drawn from the Level ${level} list above.`,
+    `• scoring_dimensions MUST be discourse, sentence, word_phrase (ACCESS Language Forms).`,
     scaffoldRequired
       ? `• scaffold MUST be a non-null sentence frame at Level ${level}.`
       : `• scaffold MUST be null at Level ${level} — do not provide a frame.`,
@@ -147,7 +140,7 @@ const FALLBACK_SPEAKING: SpeakingContent = {
   responseLength: "3_5_sentences",
   scaffold: "First, I... Then, I... Finally, I...",
   targetSeconds: { min: 30, max: 60 },
-  scoringDimensions: ["pronunciation", "fluency", "vocabulary", "grammar"],
+  scoringDimensions: ["discourse", "sentence", "word_phrase"],
   exitTip: null,
 };
 
@@ -175,6 +168,7 @@ export async function generateSpeakingContent(params: {
   imageTags?: string[];
   imageDescription?: string;
   imageConcept?: string;
+  priorPracticeReport?: PracticeReport | null;
 }): Promise<SpeakingContent> {
   // Build a level-specific output schema and combine with the static base prompt
   const schemaSection = buildSpeakingOutputSchema({
@@ -191,7 +185,7 @@ export async function generateSpeakingContent(params: {
     schemaSection,
   );
 
-  const userPrompt = JSON.stringify({
+  const userPrompt = JSON.stringify(mergePriorPractice({
     domain:                 "speaking",
     assessment:             params.assessment,
     level:                  params.level,
@@ -199,7 +193,10 @@ export async function generateSpeakingContent(params: {
     step_within_level:      params.stepWithinLevel,
     grade_band:             params.gradeBand,
     mode:                   params.mode,
-    topic:                  params.topic,
+    topic:                  params.hasLibraryImage
+      ? (params.imageConcept?.trim() || params.imageDescription?.trim().slice(0, 160) || params.topic)
+      : params.topic,
+    curriculum_topic:       params.topic,
     can_do:                 serializeCanDoForPrompt(params.canDo, { level: params.level, domain: "SPEAKING" }),
     complexity_instruction: params.complexityInstruction,
     discourse_type:         params.discourseType,
@@ -213,7 +210,7 @@ export async function generateSpeakingContent(params: {
     image_description:      params.imageDescription ?? null,
     image_concept:          params.imageConcept ?? null,
     ...(params.academicSubject ? { academic_subject: params.academicSubject } : {}),
-  });
+  }, params.priorPracticeReport));
 
   logger.info(
     {
@@ -234,6 +231,7 @@ export async function generateSpeakingContent(params: {
     "speaking content request",
   );
 
+  dumpContentGenRequest("speaking", systemPrompt, userPrompt);
   try {
     const result = (await callClaude(systemPrompt, userPrompt)) as {
       can_do_descriptor: string;
@@ -269,11 +267,24 @@ export async function generateSpeakingContent(params: {
       responseLength:    result.response_length ?? params.responseLength,
       scaffold:          toDisplayTextOrNull(result.scaffold),
       targetSeconds:     params.isTelpas ? { min: 45, max: 90 } : (result.target_seconds ?? params.targetSeconds),
-      scoringDimensions: result.scoring_dimensions ?? SPEAKING_SCORING_DIMENSIONS[params.level] ?? [],
+      scoringDimensions: ACCESS_SCORING_DIMENSIONS,
       exitTip:           toDisplayTextOrNull(result.exit_tip),
     };
   } catch (err) {
-    logger.error({ err, stage: "speaking-content", canDo: params.canDo }, "speaking content generation failed");
-    throw err;
+    logger.error({ err, stage: "speaking-content", canDo: params.canDo }, "speaking content generation failed, using fallback");
+    return {
+      ...FALLBACK_SPEAKING,
+      canDoDescriptor: params.canDo.action || FALLBACK_SPEAKING.canDoDescriptor,
+      keyUse: params.canDo.keyUse,
+      canDoAction: params.canDo.action,
+      canDoItems: params.canDo.items,
+      prompt: (params.imageTags?.length)
+        ? `Look at the photo. Name ${params.imageTags.slice(0, 3).join(", ")}.`
+        : FALLBACK_SPEAKING.prompt,
+      scaffold: params.scaffoldRequired ? FALLBACK_SPEAKING.scaffold : null,
+      targetSeconds: params.isTelpas ? { min: 45, max: 90 } : params.targetSeconds,
+      responseLength: params.responseLength,
+      scoringDimensions: ACCESS_SCORING_DIMENSIONS,
+    };
   }
 }

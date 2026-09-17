@@ -20,11 +20,12 @@
 import { Router, type IRouter, type Request } from "express";
 import { logger } from "../../config/logger";
 import { generateObjectDetectContent } from "../../lib/claude";
-import { ObjectStorageService } from "../../lib/objectStorage";
-import { runImagePipeline, type SupportedMediaType } from "../../lib/image-pipeline";
+import { ObjectStorageService } from "../../lib/images/objectStorage";
+import { runImagePipeline, type SupportedMediaType } from "../../lib/images/image-pipeline";
 import { db } from "../../../db";
 import { libraryTable } from "../../../db/schema";
 import { optionalAuth } from "../../middlewares/auth";
+import { rateLimitStudentAi } from "../../middlewares/rate-limit";
 
 const router: IRouter = Router();
 const storage = new ObjectStorageService();
@@ -64,7 +65,7 @@ async function persistScan({
 
 // ── Route ─────────────────────────────────────────────────────────────────────
 
-router.post("/images/generate-object-question", optionalAuth, async (req: Request, res) => {
+router.post("/images/generate-object-question", optionalAuth, rateLimitStudentAi(), async (req: Request, res) => {
   try {
     const { image } = req.body as { image?: string };
 
@@ -117,8 +118,7 @@ router.post("/images/generate-object-question", optionalAuth, async (req: Reques
     res.json({
       questions:      [q1, q2],
       scan_id:        scanId,
-      allDetections:  detectionResults.detections,   // full set — used by test overlay
-      _debug:         { candidates, confirmed: confirmedTags, model: detectionResults.model },
+      allDetections:  detectionResults.detections,
     });
   } catch (err) {
     logger.error({ err }, "generate-object-question failed");

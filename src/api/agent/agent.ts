@@ -9,6 +9,7 @@
 import { Router } from "express";
 import { z } from "zod/v4";
 import { requireAuth } from "../../middlewares/auth";
+import { rateLimitStudentAi } from "../../middlewares/rate-limit";
 import {
   generateListeningQuestion,
   generateListeningSession,
@@ -62,7 +63,7 @@ const BEST_FORMAT_FOR_LEVEL: Record<number, Record<string, string>> = {
  * Body: { level, keyUse, format?, topic? }
  * Returns: { question: AnyQuestion }
  */
-router.post("/agent/listening/question", requireAuth, async (req, res) => {
+router.post("/agent/listening/question", requireAuth, rateLimitStudentAi(), async (req, res) => {
   const parsed = QuestionSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Invalid request", details: parsed.error.issues });
@@ -91,7 +92,7 @@ router.post("/agent/listening/question", requireAuth, async (req, res) => {
  * Body: { level, keyUses?: [...], topic? }
  * Returns: { questions: AnyQuestion[], level, meta }
  */
-router.post("/agent/listening/session", requireAuth, async (req, res) => {
+router.post("/agent/listening/session", requireAuth, rateLimitStudentAi(), async (req, res) => {
   const parsed = SessionSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Invalid request", details: parsed.error.issues });

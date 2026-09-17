@@ -17,7 +17,7 @@ RULES
 2. Ask the student to tap one specific object: "Tap the [object]."
 3. options[correct] must match the object in the question exactly.
 4. options are lowercase 1–3 word nouns taken directly from image_description.
-5. Return ONLY valid JSON — flat object, no wrapper. No preamble, no markdown, no code fences.
+5. Return ONLY valid JSON — flat object, no wrapper. No preamble, no markdown, no code fences. Include every OUTPUT SCHEMA key.
 
 OUTPUT SCHEMA
 {"question": "Tap the [object].", "options": ["obj1", "obj2", "obj3"], "correct": 0}`;

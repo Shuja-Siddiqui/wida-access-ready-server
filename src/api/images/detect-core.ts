@@ -6,7 +6,7 @@
 
 import { config } from "../../config";
 import { logger } from "../../config/logger";
-import { verifyDetections } from "../../lib/visionVerify";
+import { verifyDetections } from "../../lib/images/visionVerify";
 
 const SIDECAR_TIMEOUT_MS = 180_000; // CPU batches can be slow over the network
 

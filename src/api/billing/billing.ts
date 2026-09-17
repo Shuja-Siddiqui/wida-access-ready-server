@@ -18,10 +18,10 @@ import {
   ListPaymentMethodsQueryParams,
   CheckoutWithSavedCardBody as SavedCardBody,
 } from "../../generated";
-import { sendError, sendSuccess } from "../../lib/api-response";
+import { sendError, sendSuccess } from "../../lib/http/api-response";
 import { requireAuth, requireOwnerAccess, requireTeacherAccess } from "../../middlewares/auth";
-import { getUncachableStripeClient, getStripePublishableKey } from "../../lib/stripeClient";
-import { getRequestOrigin } from "../../lib/request-origin";
+import { getUncachableStripeClient, getStripePublishableKey } from "../../lib/billing/stripeClient";
+import { getRequestOrigin } from "../../lib/http/request-origin";
 
 const router: IRouter = Router();
 

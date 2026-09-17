@@ -21,6 +21,6 @@ Inform → sequence a FACT process with 3 tags (not a character plot). type sequ
 Explain → compare two objects/ideas in the photo (2 tags). Passage states how they differ. type multiple_choice. Answers are image_tags or short phrases about those tags.
 Argue → fact vs opinion in print. type classify. No photo required.
 
-Questions: exactly question_count, ONLY types in OUTPUT SCHEMA. When has_library_image, answers must be grounded in the passage AND the visible tags. Multiple choice: exactly 3 options.
+Questions: exactly question_count, ONLY types in OUTPUT SCHEMA. Include every schema key. When has_library_image, answers must be grounded in the passage AND the visible tags. Multiple choice: exactly 3 options.
 Vocabulary: 2–3 words from the passage.
 `.trim();

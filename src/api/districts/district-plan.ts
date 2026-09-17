@@ -9,7 +9,7 @@ import {
   usersTable,
   ownerStripeCustomersTable,
 } from "../../../db";
-import { sendError, sendSuccess } from "../../lib/api-response";
+import { sendError, sendSuccess } from "../../lib/http/api-response";
 import { requireAuth } from "../../middlewares/auth";
 
 const router: IRouter = Router();

@@ -11,20 +11,27 @@ import {
   districtAdminsTable,
   billingConfigTable,
 } from "../../../db";
-import { libraryTable, libraryTopicsTable, topicsTable, themesTable } from "../../../db/schema";
+import { libraryTable, libraryTopicsTable, topicsTable, contentCategoriesTable } from "../../../db/schema";
 import { asc } from "drizzle-orm";
-import { sendError, sendSuccess } from "../../lib/api-response";
+import { sendError, sendSuccess } from "../../lib/http/api-response";
 import { requireAuth, requireSuperAdmin } from "../../middlewares/auth";
-import { getUncachableStripeClient } from "../../lib/stripeClient";
-import { ObjectStorageService } from "../../lib/objectStorage";
-import { runImagePipeline, type SupportedMediaType } from "../../lib/image-pipeline";
+import { getUncachableStripeClient } from "../../lib/billing/stripeClient";
+import { ObjectStorageService } from "../../lib/images/objectStorage";
+import { runImagePipeline, type SupportedMediaType } from "../../lib/images/image-pipeline";
 import { logger } from "../../config/logger";
+import {
+  getRateLimitSettings,
+  saveRateLimitSettings,
+  RATE_LIMIT_BOUNDS,
+} from "../../lib/rate-limit/settings";
+import adminLibraryCatalogRouter from "./library-catalog";
 
 const storage = new ObjectStorageService();
 
 const router: IRouter = Router();
 
 router.use("/admin", requireAuth, requireSuperAdmin);
+router.use(adminLibraryCatalogRouter);
 
 // ── GET /admin/stats ─────────────────────────────────────────────────────────
 router.get("/admin/stats", async (_req, res): Promise<void> => {
@@ -419,6 +426,33 @@ router.patch("/admin/pricing", async (req, res): Promise<void> => {
   });
 });
 
+const RateLimitSettingsBody = z.object({
+  enabled: z.boolean(),
+  windowMs: z.number().int().min(RATE_LIMIT_BOUNDS.minWindowMs).max(RATE_LIMIT_BOUNDS.maxWindowMs),
+  aiMaxPerStudent: z
+    .number()
+    .int()
+    .min(RATE_LIMIT_BOUNDS.minPerStudent)
+    .max(RATE_LIMIT_BOUNDS.maxPerStudent),
+});
+
+router.get("/admin/rate-limit", async (_req, res): Promise<void> => {
+  const settings = await getRateLimitSettings();
+  sendSuccess(res, { ...settings, bounds: RATE_LIMIT_BOUNDS });
+});
+
+router.patch("/admin/rate-limit", async (req, res): Promise<void> => {
+  const parsed = RateLimitSettingsBody.safeParse(req.body);
+  if (!parsed.success) {
+    sendError(res, 400, "Invalid rate limit settings");
+    return;
+  }
+  const updatedBy = req.auth?.userId ?? req.auth?.id ?? null;
+  const settings = await saveRateLimitSettings({ ...parsed.data, updatedBy });
+  req.log.info({ settings, updatedBy }, "Admin updated AI rate limits");
+  sendSuccess(res, { ...settings, bounds: RATE_LIMIT_BOUNDS });
+});
+
 // ── GET /api/admin/library ────────────────────────────────────────────────────
 // List all library rows (no ownership filter), newest first, with presigned URLs.
 
@@ -494,14 +528,14 @@ router.post("/admin/library/analyze", async (req, res): Promise<void> => {
     // Fetch all topics so the pipeline can suggest which ones apply
     const topicRows = await db
       .select({
-        id:        topicsTable.id,
-        name:      topicsTable.name,
-        themeName: themesTable.name,
+        id:                  topicsTable.id,
+        name:                topicsTable.name,
+        contentCategoryName: contentCategoriesTable.name,
       })
       .from(topicsTable)
-      .innerJoin(themesTable, eq(themesTable.id, topicsTable.themeId))
+      .innerJoin(contentCategoriesTable, eq(contentCategoriesTable.id, topicsTable.contentCategoryId))
       .where(eq(topicsTable.isActive, true))
-      .orderBy(asc(themesTable.displayOrder), asc(topicsTable.displayOrder));
+      .orderBy(asc(contentCategoriesTable.displayOrder), asc(topicsTable.displayOrder));
 
     const { candidates, confirmedTags, description, imageConcept, suggestedTopicIds, detectionResults } =
       await runImagePipeline(image, base64Data, contentType, { topics: topicRows });
@@ -581,7 +615,7 @@ router.post("/admin/library/upload", async (req, res): Promise<void> => {
 
   try {
     // Step 1 — upload original to S3 immediately so the image is safe even if AI fails
-    const { generateImageVariants } = await import("../../lib/imageResize");
+    const { generateImageVariants } = await import("../../lib/images/imageResize");
     const { key, sizeBytes } = await storage.uploadBuffer(buffer, contentType, "access-ready-files/library");
 
     // Generate + upload thumbnail (200 px) and medium (600 px) variants in parallel (non-fatal)
@@ -619,11 +653,15 @@ router.post("/admin/library/upload", async (req, res): Promise<void> => {
     } else {
       // Full pipeline: Claude vision + Grounding DINO
       const topicRows = await db
-        .select({ id: topicsTable.id, name: topicsTable.name, themeName: themesTable.name })
+        .select({
+          id:                  topicsTable.id,
+          name:                topicsTable.name,
+          contentCategoryName: contentCategoriesTable.name,
+        })
         .from(topicsTable)
-        .innerJoin(themesTable, eq(themesTable.id, topicsTable.themeId))
+        .innerJoin(contentCategoriesTable, eq(contentCategoriesTable.id, topicsTable.contentCategoryId))
         .where(eq(topicsTable.isActive, true))
-        .orderBy(asc(themesTable.displayOrder), asc(topicsTable.displayOrder));
+        .orderBy(asc(contentCategoriesTable.displayOrder), asc(topicsTable.displayOrder));
 
       try {
         pipelineResult = await runImagePipeline(image, base64Data, contentType, {

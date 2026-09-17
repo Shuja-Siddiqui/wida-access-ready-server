@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { HealthCheckResponse } from "../../generated";
-import { sendSuccess } from "../../lib/api-response";
+import { sendSuccess } from "../../lib/http/api-response";
 
 const router: IRouter = Router();
 

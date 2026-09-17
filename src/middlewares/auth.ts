@@ -10,7 +10,12 @@ import type { NextFunction, Request, Response } from "express";
 import crypto from "node:crypto";
 import { and, eq, gt } from "drizzle-orm";
 import { db, districtAdminsTable, profilesTable, studentsTable, userSessionsTable, usersTable } from "../../db";
-import { sendError } from "../lib/api-response";
+import {
+  assertStudentOrgAccess,
+  assertTeacherProfileOrgAccess,
+  sendAccessDenied,
+} from "../lib/auth/org-access";
+import { sendError } from "../lib/http/api-response";
 
 export type UserType = "student" | "teacher" | "parent" | "principal" | "district_admin";
 
@@ -182,20 +187,33 @@ export function requireStudentAccess(paramName = "studentId", options: { allowSe
     }
 
     const [student] = await db
-      .select({ guardianId: studentsTable.guardianId })
+      .select({
+        guardianId: studentsTable.guardianId,
+        schoolId: studentsTable.schoolId,
+        districtId: studentsTable.districtId,
+      })
       .from(studentsTable)
       .where(eq(studentsTable.id, studentId))
       .limit(1);
 
     if (!student) { sendError(res, 404, "Student not found"); return; }
 
-    const isPrincipalOrAdmin = auth.userType === "principal" || auth.userType === "district_admin";
-    if (!isPrincipalOrAdmin && (!student.guardianId || student.guardianId !== auth.id)) {
-      sendError(res, 403, "You do not have access to this student's data");
+    if (student.guardianId && student.guardianId === auth.id) {
+      next();
       return;
     }
 
-    next();
+    if (auth.userType === "principal" || auth.userType === "district_admin") {
+      const denied = await assertStudentOrgAccess(auth, student);
+      if (denied) {
+        sendAccessDenied(res, denied);
+        return;
+      }
+      next();
+      return;
+    }
+
+    sendError(res, 403, "You do not have access to this student's data");
   };
 }
 
@@ -212,11 +230,18 @@ export function requireTeacherAccess(paramName = "teacherId") {
     if (!auth) { sendError(res, 401, "Authentication required"); return; }
     if (auth.role === "super_admin") { next(); return; }
 
-    const teacherId = req.params[paramName];
+    const teacherId = req.params[paramName] as string | undefined;
     if (!teacherId) { sendError(res, 403, "You do not have access to this teacher's data"); return; }
 
-    const isPrincipalOrAdmin = auth.userType === "principal" || auth.userType === "district_admin";
-    if (isPrincipalOrAdmin) { next(); return; }
+    if (auth.userType === "principal" || auth.userType === "district_admin") {
+      const denied = await assertTeacherProfileOrgAccess(auth, teacherId);
+      if (denied) {
+        sendAccessDenied(res, denied);
+        return;
+      }
+      next();
+      return;
+    }
 
     if (auth.userType !== "student" && auth.id === teacherId) { next(); return; }
 

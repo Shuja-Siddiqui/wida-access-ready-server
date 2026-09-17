@@ -23,8 +23,11 @@ import {
 } from "./prompts";
 import { parseOptionDiagrams, parseVisual } from "./prompts/optional-line-visuals";
 import type { ListeningContent } from "./listening";
-import { serializeCanDoForPrompt } from "../listeningContentEngine";
+import { serializeCanDoForPrompt } from "../content";
 import { clampToThreeOptions } from "../choice-options";
+import { logger } from "../../config/logger";
+import { dumpContentGenRequest } from "./dump-content-gen";
+import { mergePriorPractice, type PracticeReport } from "../practice-report";
 
 const SYSTEM_PROMPT = buildSystemPrompt(
   contentGenPrompt("listening", 3),
@@ -99,10 +102,11 @@ export async function generateAcademicSocialStudiesListeningContent(params: {
   isRetry?: boolean;
   lastSessionScore?: number | null;
   hasLibraryImage?: boolean;
+  priorPracticeReport?: PracticeReport | null;
 }): Promise<ListeningContent> {
   const { questionCount, passageSentenceTarget, maxTokens } = academicSessionScale(params.level);
 
-  const prompt = JSON.stringify({
+  const prompt = JSON.stringify(mergePriorPractice({
     integer_level:          params.level,
     step_within_level:      params.stepWithinLevel,
     complexity_instruction: params.complexityInstruction,
@@ -118,8 +122,9 @@ export async function generateAcademicSocialStudiesListeningContent(params: {
     question_count:          questionCount,
     passage_sentence_target: passageSentenceTarget,
     has_library_image:       params.hasLibraryImage ?? false,
-  });
+  }, params.priorPracticeReport));
 
+  dumpContentGenRequest("academic-social-studies", SYSTEM_PROMPT, prompt);
   try {
     const result = (await callClaude(SYSTEM_PROMPT, prompt, maxTokens)) as {
       audio_script: string;
@@ -155,6 +160,7 @@ export async function generateAcademicSocialStudiesListeningContent(params: {
       }),
     };
   } catch (err) {
-    throw err;
+    logger.error({ err }, "academic social studies listening generation failed, using fallback");
+    return FALLBACK_ACADEMIC_SOCIAL_STUDIES;
   }
 }

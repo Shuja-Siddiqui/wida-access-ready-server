@@ -11,8 +11,9 @@
 
 import { config } from "../config/index";
 import { logger } from "../config/logger";
-import canDoData from "../data/canDo.json";
-import { findKeyUseBlock } from "./listeningContentEngine";
+import { runClaudeJob } from "./claude/queue";
+import { canDoData } from "./claude/standards/2016";
+import { findKeyUseBlock } from "./content";
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -188,6 +189,7 @@ async function callListeningAgent(
   outputSchema: string,
   topic?: string,
 ): Promise<AnyGeneratedQuestion> {
+  return runClaudeJob("listening-agent", async () => {
   const baseUrl = resolveBaseUrl();
   const apiKey = config.anthropic.apiKey;
 
@@ -259,11 +261,16 @@ RULES
 
   if (!fallbackRes.ok) {
     const errText = await fallbackRes.text();
-    throw new Error(`Anthropic messages API error ${fallbackRes.status}: ${errText}`);
+    const err = new Error(`Anthropic messages API error ${fallbackRes.status}: ${errText}`) as Error & {
+      status: number;
+    };
+    err.status = fallbackRes.status;
+    throw err;
   }
 
   const data = await fallbackRes.json() as Record<string, unknown>;
   return extractToolResult(data);
+  });
 }
 
 /**

@@ -43,13 +43,39 @@ jobs:
           fi
 
       - name: Prepare SSH
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_SSH_USER: ${{ secrets.EC2_SSH_USER }}
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
         run: |
           mkdir -p ~/.ssh
-          printf '%s\n' "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 700 ~/.ssh
+          HOST=$(printf '%s' "$EC2_HOST" | tr -d '\r\n ')
+          USER=$(printf '%s' "$EC2_SSH_USER" | tr -d '\r\n ')
+          printf '%s\n' "$EC2_SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts
-          printf 'Host deploy-target\n  HostName %s\n  User %s\n  IdentityFile ~/.ssh/deploy_key\n  IdentitiesOnly yes\n' \
-            "${{ secrets.EC2_HOST }}" "${{ secrets.EC2_SSH_USER }}" >> ~/.ssh/config
+          echo "Connecting to ${HOST} as ${USER}"
+          # Do not use -H: hashed hosts cannot be grepped by IP, which falsely fails this step.
+          if ! ssh-keyscan -T 20 "$HOST" >> ~/.ssh/known_hosts 2>/tmp/keyscan.err; then
+            echo "ssh-keyscan could not reach ${HOST}:22"
+            cat /tmp/keyscan.err || true
+            echo "Open security group inbound TCP 22 from 0.0.0.0/0 so GitHub Actions can SSH."
+            exit 1
+          fi
+          if ! grep -qE ' (ssh-|ecdsa-)' ~/.ssh/known_hosts; then
+            echo "ssh-keyscan wrote no host keys for ${HOST}:22"
+            cat /tmp/keyscan.err || true
+            exit 1
+          fi
+          {
+            echo "Host deploy-target"
+            echo "  HostName ${HOST}"
+            echo "  User ${USER}"
+            echo "  IdentityFile ~/.ssh/deploy_key"
+            echo "  IdentitiesOnly yes"
+            echo "  StrictHostKeyChecking accept-new"
+          } > ~/.ssh/config
+          chmod 600 ~/.ssh/config
 
       - name: Sync and restart
         run: |

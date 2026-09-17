@@ -10,9 +10,9 @@ import { runMigrations } from "stripe-replit-sync";
 import app from "./app";
 import { config } from "./config";
 import { logger } from "./config/logger";
-import { startLogCleanupJob } from "./lib/logCleanup";
-import { startRenewalCrons } from "./lib/renewalCron";
-import { getStripeSync } from "./lib/stripeClient";
+import { startLogCleanupJob } from "./lib/jobs/logCleanup";
+import { startRenewalCrons } from "./lib/jobs/renewalCron";
+import { getStripeSync } from "./lib/billing/stripeClient";
 
 const rawPort = process.env["PORT"] ?? "8080";
 const port = Number(rawPort);
@@ -63,7 +63,7 @@ try {
   logger.error({ err }, "Failed to initialize Stripe");
 }
 
-app.listen(port, (err) => {
+app.listen(port, "0.0.0.0", (err) => {
   if (err) {
     logger.error({ err }, "Error listening on port");
     process.exit(1);

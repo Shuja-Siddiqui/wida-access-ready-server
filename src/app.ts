@@ -4,7 +4,7 @@ import cookieParser from "cookie-parser";
 import pinoHttp from "pino-http";
 import router from "./api";
 import { logger } from "./config/logger";
-import { WebhookHandlers } from "./lib/webhookHandlers";
+import { WebhookHandlers } from "./lib/billing/webhookHandlers";
 
 const app: Express = express();
 

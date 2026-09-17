@@ -3,8 +3,8 @@ import { eq, desc, count } from "drizzle-orm";
 import { db } from "../../../db";
 import { mediaAssetsTable } from "../../../db/schema";
 import { requireAuth } from "../../middlewares/auth";
-import { sendError, sendSuccess } from "../../lib/api-response";
-import { ObjectStorageService } from "../../lib/objectStorage";
+import { sendError, sendSuccess } from "../../lib/http/api-response";
+import { ObjectStorageService } from "../../lib/images/objectStorage";
 import { z } from "zod/v4";
 
 const router: IRouter = Router();

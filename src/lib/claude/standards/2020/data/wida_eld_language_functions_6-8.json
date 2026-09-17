@@ -1,0 +1,602 @@
+{
+  "grade_band": "6-8",
+  "source": "WIDA English Language Development Standards Framework, 2020 Edition, Kindergarten-Grade 12",
+  "source_pages_in_file": "141-177",
+  "source_pages_as_labeled_in_document": "139-175",
+  "note": "This file captures the Language Functions layer that was found missing from the existing standards/rubric JSON files. Per the framework text (doc-labeled p.142): 'Language Expectations are built around a set of Language Functions... In Figure 3-5, you can see that the Language Functions are listed in bulleted form, under the interpretive and expressive language expectations.' Language Features (doc p.142) 'are examples of various language resources that carry out particular Language Functions' and are only provided for the expressive mode. Standard 1 (Social and Instructional) has no Language Features by design -- interpretive and expressive expectations are identical there, and its bullets serve directly as its Functions -- this is documented in the source text, not a data gap.",
+  "standards": {
+    "1": {
+      "standard_name": "Language for Social and Instructional Purposes",
+      "reference_code_note": "ELD-SI 4-12 (same Language Expectations apply grades 4-12; grades K-3 have a separate span not captured in this 6-8 extraction)",
+      "has_language_features": false,
+      "key_language_uses": {
+        "Narrate": {
+          "reference_code": "ELD-SI 4-12 Narrate",
+          "language_expectations": [
+            "Share ideas about one's own and others' lived experiences and previous learning",
+            "Connect stories with images and representations to add meaning",
+            "Identify and raise questions about what might be unexplained, missing, or left unsaid",
+            "Recount and restate ideas to sustain and move dialogue forward",
+            "Create closure, recap, and offer next steps"
+          ]
+        },
+        "Inform": {
+          "reference_code": "ELD-SI 4-12 Inform",
+          "language_expectations": [
+            "Define and classify facts and interpretations; determine what is known vs. unknown",
+            "Report on explicit and inferred characteristics, patterns, or behavior",
+            "Describe the parts and wholes of a system",
+            "Sort, clarify, and summarize relationships",
+            "Summarize most important aspects of information"
+          ]
+        },
+        "Explain": {
+          "reference_code": "ELD-SI 4-12 Explain",
+          "language_expectations": [
+            "Generate and convey initial thinking",
+            "Follow and describe cycles and sequences of steps or procedures and their causes and effects",
+            "Compare changing variables, factors, and circumstances",
+            "Offer alternatives to extend or deepen awareness of factors that contribute to particular outcomes",
+            "Act on feedback to revise understandings of how or why something is or works in particular ways"
+          ]
+        },
+        "Argue": {
+          "reference_code": "ELD-SI 4-12 Argue",
+          "language_expectations": [
+            "Generate questions about different perspectives",
+            "Support or challenge an opinion, premise, or interpretation",
+            "Clarify and elaborate ideas based on feedback",
+            "Evaluate changes in thinking, identifying trade-offs",
+            "Refine claims and reasoning based on new information or evidence"
+          ]
+        }
+      }
+    },
+    "2": {
+      "standard_name": "Language for Language Arts",
+      "has_language_features": true,
+      "note": "Explain is not detailed for this standard at grades 6-8 -- the framework only provides full Language Expectations/Functions/Features for the 'most prominent' Key Language Use x Standard combinations per grade band (see Table 3-11, Distribution of Key Language Uses in Grades 6-8).",
+      "key_language_uses": {
+        "Narrate": {
+          "reference_code_interpretive": "ELD-LA 6-8 Narrate Interpretive",
+          "reference_code_expressive": "ELD-LA 6-8 Narrate Expressive",
+          "interpretive": {
+            "intro": "Interpret language arts narratives by",
+            "language_expectations": [
+              "Identifying a theme or central idea that develops over the course of a text",
+              "Analyzing how character attributes and actions develop in relation to events or dialogue",
+              "Evaluating impact of specific word choices about meaning and tone"
+            ]
+          },
+          "expressive": {
+            "intro": "Construct language arts narratives that",
+            "language_expectations": [
+              "Orient audience to context and point of view",
+              "Develop and describe characters and their relationships",
+              "Develop story, including themes with complication and resolution, time, and event sequences",
+              "Engage and adjust for audience"
+            ]
+          },
+          "language_functions": [
+            {
+              "function": "Orient audience to context and point of view",
+              "language_features": [
+                "Expanded noun groups to state who or what the narrative is about",
+                "A variety of sentence types to introduce the context such as rhetorical and other questions, statements, dialog (Are we ever truly happy? It was confusing time, nothing seemed normal.)",
+                "Adverbial and prepositional phrases to establish time and location (They stood together silently on the hill as the sun rose.)",
+                "Statements and questions to foreshadow or state complication (As she walked home, she felt watched.)"
+              ]
+            },
+            {
+              "function": "Develop and describe characters and their relationships",
+              "language_features": [
+                "Verbs to describe character behaviors (turned instinctively), thoughts (concerned), feelings (pleased), speech (asked weakly)",
+                "Expanded verb groups to show relationship between characters",
+                "Saying, thinking, and feeling dialog verbs to add nuance to characters' relationships (“Danny,” the old man said, “I was angry. Forgive me.”)",
+                "Expanded noun groups to add description and detail (He was short, but strong, with light, closely cut hair and a determined face.)",
+                "Cohesive devices (pronouns, demonstratives, renaming, synonyms) to reference characters or ideas across the text"
+              ]
+            },
+            {
+              "function": "Develop story, including themes with complication and resolution, time, and event sequences",
+              "language_features": [
+                "Dependent clauses to add details (the race, which only happened every four years)",
+                "A variety of verb tenses to pace narrative and locate events in time, including dialog (“Where are you going?,” I asked.)",
+                "Connectors to develop and link sections of text to sequence time (meanwhile, later), ideas (in the first place, at this point), and add information (what's more, likewise, in addition)",
+                "Statements to provide closure, evaluate experience, or summarize narrative (Finally, it was over; The experience was enlightening; There are some things that can't be seen but only felt.)"
+              ]
+            },
+            {
+              "function": "Engage and adjust for audience",
+              "language_features": [
+                "Evaluative word choices to describe author's attitudes (with death-cold scorn in his voice; pitiful, gracious, self-sacrificing, enriching)",
+                "Literary devices (similes and metaphors) to enrich the narrative (fly like an eagle, life is a highway), alliteration (babbling brook), sensory words/phrases, and onomatopoeia (tick-tock)",
+                "Tone of voice, gesturing, acting behaviors to adjust for audience",
+                "Language to address reader/listener and draw them in (She scuffled away across the snowy field like a small hunched animal.)"
+              ]
+            }
+          ]
+        },
+        "Inform": {
+          "reference_code_interpretive": "ELD-LA 6-8 Inform Interpretive",
+          "reference_code_expressive": "ELD-LA 6-8 Inform Expressive",
+          "interpretive": {
+            "intro": "Interpret informational texts in language arts by",
+            "language_expectations": [
+              "Identifying and/or summarizing main ideas and their relationship to supporting ideas",
+              "Analyzing observations and descriptions in textual evidence for key attributes, qualities, characteristics, activities, and behaviors",
+              "Evaluating the impact of author's key word choices over the course of a text"
+            ]
+          },
+          "expressive": {
+            "intro": "Construct informational texts in language arts that",
+            "language_expectations": [
+              "Introduce and define topic and/or entity for audience",
+              "Establish objective or neutral stance",
+              "Add precision, details, and clarity about relevant attributes, qualities, characteristics, activities, and behaviors",
+              "Develop coherence and cohesion throughout text"
+            ]
+          },
+          "language_functions": [
+            {
+              "function": "Introduce and define topic and/or entity for audience",
+              "language_features": [
+                "Generalized nouns and descriptive titles to introduce topic (Revolutions, Environmental Disasters, Mining the Earth)",
+                "Opening statements to identify type of information (describing, comparing/contrasting, classifying)",
+                "Relating verbs (have, be, belong to) to link an entity with its attributes; define, describe, and classify (It was a cultural and intellectual movement.)",
+                "Timeless present verbs (rises, shapes, determines) to indicate generalizable nature of information",
+                "Expanded noun groups to define key concepts (a period in European history that took place)"
+              ]
+            },
+            {
+              "function": "Establish objective or neutral stance",
+              "language_features": [
+                "Declarative statements to provide objective, factual information",
+                "Technical word choices to add precise and descriptive information without evaluative language (the effects versus devastating effects)",
+                "Generalized nouns to maintain neutrality (millennials, stringed instruments, marsupials)",
+                "Variety of structures to define and describe entities (embedded clauses, relating verbs, nominalizations, given/new patterns)",
+                "Reporting devices (saying verbs) to integrate sourced information into report (said, reported, claims), direct and indirect quotes"
+              ]
+            },
+            {
+              "function": "Add precision, details, and clarity about relevant attributes, qualities, characteristics, activities, and behaviors",
+              "language_features": [
+                "Adverbial and prepositional phrases to specify time and location (in 1592, following the Middle Ages, during the spring, along the ridge, located within the Earth's core)",
+                "Expanded noun groups to add precision (strummed or plucked vibration of the strings)",
+                "Adjectives and adverbs to answer questions about quantity, size, shape, manner (microscopic, right-angled, voraciously, precisely)",
+                "Contrasting connectors to differentiate between entities or components (unlike, as opposed to, however)",
+                "Visuals (graphs, data, diagrams) to support key details"
+              ]
+            },
+            {
+              "function": "Develop coherence and cohesion throughout text",
+              "language_features": [
+                "Referential devices (pronoun reference, synonyms, renaming, collocations) to link ideas across sections of text",
+                "Topic or headings to serve as openers for sentences or paragraphs",
+                "Nominalization to condense clauses (it rained year after year=annual floods) or summarize key ideas"
+              ]
+            }
+          ]
+        },
+        "Argue": {
+          "reference_code_interpretive": "ELD-LA 6-8 Argue Interpretive",
+          "reference_code_expressive": "ELD-LA 6-8 Argue Expressive",
+          "interpretive": {
+            "intro": "Interpret language arts arguments by",
+            "language_expectations": [
+              "Identifying and summarizing central idea distinct from prior knowledge or opinions",
+              "Analyzing how an author acknowledges and responds to conflicting evidence or viewpoints",
+              "Evaluating relevance, sufficiency of evidence, and validity of reasoning that support claim(s)"
+            ]
+          },
+          "expressive": {
+            "intro": "Construct language arts arguments that",
+            "language_expectations": [
+              "Introduce and develop claim(s) and acknowledge counterclaim(s)",
+              "Support claims with reasons and evidence that are clear, relevant, and credible",
+              "Establish and maintain formal style",
+              "Logically organize claim(s) with clear reasons and relevant evidence; offer a conclusion"
+            ]
+          },
+          "language_functions": [
+            {
+              "function": "Introduce and develop claim(s) and acknowledge counterclaim(s)",
+              "language_features": [
+                "Declarative statements to frame topic, provide background information, state claim, and acknowledge counterclaim (Graphic novels provide a unique way to read that appeals to many teenagers.)",
+                "Noun groups to provide details (Maus, a graphic novel written and illustrated by Art Spiegelman…)",
+                "Connectors to introduce alternative points of view (although, on the other hand, unlike, contrary to common belief)",
+                "Pronouns, synonyms, collocations, renaming subjects to maintain cohesion (graphic novels=these unique texts=young adult comic books)"
+              ]
+            },
+            {
+              "function": "Support claims with reasons and evidence that are clear, relevant, and credible",
+              "language_features": [
+                "A variety of clauses (adverbial, embedded) to support opinion and/or claim(s) (quotes, references, detailed descriptions, examples or other sources and data) (according to X, the author's claim)",
+                "Connectors to elaborate an idea/interpretation (so, this means, therefore, leading one to believe, a way to think about this)",
+                "Connectors to link claim(s) with evidence and reasoning (because, as a result, when, if, although, but)",
+                "Literary devices to support evidence and interpretation (similes and metaphors, alliteration, idioms, figurative and sensory words/phrases, collocation, multilingual words/phrases)",
+                "Modality to express obligation or certainty (might, could, must, need to) or to open up to other possibilities (possibly, apparently, perhaps, definitely, absolutely)"
+              ]
+            },
+            {
+              "function": "Establish and maintain formal style",
+              "language_features": [
+                "First, second, third person use to connect with reader, build alliance, or maintain neutrality (unjust power, a theme throughout the text, reminds us to be aware of our individual resourcefulness as sources of hope in desperate situations)",
+                "Authoritative declarative sentences to evaluate and interpret events (Spiegelman's clever use of imagery and graphic layout presents a unique way of using the graphic novel format.)",
+                "Nouns, adjectives, verbs, and adverbs to adjust intensity and strength of message (somewhat powerful versus incredibly powerful; ugly versus grotesque)"
+              ]
+            },
+            {
+              "function": "Logically organize claim(s) with clear reasons and relevant evidence; offer a conclusion",
+              "language_features": [
+                "Connectors to support inferential conclusions (Students' preference for graphic novels is evident because/due to the rate these novels are checked out of the library.)",
+                "Comparing/contrasting connectors to differentiate between claims and counterclaims (unlike, as opposed to, contrasted with, conversely, similarly, in spite of that)",
+                "Verb structures to present information in a variety of ways (past, timeless present, passive voice)",
+                "Connectors to sequence points in the argument and maintain logical progression (one way, another point, as mentioned previously, in addition)",
+                "Summary statement to reiterate claim(s), call to action, or encourage a response (While Maus relies on images to get the point across, the message of how we dehumanize others is loud and clear.)"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "3": {
+      "standard_name": "Language for Mathematics",
+      "has_language_features": true,
+      "note": "Narrate and Inform are not detailed for this standard at grades 6-8, per prominence distribution (Table 3-11).",
+      "key_language_uses": {
+        "Explain": {
+          "reference_code_interpretive": "ELD-MA 6-8 Explain Interpretive",
+          "reference_code_expressive": "ELD-MA 6-8 Explain Expressive",
+          "interpretive": {
+            "intro": "Interpret mathematical explanations by",
+            "language_expectations": [
+              "Identifying concept or entity",
+              "Analyzing possible ways to represent and solve a problem",
+              "Evaluating model and rationale for underlying relationships in selected problem-solving approach"
+            ]
+          },
+          "expressive": {
+            "intro": "Construct mathematical explanations that",
+            "language_expectations": [
+              "Introduce concept or entity",
+              "Share solution with others",
+              "Describe data and/or problem-solving strategy",
+              "State reasoning used to generate solution"
+            ]
+          },
+          "language_functions": [
+            {
+              "function": "Introduce concept or entity",
+              "language_features": [
+                "Mathematical terms and phrases to describe concept, process, or purpose (this probability model, randomized sampling will provide more valid results)",
+                "Relating verbs (belong to, are part of, be, have) to define or describe concept"
+              ]
+            },
+            {
+              "function": "Share solution with others",
+              "language_features": [
+                "Generalized nouns to add precision to discussion (distributions, probability, frequencies)",
+                "Language choices to reflect on completed and on-going process (we should have done this, we might be able to, what if we try)",
+                "First person (I, We) to describe approach; third person to describe approach with neutral stance of authority",
+                "Observational (notice, it appears, looks like) and comparative language (different from, similar to, the same) to share results (We notice our process was different, but we have the same solution.)",
+                "Modality (verbs, adverbs, nouns, adjectives) to express opinions, degrees of certainty, or temper disagreement (It's a possibility, We have to do it this way, Maybe we could look at)"
+              ]
+            },
+            {
+              "function": "Describe data and/or problem-solving strategy",
+              "language_features": [
+                "Abstract, generalized, or multi-meaning noun groups to add precision to mathematical descriptions (randomized variation, proportional relationships, constituents)",
+                "Visual data displays (tables, tree diagrams, simulations, data charts, manipulatives) to clarify approach and/or solution",
+                "Connectors to link sentences and longer stretches of text signaling details of time (next, at the same time), causality (therefore, consequently, as a result), clarification (for example, as seen in the model)",
+                "Passive voice verbs to explain or analyze (The variable is given a value of six.)",
+                "Timeless present verbs to present generalizable truths (The hypotenuse is opposite the right angle.)"
+              ]
+            },
+            {
+              "function": "State reasoning used to generate solution",
+              "language_features": [
+                "Causal connectors to express reasoning (We took these steps to solve problems with the ratios because…)",
+                "Conditional conjunctions to propose future options (if/so, if/then) and generalized relationships (if/will, if we follow the order of operations, we will show that…)"
+              ]
+            }
+          ]
+        },
+        "Argue": {
+          "reference_code_interpretive": "ELD-MA 6-8 Argue Interpretive",
+          "reference_code_expressive": "ELD-MA 6-8 Argue Expressive",
+          "interpretive": {
+            "intro": "Interpret mathematics arguments by",
+            "language_expectations": [
+              "Comparing conjectures with previously established results",
+              "Distinguishing commonalities among strategies used",
+              "Evaluating relationships between evidence and mathematical facts to create generalizations"
+            ]
+          },
+          "expressive": {
+            "intro": "Construct mathematics arguments that",
+            "language_expectations": [
+              "Create conjecture, using definitions and previously established results",
+              "Generalize logic across cases",
+              "Justify conclusions with evidence and mathematical facts",
+              "Evaluate and critique others' arguments"
+            ]
+          },
+          "language_functions": [
+            {
+              "function": "Create conjecture, using definitions and previously established results",
+              "language_features": [
+                "Conditional conjunctions (if or when) to make and justify conjecture (If I add 4/5 and 3/4, the result will be less than 2 because each fraction is less than a whole number.)",
+                "Relating verbs (have, belong to, be) to define principles, operational theorems, and properties (for right angled triangles the Pythagorean formula is a² + b² = c²)",
+                "Adverbial phrases (qualities, quantities, frequencies) to add precision related to conjecture (For all integers, For every vote candidate A received, candidate B received three votes which means…)"
+              ]
+            },
+            {
+              "function": "Generalize logic across cases",
+              "language_features": [
+                "Declarative statements to present generalizable processes (The expression 4n-1 can be used to find any value in the pattern.)",
+                "Verbs to apply mathematical principles (commands) (use, do, apply, divide) across cases (Use the distributive property when there is no common factor.)"
+              ]
+            },
+            {
+              "function": "Justify conclusions with evidence and mathematical facts",
+              "language_features": [
+                "Conditional structures (if/then, when) to demonstrate conclusions (If it's a proportional relationship then the ratio between the 2 variables is always going to be the same thing.)",
+                "Technical nouns and noun groups to add precision and details (coordinate plane, one-variable equations, two- and three-dimensional shapes)",
+                "Models, drawings, graphs to demonstrate principles"
+              ]
+            },
+            {
+              "function": "Evaluate and critique others' arguments",
+              "language_features": [
+                "Questions (what, how, why, do), requests (could, would) to request information, clarification, procedure (Could you show me how you got that answer? Why did you do…instead of…?)",
+                "Causal connectors (so, because, therefore) to identify misconceptions (The pattern is multiplying by a factor of 2, so it can't be a linear function.)",
+                "Negation (don't, doesn't, can't) and obligation modal verbs (have to, must, should, could, might) to engage with others (I don't think you can apply that theorem, I think you have to use this....)"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "4": {
+      "standard_name": "Language for Science",
+      "has_language_features": true,
+      "note": "Narrate and Inform are not detailed for this standard at grades 6-8, per prominence distribution (Table 3-11).",
+      "key_language_uses": {
+        "Explain": {
+          "reference_code_interpretive": "ELD-SC 6-8 Explain Interpretive",
+          "reference_code_expressive": "ELD-SC 6-8 Explain Expressive",
+          "interpretive": {
+            "intro": "Interpret scientific explanations by",
+            "language_expectations": [
+              "Defining investigable questions or design problems based on observations, information, and/or data about a phenomenon",
+              "Determining central ideas in complex evidence and information to help explain how or why a phenomenon occurs",
+              "Evaluating scientific reasoning that shows why data or evidence adequately supports conclusions"
+            ]
+          },
+          "expressive": {
+            "intro": "Construct scientific explanations that",
+            "language_expectations": [
+              "Describe valid and reliable evidence from sources about a phenomenon",
+              "Establish neutral or objective stance in how results are communicated",
+              "Develop reasoning to show relationships among independent and dependent variables in models and simple systems",
+              "Summarize patterns in evidence, making trade-offs, revising, and retesting"
+            ]
+          },
+          "language_functions": [
+            {
+              "function": "Describe valid and reliable evidence from sources about a phenomenon",
+              "language_features": [
+                "Abstract nouns to introduce concepts, ideas, and technical terms (effects, predator-prey relationships, magnetic forces)",
+                "Cohesion to reference ideas, people across text (pronouns, substitutions, renaming, synonyms, collocations)",
+                "Relating verb groups to state relationships or attributes (have, be, belong to)",
+                "A variety of ways to define phenomenon (relative clauses, declarative statements)"
+              ]
+            },
+            {
+              "function": "Establish neutral or objective stance in how results are communicated",
+              "language_features": [
+                "Passive voice and declarative statements (Indonesia was formed by, tectonic plates have shifted for billions of years)",
+                "Word choices to moderate stance (hedging) (could/might, a possibility, usually)",
+                "Objective and evaluative language to adjust precision and establish shared interest"
+              ]
+            },
+            {
+              "function": "Develop reasoning to show relationships among independent and dependent variables in models and simple systems",
+              "language_features": [
+                "Connectors to link clauses and combine ideas into logical relationships (as a result, therefore) or order events",
+                "Variety of clause types to express causality (If magma is thick, gas bubbles cannot easily escape, building pressure as the magma rises.)",
+                "Given/new patterns to link relationships, add new details, and condense information into abstract nouns"
+              ]
+            },
+            {
+              "function": "Summarize patterns in evidence, making trade-offs, revising, and retesting",
+              "language_features": [
+                "Labeling/describing diagrams, graphics, data, statistics to add information about a phenomenon",
+                "Ask and answer questions to theorize, clarify, and make extrapolations about a phenomenon",
+                "Conditional clauses (if/then) to generalize a phenomenon to additional contexts"
+              ]
+            }
+          ]
+        },
+        "Argue": {
+          "reference_code_interpretive": "ELD-SC 6-8 Argue Interpretive",
+          "reference_code_expressive": "ELD-SC 6-8 Argue Expressive",
+          "interpretive": {
+            "intro": "Interpret scientific arguments by",
+            "language_expectations": [
+              "Identifying convincing evidence from data, models, and/or information from investigations of phenomena or design solutions",
+              "Comparing reasoning and claims based on evidence from two arguments on the same topic",
+              "Evaluating whether they emphasize similar or different evidence and/or interpretations of facts"
+            ]
+          },
+          "expressive": {
+            "intro": "Construct scientific arguments that",
+            "language_expectations": [
+              "Introduce and contextualize topic/phenomenon in issues related to the natural and designed world(s)",
+              "Support or refute a claim based on data and evidence",
+              "Establish and maintain a neutral or objective stance",
+              "Signal logical relationships among reasoning, evidence, data, and/or a model when making or defending a claim or counterclaim"
+            ]
+          },
+          "language_functions": [
+            {
+              "function": "Introduce and contextualize topic/phenomenon in issues related to the natural and designed world(s)",
+              "language_features": [
+                "A variety of ways to define phenomenon (relative clauses, declarative statements, relational verbs)",
+                "Abstract nouns to introduce concepts, ideas, and technical terms (molecules, atoms, reactions, energy, regrouping)",
+                "A variety of verb groups (past, timeless present, future, conditional) to describe events known or anticipated"
+              ]
+            },
+            {
+              "function": "Support or refute a claim based on data and evidence",
+              "language_features": [
+                "Expanded noun groups to classify and/or add details (energy releasing reactions, reconfigured molecular bonds)",
+                "Connectors to link clauses and establish logical relationships (as a result, therefore, to be more precise, instead, however, on the other hand)",
+                "Variety of clause types to express causality (If the total number in each type of atom is conserved, there is no change in the atom's mass.)",
+                "Diagrams, models, data, graphics to add support to claim or evidence"
+              ]
+            },
+            {
+              "function": "Establish and maintain a neutral or objective stance",
+              "language_features": [
+                "Passive voice and declarative statement to establish a factual stance (Some chemical reactions release energy, others store it.)",
+                "Word choices to moderate stance (hedging) (could/might, a possibility, usually, often)"
+              ]
+            },
+            {
+              "function": "Signal logical relationships among reasoning, evidence, data, and/or a model when making or defending a claim or counterclaim",
+              "language_features": [
+                "Given/new patterns to link relationships, add new details, and condense information into abstract nouns",
+                "Cohesion to reference ideas, concepts, phenomena across text (pronouns, substitutions, renaming subjects, collocations, synonyms)",
+                "Connectors to signal time (next, at the same time), causality (therefore, consequently, as a result, because), clarification (for example, this shows how…)"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "5": {
+      "standard_name": "Language for Social Studies",
+      "has_language_features": true,
+      "note": "Narrate and Inform are not detailed for this standard at grades 6-8, per prominence distribution (Table 3-11).",
+      "key_language_uses": {
+        "Explain": {
+          "reference_code_interpretive": "ELD-SS 6-8 Explain Interpretive",
+          "reference_code_expressive": "ELD-SS 6-8 Explain Expressive",
+          "interpretive": {
+            "intro": "Interpret social studies explanations by",
+            "language_expectations": [
+              "Determining multiple points of view in sources for answering compelling and supporting questions about phenomena or events",
+              "Analyzing sources for logical relationships among contributing factors or causes",
+              "Evaluating experts' points of agreement, along with strengths and weakness of explanations"
+            ]
+          },
+          "expressive": {
+            "intro": "Construct social studies explanations that",
+            "language_expectations": [
+              "Introduce and contextualize phenomena or events",
+              "Establish perspective for communicating outcomes, consequences, or documentation",
+              "Develop reasoning, sequences with linear and nonlinear relationships, evidence, and details, acknowledging strengths and weaknesses",
+              "Generalize multiple causes and effects of developments or events"
+            ]
+          },
+          "language_functions": [
+            {
+              "function": "Introduce and contextualize phenomena or events",
+              "language_features": [
+                "Prepositional phrases of time, place to contextualize phenomena or events (a place where tourists already come)",
+                "A variety of structures (embedded clauses, relating verbs, nominalizations, noun groups) to define phenomena or events",
+                "Cohesion to reference ideas, people across text (pronouns, substitutions, renaming, synonyms, collocations)"
+              ]
+            },
+            {
+              "function": "Establish perspective for communicating outcomes, consequences, or documentation",
+              "language_features": [
+                "Passive voice to emphasize main topic (British trade was disrupted by…)",
+                "Active verbs to highlight agents and recipients (The colonists disrupted British trade.)",
+                "Declarative statements to evaluate and interpret events (Feudalism was the ultimate system of control for medieval society.)",
+                "Verbs and adjectives to judge behavior or moral character (rallied, conquered, cruel, compassionate)"
+              ]
+            },
+            {
+              "function": "Develop reasoning, sequences with linear and nonlinear relationships, evidence, and details, acknowledging strengths and weaknesses",
+              "language_features": [
+                "Nominalizations to name abstract concepts, ideas, ideologies (colonization, feudalism)",
+                "Dependent clauses to express details as a result of place, manner, duration, extent",
+                "Complex sentences to clarify causal, linked, time-bound, or sequential relationships",
+                "Expanded noun groups to add details (living standards of 18th century people)",
+                "Connectors to maintain chronological, causal or logical relationships (as a result, meanwhile, later, in order to)"
+              ]
+            },
+            {
+              "function": "Generalize multiple causes and effects of events and developments",
+              "language_features": [
+                "Word choices to evaluate, judge, or appreciate significance of events or phenomena",
+                "Nominalizations to summarize events and name abstract phenomena"
+              ]
+            }
+          ]
+        },
+        "Argue": {
+          "reference_code_interpretive": "ELD-SS 6-8 Argue Interpretive",
+          "reference_code_expressive": "ELD-SS 6-8 Argue Expressive",
+          "interpretive": {
+            "intro": "Interpret social studies arguments by",
+            "language_expectations": [
+              "Identifying topic and purpose (argue in favor or against a position, present a balanced interpretation, challenge perspective)",
+              "Analyzing relevant information from multiple sources to support claims",
+              "Evaluating point of view and credibility of source based on relevance and intended use"
+            ]
+          },
+          "expressive": {
+            "intro": "Construct social studies arguments that",
+            "language_expectations": [
+              "Introduce and contextualize topic",
+              "Select relevant information to support claims with evidence gathered from multiple sources",
+              "Establish perspective",
+              "Show relationships between claims and counterclaims, differences in perspectives, and evidence and reasoning"
+            ]
+          },
+          "language_functions": [
+            {
+              "function": "Introduce and contextualize topic",
+              "language_features": [
+                "Generalized nouns and a descriptive title to introduce topic (empire, excavation, The Cradle of Modern Civilization)",
+                "A variety of verb tenses (past, timeless present, relational) to present position and/or provide background information",
+                "Expanded noun groups with embedded and relative clauses to add details (Mesopotamia, often referred to as the Cradle of Life, was located between the Tigris and Euphrates Rivers.)",
+                "Cohesion to reference ideas, people across text (pronouns, synonyms, substitutions, renaming, collocations)",
+                "Connectors to structure paragraphs (first, in the beginning, meanwhile, as a result, in conclusion)",
+                "Given/new patterns to link relationships, add new details, and condense information into abstract nouns"
+              ]
+            },
+            {
+              "function": "Select relevant information to support claims with evidence gathered from multiple sources",
+              "language_features": [
+                "A variety of clauses to frame details, examples, quotes, data (according to, historians dis/agree, several sources suggest, these data suggest)",
+                "Adverbial and prepositional phrases to specify time (duration, specific date or range), location, how or why something happened (during the late Neolithic period, the area between…)",
+                "A variety of verb forms to express agency in doing, thinking, saying, feeling actions (I contradicted him, we support, they challenged)"
+              ]
+            },
+            {
+              "function": "Establish perspective",
+              "language_features": [
+                "Passive voice to keep emphasis on main topic rather than who or what is doing the action (Soldiers were housed in primitive tents.) or to keep emphasis on who or what is doing the action",
+                "Objective or emotive language to appeal to logic or feelings (credited with inventing the wheel versus the greatest inventions of all times)",
+                "Evaluative verbs, adverbs, and adjectives to add author's perspective (dominated, absolutely, compelling)"
+              ]
+            },
+            {
+              "function": "Show relationships between claims and counterclaims, differences in perspectives, and evidence and reasoning",
+              "language_features": [
+                "Connectors to link claims with evidence and reasoning (because, but, as a result, when, if, although, therefore)",
+                "Connectors to signal alternate points of view (on the other hand, contrary to common belief, according to), show concession or comparison/contrast (while, although, instead, despite this, however)",
+                "Modality in summary statements to reiterate position, or create a call to action (could be argued, undoubtedly, ought to, may)"
+              ]
+            }
+          ]
+        }
+      }
+    }
+  }
+}

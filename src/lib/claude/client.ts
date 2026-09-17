@@ -6,6 +6,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { logger } from "../../config/logger";
 import { config } from "../../config/index";
+import { runClaudeJob } from "./queue";
 
 // ── Singleton client ──────────────────────────────────────────────────────────
 
@@ -116,6 +117,7 @@ export function sentenceCount(text: string): number {
 
 /**
  * Calls the Claude API with the given system and user prompts.
+ * Goes through the process-wide Claude queue (concurrency + retry).
  * Always parses the response as JSON.
  * Throws on API error or unparseable response — callers handle fallback.
  */
@@ -126,19 +128,16 @@ export async function callClaude(
 ): Promise<unknown> {
   const claude = getClient();
   try {
-    const response = await claude.messages.create({
-      model: config.anthropic.model,
-      max_tokens: maxTokens,
-      temperature: 0.7,
-      system: [
-        {
-          type: "text",
-          text: systemPrompt,
-          cache_control: { type: "ephemeral" },
-        },
-      ],
-      messages: [{ role: "user", content: userPrompt }],
-    });
+    const response = await runClaudeJob("messages.json", () =>
+      claude.messages.create({
+        model: config.anthropic.model,
+        max_tokens: maxTokens,
+        temperature: 0.7,
+        // Plain string: some live proxies reject cache_control on short L1–2 prompts.
+        system: systemPrompt,
+        messages: [{ role: "user", content: userPrompt }],
+      }),
+    );
 
     const text = response.content[0].type === "text" ? response.content[0].text : "";
 
@@ -179,3 +178,4 @@ export async function callClaude(
     throw err;
   }
 }
+

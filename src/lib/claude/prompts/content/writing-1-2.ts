@@ -1,25 +1,19 @@
-/** Writing levels 1–2: frame + word bank; photo only when the content guide requires it. */
-
-import { ONE_PHOTO_L12 } from "./one-photo-l12";
+/** Writing levels 1–2: academic WIDA expressive tasks; text-only (no library photos). */
 
 export const WRITING_CONTENT_1_2 = `
-DOMAIN: WRITING  |  BAND: 1–2  |  student WRITES using a frame and word bank
+DOMAIN: WRITING  |  BAND: 1–2  |  Grade 6–8 ELL  |  ACCESS-style PRACTICE  |  ACADEMIC WIDA
 
-${ONE_PHOTO_L12}
+There is NO library photo. Write from the session topic and academic_subject only.
+Do NOT say look, picture, photo, or "what do you see".
 
-Prompt: one clear writing task. NEVER mention the word bank or sentence frame inside the prompt.
+BUILD ORDER
+1. Apply the six 2020 framework parts. The job is language_functions + key_language_use. English hardness is pld.level.
+2. Write one open writing prompt on THIS topic in the academic subject world.
+   • pld.level 1: a few simple sentences about this topic is enough.
+   • pld.level 2: connected sentences with linking words that carry out the functions (how/why or claim+reason).
+3. Default: word_bank and sentence_frame are null. Add them only if this pld cannot be practiced without that help.
+4. Prompt must NEVER say word bank, sentence frame, "use the bank," or "start here."
+5. Self-check: Level 2 prompt that only asks to name objects → START OVER.
 
-LEVEL 1
-Narrate → student writes labels for what is in the photo (amounts, more/less, names of tags). Picture required. Word bank from image_tags.
-Inform → copy/reproduce topic words (cognates OK). Picture not required. Word bank of topic words.
-Explain → label parts/jobs of objects in the photo, or compare two image_tags (this is bigger / this is for ___). Picture required. Word bank from tags.
-Argue → I think ___ plus two printed choices. Picture not required.
-
-LEVEL 2
-Narrate / Inform → complete sentences with a word bank (First… Then… or a fact sentence). Picture not required. Word bank of topic words; if a photo is present, include visible tags.
-Explain → join short sentences (because/so) AND compare two illustrated ideas using two image_tags in THIS photo. Picture required. Word bank includes those two tags.
-Argue → I agree/disagree because… Picture not required.
-
-If has_library_image: write about visible tags only. Do not invent objects.
-Follow OUTPUT SCHEMA. Frame is a starter, not fill-in-the-blank. echo min_sentences.
+Return ONLY the JSON in OUTPUT SCHEMA.
 `.trim();

@@ -19,8 +19,10 @@ import { resolvePictureListeningQuestion } from "./image-library";
 import { buildSystemPrompt } from "./prompts/compose";
 import { contentGenPrompt } from "./prompts/content";
 import { clampToThreeOptions } from "../choice-options";
-import { serializeCanDoForPrompt } from "../listeningContentEngine";
-import { kluSubjectPairingLine } from "../academicSubjectContent";
+import { serializeCanDoForPrompt } from "../content";
+import { dumpContentGenRequest } from "./dump-content-gen";
+import { kluSubjectPairingLine } from "../academic";
+import { mergePriorPractice, type PracticeReport } from "../practice-report";
 
 // ── Subject guidelines (academic framing per subject) ─────────────────────────
 
@@ -113,6 +115,7 @@ export async function generateAcademicImageTapContent(params: {
   avoidTargets?:         string[];
   /** Random seed to force variation in Claude's output. */
   variationSeed?:        number;
+  priorPracticeReport?:  PracticeReport | null;
 }): Promise<ImagePassageContent> {
   const base = PASSAGE_SENTENCE_TARGETS[params.level] ?? PASSAGE_SENTENCE_TARGETS[2];
 
@@ -135,7 +138,7 @@ export async function generateAcademicImageTapContent(params: {
       ? `${base} The passage MUST name BOTH the agreed object (Q1) AND the absent object (Q2 — plausible but not in image_tags).`
       : base;
 
-  const prompt = JSON.stringify({
+  const prompt = JSON.stringify(mergePriorPractice({
     required_key_use:       ku,
     integer_level:          params.level,
     current_score:          params.fractionalLevel,
@@ -158,7 +161,7 @@ export async function generateAcademicImageTapContent(params: {
     ...(params.avoidTargets?.length ? { avoid_targets: params.avoidTargets } : {}),
     // Variation seed — forces different object/wording choices each call.
     variation_seed: params.variationSeed ?? Math.floor(Math.random() * 10000),
-  });
+  }, params.priorPracticeReport));
 
   const systemPrompt = academicTapSystem(
     params.academicSubject,
@@ -166,6 +169,7 @@ export async function generateAcademicImageTapContent(params: {
     params.subjectLabel,
   );
 
+  dumpContentGenRequest("academic-image-tap", systemPrompt, prompt);
   try {
     const result = (await callClaude(systemPrompt, prompt, 2000)) as Record<string, unknown>;
     const questions = (result.questions as Array<Record<string, unknown>>) ?? [];

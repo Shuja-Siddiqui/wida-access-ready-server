@@ -1,15 +1,16 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import express from "express";
 import { z } from "zod";
-import { sendError, sendSuccess } from "../../lib/api-response";
+import { sendError, sendSuccess } from "../../lib/http/api-response";
 import {
   textToSpeech,
   speechToText,
   isAzureSpeechConfigured,
   AzureSpeechNotConfiguredError,
   AzureSpeechRequestError,
-} from "../../lib/azureSpeech";
+} from "../../lib/speech/azureSpeech";
 import { requireAuth } from "../../middlewares/auth";
+import { rateLimitStudentAi } from "../../middlewares/rate-limit";
 
 const router: IRouter = Router();
 
@@ -41,7 +42,7 @@ router.get("/speech/status", (_req: Request, res: Response) => {
  * Body: { text: string, voice?: string }
  * Response: audio/mpeg bytes (Azure neural TTS).
  */
-router.post("/speech/text-to-speech", async (req: Request, res: Response) => {
+router.post("/speech/text-to-speech", rateLimitStudentAi(), async (req: Request, res: Response) => {
   const parsed = TextToSpeechBody.safeParse(req.body);
   if (!parsed.success) {
     sendError(res, 400, "Missing or invalid required fields");
@@ -81,6 +82,7 @@ router.post("/speech/text-to-speech", async (req: Request, res: Response) => {
  */
 router.post(
   "/speech/speech-to-text",
+  rateLimitStudentAi(),
   express.raw({ type: () => true, limit: MAX_AUDIO_BYTES }),
   async (req: Request, res: Response) => {
     const contentType = req.headers["content-type"];
