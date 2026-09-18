@@ -109,7 +109,12 @@ export function selectMathScenario(
     );
     const pool = available.length > 0 ? available : units;
     chosenUnit = pool[Math.floor(Math.random() * pool.length)];
-    chosenScenario = chosenUnit.scenarios[Math.floor(Math.random() * chosenUnit.scenarios.length)];
+    const scenarioPool = chosenUnit.scenarios.filter(
+      (s) => !usedLower.some((used) => used.includes(s.slice(0, 40).toLowerCase())),
+    );
+    chosenScenario = (scenarioPool.length > 0 ? scenarioPool : chosenUnit.scenarios)[
+      Math.floor(Math.random() * (scenarioPool.length > 0 ? scenarioPool.length : chosenUnit.scenarios.length))
+    ];
   }
 
   const topicLabel = `Mathematics — Grade ${chosenUnit.grade}: ${chosenUnit.unit}`;

@@ -23,7 +23,11 @@ import {
   clampLevel,
   KEY_USE_ROTATION,
   normalizeRotationKeyUse,
-  ACADEMIC_SUBJECTS,
+  ACADEMIC_SUBJECT_ROTATION,
+  lastKeyUseForSubject,
+  nextAcademicSubject,
+  nextKeyUseForSubject,
+  subjectKluCycleComplete,
   type AcademicSubject,
   type AcademicSessionRef,
   type KeyUse,
@@ -36,24 +40,16 @@ export interface WritingContext {
   elpLevel: number;
   /** The student's exact fractional score (e.g. 2.4) */
   fractionalLevel: number;
-  /** 0 = just entered (max scaffolding), 4 = about to graduate (min scaffolding) */
+  /** 0 = Entry … 4 = Advanced within this integer level */
   stepWithinLevel: number;
   /** Human-readable step label: "Entry" | "Early" | "Mid" | "Late" | "Advanced" */
   stepLabel: string;
   /** Exact difficulty instruction derived from sub-step — primary calibration signal */
   complexityInstruction: string;
-  /** Writing genre and length description for this level */
-  writingFormat: string;
-  /** Minimum sentences expected in the student's response */
-  minSentences: number;
-  /** Whether a sentence frame should be provided */
-  sentenceFrameRequired: boolean;
-  /** Whether a word bank should be included (levels 1–3) */
-  wordBankRequired: boolean;
-  /**
-   * Writing task size by key use + level (ACCESS practice packaging, not 2016 Can-Dos).
-   */
+  /** Fallback task size label — not sent to the content generator. */
   taskType: string;
+  /** Fallback min sentences — not sent to the content generator. */
+  minSentences: number;
   keyUse: string;
   /** 2020 Standard × KLU × expressive functions + this-level PLDs. */
   framework: FrameworkTask;
@@ -122,17 +118,7 @@ export const WRITING_TASK_TYPE: Record<string, Record<number, string>> = {
   },
 };
 
-/** What the student should be able to write at this level — not a required item format. */
-const WRITING_FORMAT: Record<number, string> = {
-  1: "end-of-level-1 writing: a short series of topic-related sentences; simple connecting words; everyday plus a few content words",
-  2: "end-of-level-2 writing: a short connected text; more linking words; a bit more detail in noun groups",
-  3: "end-of-level-3 writing: organized short text (beginning–middle–end); more joining and more packed noun groups",
-  4: "end-of-level-4 writing: genre-shaped organization; ideas linked through a longer text",
-  5: "end-of-level-5 writing: claim/evidence or similar genre pattern; denser, more precise language",
-  6: "level-6 writing: discipline-like organization; varied links between ideas; precise and compact language",
-};
-
-/** Suggested length floor. The model may raise this if the pld needs more connected text. */
+/** Fallback length floor when the model omits min_sentences — not sent to Claude. */
 const WRITING_MIN_SENTENCES: Record<number, number> = {
   1: 1,
   2: 2,
@@ -140,31 +126,6 @@ const WRITING_MIN_SENTENCES: Record<number, number> = {
   4: 6,
   5: 8,
   6: 12,
-};
-
-/** Whether a sentence frame is appropriate at each level */
-const SENTENCE_FRAME_REQUIRED: Record<number, boolean> = {
-  1: true,
-  2: true,
-  3: true,
-  4: false,
-  5: false,
-  6: false,
-};
-
-/**
- * Whether a word bank is required at each level.
- * Levels 1–2: full word bank (students need content words to produce anything).
- * Level 3: partial word bank (key Tier-2 vocabulary only).
- * Levels 4–6: no word bank; students generate their own language.
- */
-const WORD_BANK_REQUIRED: Record<number, boolean> = {
-  1: true,
-  2: true,
-  3: true,
-  4: false,
-  5: false,
-  6: false,
 };
 
 // ── Sub-step helpers (same logic as listeningContentEngine.ts — keep in sync) ──
@@ -182,11 +143,11 @@ function subStep(fractional: number): number {
 }
 
 const COMPLEXITY_INSTRUCTIONS: Record<number, (level: number) => string> = {
-  0: (l) => `ENTRY of Level ${l}: English at the floor of this level. Simple words and short sentences. Aim so the student can reach the end-of-level writing in framework.pld. Do not add a word bank or sentence frame unless this pld cannot be practiced without them.`,
-  1: (l) => `EARLY Level ${l}: Still this level's English, a little more variety. Aim at framework.pld. Default: no word bank, no sentence frame.`,
-  2: (l) => `MID Level ${l}: Typical English for this level. Aim at framework.pld. Default: no word bank, no sentence frame.`,
-  3: (l) => `LATE Level ${l}: Toward the ceiling of this level. Denser sentences and more precise words, still matching framework.pld — not the next level. Default: no word bank, no sentence frame.`,
-  4: (l) => `ADVANCED Level ${l}: At the end-of-level writing in framework.pld. Ready to leave this level. Default: no word bank, no sentence frame. Do not write English from level ${l + 1}.`,
+  0: (l) => `ENTRY of Level ${l}: English at the floor of this level. Simple words and short sentences. Aim at framework.pld.`,
+  1: (l) => `EARLY Level ${l}: Still this level's English, a little more variety. Aim at framework.pld.`,
+  2: (l) => `MID Level ${l}: Typical English for this level. Aim at framework.pld.`,
+  3: (l) => `LATE Level ${l}: Toward the ceiling of this level. Denser sentences and more precise words, still matching framework.pld — not the next level.`,
+  4: (l) => `ADVANCED Level ${l}: At the end-of-level writing in framework.pld. Ready to leave this level. Do not write English from level ${l + 1}.`,
 };
 
 /** Table 3-11 6–8: Science/Math/SS = Explain+Argue only. ELA = Narrate+Inform+Argue. */
@@ -206,81 +167,39 @@ function nextWritingKeyUse(
   return pool[(pool.indexOf(last) + 1) % pool.length];
 }
 
-/** Math → Science → Social Studies → ELA — each subject uses its own WIDA KLU pool. */
-export const WRITING_ACADEMIC_SUBJECT_ROTATION: readonly AcademicSubject[] = ACADEMIC_SUBJECTS;
+/** Same order as ACADEMIC_SUBJECT_ROTATION (ELA → Math → Science → Social Studies). */
+export const WRITING_ACADEMIC_SUBJECT_ROTATION: readonly AcademicSubject[] = ACADEMIC_SUBJECT_ROTATION;
 
-function asWritingSubject(value: string | null | undefined): AcademicSubject | null {
-  return ACADEMIC_SUBJECTS.includes(value as AcademicSubject) ? (value as AcademicSubject) : null;
-}
+const writingKluPool = (subject: AcademicSubject) => expressiveKeyUsesForWritingSubject(subject);
 
 /** Last key use for this subject only — not the previous session's subject. */
-export function lastWritingKeyUseForSubject(
-  recent: AcademicSessionRef[],
-  subject: AcademicSubject,
-): string | null {
-  for (const row of recent) {
-    if (asWritingSubject(row.subject) === subject && row.keyUse) return row.keyUse;
-  }
-  return null;
-}
+export const lastWritingKeyUseForSubject = lastKeyUseForSubject;
 
-/** True when every KLU in this subject's pool has been used (last session for subject was final KLU). */
+/** True when every KLU in this subject's pool has been used. */
 export function writingSubjectKluCycleComplete(
   subject: AcademicSubject,
-  lastKeyUseForSubject: string | null,
+  lastKeyUseForSubjectValue: string | null,
 ): boolean {
-  const pool = expressiveKeyUsesForWritingSubject(subject);
-  if (pool.length === 0) return true;
-  const last = normalizeRotationKeyUse(lastKeyUseForSubject);
-  if (!last || !pool.includes(last)) return false;
-  return pool[pool.length - 1] === last;
+  return subjectKluCycleComplete(writingKluPool(subject), lastKeyUseForSubjectValue);
 }
 
-/**
- * Rotate academic subjects for writing. Stay on a subject until its KLU pool is exhausted,
- * then advance to the next subject in WRITING_ACADEMIC_SUBJECT_ROTATION.
- */
+/** Subject-first rotation for writing (expressive KLU pool per subject). */
 export function nextWritingAcademicSubject(
   recent: AcademicSessionRef[],
   isRetry: boolean,
   lastSessionSubject: AcademicSubject | null,
 ): AcademicSubject {
-  const rotation = WRITING_ACADEMIC_SUBJECT_ROTATION.filter(
-    (s) => expressiveKeyUsesForWritingSubject(s).length > 0,
-  );
-  const fallback = rotation[0] ?? "science";
-
-  if (isRetry && lastSessionSubject) return lastSessionSubject;
-
-  if (lastSessionSubject) {
-    const subjectLastKu = lastWritingKeyUseForSubject(recent, lastSessionSubject);
-    if (!writingSubjectKluCycleComplete(lastSessionSubject, subjectLastKu)) {
-      return lastSessionSubject;
-    }
-    const idx = rotation.indexOf(lastSessionSubject);
-    if (idx >= 0) return rotation[(idx + 1) % rotation.length];
-  }
-
-  return fallback;
+  return nextAcademicSubject(recent, isRetry, lastSessionSubject, writingKluPool);
 }
 
-/** Next KLU for this subject — uses that subject's history, not the previous subject's last KLU. */
+/** Next KLU for this subject — uses that subject's history. */
 export function nextWritingKeyUseForSubject(
   recent: AcademicSessionRef[],
   subject: AcademicSubject,
   isRetry: boolean,
   retryKeyUse: string | null = null,
 ): KeyUse {
-  const pool = expressiveKeyUsesForWritingSubject(subject);
-  if (pool.length === 0) return "Inform";
-
-  if (isRetry && retryKeyUse) {
-    const retry = normalizeRotationKeyUse(retryKeyUse);
-    if (retry && pool.includes(retry)) return retry;
-  }
-
-  const subjectLast = lastWritingKeyUseForSubject(recent, subject);
-  return nextWritingKeyUse(subjectLast, false, subject);
+  return nextKeyUseForSubject(recent, subject, isRetry, retryKeyUse, writingKluPool);
 }
 
 // ── Curriculum helpers ────────────────────────────────────────────────────────
@@ -354,10 +273,7 @@ export function buildWritingContext(
     stepWithinLevel:       step,
     stepLabel:             STEP_LABELS[step],
     complexityInstruction: (COMPLEXITY_INSTRUCTIONS[step] ?? COMPLEXITY_INSTRUCTIONS[2])(elpLevel),
-    writingFormat:         WRITING_FORMAT[elpLevel]         ?? "",
     minSentences:          WRITING_MIN_SENTENCES[elpLevel]  ?? 3,
-    sentenceFrameRequired: SENTENCE_FRAME_REQUIRED[elpLevel] ?? false,
-    wordBankRequired:      WORD_BANK_REQUIRED[elpLevel]                     ?? false,
     taskType:              WRITING_TASK_TYPE[keyUse]?.[elpLevel]             ?? "paragraph",
     keyUse,
     framework:             selectFrameworkTask({

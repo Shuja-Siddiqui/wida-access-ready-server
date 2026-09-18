@@ -6,7 +6,8 @@
 
 import { callClaude, toDisplayText } from "./client";
 import { rethrowIfClaudeCapacity } from "./queue";
-import { parseVisual } from "./prompts/optional-line-visuals";
+import { OPTIONAL_LINE_VISUALS_BLOCK, parseVisual } from "./prompts/optional-line-visuals";
+import { getWritingPortrayalForPrompt } from "../content";
 import { buildSystemPrompt } from "./prompts/compose";
 import { contentGenPrompt } from "./prompts/content";
 import { feedbackCoachPrompt } from "./prompts/wida-feedback-guide";
@@ -38,10 +39,10 @@ import {
  */
 function buildWritingOutputSchema(params: {
   level: number;
-  minSentences: number;
   keyUse: string;
+  hasLibraryImage?: boolean;
 }): string {
-  const { level, minSentences } = params;
+  const { level, hasLibraryImage } = params;
 
   return [
     `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
@@ -54,26 +55,31 @@ function buildWritingOutputSchema(params: {
     `  "task_type": "<short name for this writing job>",`,
     `  /* Primary key_use: ${params.keyUse} */`,
     ``,
-    `  "prompt": "<one academic writing job on THIS topic — never say look/see/photo>",`,
+    hasLibraryImage
+      ? `  "prompt": "<one writing job about the library photo — use image_tags; student can see the photo>",`
+      : `  "prompt": "<one academic writing job on THIS topic — do not say look/see/photo>",`,
     `  /* Level ${level}: follow pld.level. Level 2 must not copy a level-1 name-objects pattern. */`,
     `  /* If language_functions need two short sources, put two Grade 6–8 blurbs IN this prompt. Otherwise do not add sources. */`,
     `  /* Do NOT mention the word bank or sentence frame inside the prompt */`,
     `  "visual": null,`,
     ``,
-    `  "word_bank": null,`,
-    `  /* Default null. Only replace with a short word list if this student cannot reach the pld without it. Do not add a bank because the field exists. */`,
-    ``,
-    `  "sentence_frame": null,`,
-    `  /* Default null. Only replace with a starter if needed. Do not invent fill-in-the-blank because this field exists. */`,
-    ``,
-    `  "min_sentences": <number>`,
-    `  /* Suggested floor from our app: ${minSentences}. Raise it if the pld needs more connected text. Do not shrink below what the pld needs. */`,
+    hasLibraryImage
+      ? `  "word_bank": null,  /* MUST stay null — photo is on screen */`
+      : `  "word_bank": null,`,
+    hasLibraryImage
+      ? `  "sentence_frame": null,  /* MUST stay null — photo is on screen */`
+      : `  "sentence_frame": null,`,
+    `  "min_sentences": <number>,`,
     `}`,
     ``,
     `SCHEMA ENFORCEMENT RULES`,
-    `• Return task_descriptor, task_type, prompt, visual, word_bank, sentence_frame, min_sentences. word_bank and sentence_frame should be null unless you have a reason they are needed.`,
-    `• Do not add a word bank or fill-in-the-blank just because those keys exist. Prefer an open writing prompt that matches the pld (simple sentences the student writes).`,
-    `• Academic text-only. Do NOT say look, picture, photo, "what do you see", or "places you see". Write from the topic and academic_subject only.`,
+    `• Return task_descriptor, task_type, prompt, visual, word_bank, sentence_frame, min_sentences.`,
+    hasLibraryImage
+      ? `• has_library_image true → word_bank and sentence_frame MUST be null. Write one open prompt only; the photo is the visual.`
+      : `• You choose whether word_bank, sentence_frame, and visual are null or filled — match framework.pld.`,
+    hasLibraryImage
+      ? `• Refer to visible parts by name (from image_tags). Do not say "look at the picture" or "look at the diagram".`
+      : `• No library photo. Do NOT say look, picture, photo, "what do you see", or "places you see". Write from the topic and academic_subject only.`,
     ...(level >= 2
       ? [`• ALIGN: prompt assesses language_functions for key_use ${params.keyUse}. Follow pld.level ${level}. Do not add printed sources unless the functions require them.`]
       : []),
@@ -145,31 +151,46 @@ export async function generateWritingContent(params: {
   fractionalLevel: number;
   stepWithinLevel: number;
   complexityInstruction: string;
-  writingFormat: string;
-  taskType: string;
-  minSentences: number;
-  sentenceFrameRequired: boolean;
-  wordBankRequired: boolean;
+  /** Fallback only — not sent to Claude. */
+  taskType?: string;
+  /** Fallback only — not sent to Claude. */
+  minSentences?: number;
   framework: FrameworkTask;
   topic: string;
   gradeBand: string;
   mode: "standard" | "exit_proximity";
   academicContentLayer?: string;
   academicSubject: string;
+  /** Real-world scenario from the academic curriculum (math/science/etc.). */
+  academicUnit?: string;
+  academicScenario?: string;
+  tier3Vocabulary?: string[];
+  hasLibraryImage?: boolean;
+  imageTags?: string[];
+  imageDescription?: string;
+  imageConcept?: string;
   priorPracticeReport?: PracticeReport | null;
 }): Promise<WritingContent> {
   const keyUse = params.framework.key_language_use;
+  const hasLibraryImage = params.hasLibraryImage ?? false;
   const schemaSection = buildWritingOutputSchema({
-    level:        params.level,
-    minSentences: params.minSentences,
+    level: params.level,
     keyUse,
+    hasLibraryImage,
   });
   const systemPrompt = buildSystemPrompt(
     contentGenPrompt("writing", params.level, "2020"),
+    params.level <= 2 ? OPTIONAL_LINE_VISUALS_BLOCK : "",
     formatExpressivePldBlock(params.framework.pld),
     params.academicContentLayer ?? "",
     schemaSection,
   );
+
+  const contentPortrayal = getWritingPortrayalForPrompt(params.level, keyUse, hasLibraryImage);
+  const topicForPrompt = hasLibraryImage
+    ? (params.imageConcept?.trim() || params.imageDescription?.trim().slice(0, 160) || params.topic)
+    : params.topic;
+  const stripPhotoScaffold = hasLibraryImage && params.level <= 2;
 
   const userPrompt = JSON.stringify(mergePriorPractice({
     domain:                  "writing",
@@ -179,17 +200,30 @@ export async function generateWritingContent(params: {
     step_within_level:       params.stepWithinLevel,
     grade_band:              params.gradeBand,
     mode:                    params.mode,
-    topic:                   params.topic,
+    topic:                   topicForPrompt,
+    curriculum_topic:        params.topic,
     framework:               serializeFrameworkTask(params.framework),
-    goal:                    "Create one writing task this student can do so they become able to produce the writing in framework.pld (end of this integer level). Default: no word bank and no fill-in-the-blank.",
+    content_portrayal:       contentPortrayal,
+    goal:                    "Create one writing task this student can do so they become able to produce the writing in framework.pld (end of this integer level).",
     complexity_instruction:  params.complexityInstruction,
-    size_hint: {
-      writing_format: params.writingFormat,
-      min_sentences:  params.minSentences,
-    },
     required_key_use:        keyUse,
-    has_library_image:       false,
+    has_library_image:       hasLibraryImage,
+    image_tags:              params.imageTags ?? [],
+    image_description:       params.imageDescription ?? null,
+    image_concept:           params.imageConcept ?? null,
     academic_subject:        params.academicSubject,
+    academic_unit:           params.academicUnit ?? null,
+    academic_scenario:       params.academicScenario ?? null,
+    ...(stripPhotoScaffold
+      ? {
+          academic_language_note:
+            "Use grade-appropriate terms inside the prompt text if needed. Do not output tier3 words as word_bank.",
+        }
+      : { tier3_vocabulary: params.tier3Vocabulary ?? [] }),
+    scenario_instruction:
+      params.academicScenario && !hasLibraryImage
+        ? "Build the student prompt from academic_scenario. Use different numbers, names, or details than any prior session — do not reuse the same triangle side lengths or identical word problem."
+        : null,
   }, params.priorPracticeReport));
 
   dumpContentGenRequest("writing", systemPrompt, userPrompt);
@@ -204,13 +238,26 @@ export async function generateWritingContent(params: {
       min_sentences: number;
     };
     const promptRaw = tidyWritingPrompt(toDisplayText(result.prompt));
+    const rawWordBank = mergeWritingWordBank(result.word_bank);
+    const rawFrame = normalizeWritingSentenceFrame(promptRaw, result.sentence_frame);
+    if (stripPhotoScaffold && (rawWordBank?.length || rawFrame)) {
+      logger.info(
+        {
+          stage: "writing-content scaffold stripped",
+          hadWordBank: Boolean(rawWordBank?.length),
+          hadFrame: Boolean(rawFrame),
+        },
+        "L1–2 library-photo writing: removed word_bank/sentence_frame from response",
+      );
+    }
     logger.info(
       {
         stage:           "writing-content ← Claude",
         topic:           params.topic,
         academicSubject: params.academicSubject,
         prompt:          promptRaw.slice(0, 240),
-        wordBank:        result.word_bank,
+        wordBank:        stripPhotoScaffold ? null : rawWordBank,
+        hasLibraryImage,
       },
       "writing content generated",
     );
@@ -218,12 +265,12 @@ export async function generateWritingContent(params: {
     return {
       canDoDescriptor: result.task_descriptor ?? result.can_do_descriptor
         ?? params.framework.language_functions.map((f) => f.function).join("; "),
-      taskType:        result.task_type ?? params.taskType,
+      taskType:        result.task_type ?? params.taskType ?? "paragraph",
       prompt:          promptRaw,
       visual:          parseVisual((result as { visual?: unknown }).visual),
-      wordBank:        mergeWritingWordBank(result.word_bank),
-      sentenceFrame:   normalizeWritingSentenceFrame(promptRaw, result.sentence_frame),
-      minSentences:    Number.isFinite(modelMin) && modelMin > 0 ? modelMin : params.minSentences,
+      wordBank:        stripPhotoScaffold ? null : rawWordBank,
+      sentenceFrame:   stripPhotoScaffold ? null : rawFrame,
+      minSentences:    Number.isFinite(modelMin) && modelMin > 0 ? modelMin : (params.minSentences ?? 1),
     };
   } catch (err) {
     logger.error({ err }, "generateWritingContent failed, using fallback");
@@ -231,11 +278,11 @@ export async function generateWritingContent(params: {
       ...FALLBACK_WRITING,
       canDoDescriptor: params.framework.language_functions.map((f) => f.function).join("; ")
         || FALLBACK_WRITING.canDoDescriptor,
-      taskType: params.taskType,
+      taskType: params.taskType ?? FALLBACK_WRITING.taskType,
       prompt: FALLBACK_WRITING.prompt,
       wordBank: null,
       sentenceFrame: null,
-      minSentences: params.minSentences,
+      minSentences: params.minSentences ?? FALLBACK_WRITING.minSentences,
     };
   }
 }

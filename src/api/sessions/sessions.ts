@@ -25,6 +25,10 @@ import {
   nextWritingAcademicSubject,
   nextWritingKeyUseForSubject,
   lastWritingKeyUseForSubject,
+  nextAcademicSubject,
+  nextKeyUseForSubject,
+  KEY_USE_ROTATION,
+  asAcademicSubject,
   getContentPortrayal,
 } from "../../lib/content";
 import {
@@ -468,11 +472,8 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
   // tier   = the curriculum track (general/academic).
   // Both are independent axes stored in separate columns — no composite strings.
   const domain = parsed.data.domain as Domain;
-  const tier   = parsed.data.tier as Tier;
-  if (domain === "writing" && tier !== "academic") {
-    sendError(res, 400, 'Writing practice uses the academic WIDA track only (tier: "academic").');
-    return;
-  }
+  // Writing is always academic WIDA — coerce legacy clients that omit tier or send "general".
+  const tier: Tier = domain === "writing" ? "academic" : (parsed.data.tier as Tier);
   const configDomain = domain; // domain is always a core Domain — no mapping needed
   const config = getAssessmentConfig(assessment);
 
@@ -499,6 +500,7 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
   // We also fetch `subject` so academic sessions can de-dup per-subject
   // (prevents a science topic from incorrectly blocking a math unit).
   const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  // Include incomplete sessions so abandoned/failed completes still dedupe prompts.
   const recentTopicRows = await db
     .select({ topic: sessionsTable.topic, subject: sessionsTable.subject })
     .from(sessionsTable)
@@ -507,7 +509,6 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
         eq(sessionsTable.studentId, student.id),
         eq(sessionsTable.domain, domain),
         eq(sessionsTable.tier, tier),
-        eq(sessionsTable.completed, true),
         sql`${sessionsTable.createdAt} >= ${yesterday}`,
       )
     );
@@ -1297,7 +1298,7 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
   // ── Non-listening domains ─────────────────────────────────────────────────
   // Fetch the last completed session for this domain/tier to drive key-use
   // rotation and topic persistence (reuse topic if last session score < 70).
-  const recentDomainSessions = await db
+  const recentCompletedDomainSessions = await db
     .select({
       topic:          sessionsTable.topic,
       scorePct:       sessionsTable.scorePct,
@@ -1315,7 +1316,24 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
     .orderBy(desc(sessionsTable.createdAt))
     .limit(16);
 
-  const lastDomainSession = recentDomainSessions[0];
+  // Include recent incomplete attempts so subject/KLU rotation history is accurate.
+  const recentDomainSessions = await db
+    .select({
+      topic:    sessionsTable.topic,
+      scorePct: sessionsTable.scorePct,
+      keyUse:   sessionsTable.keyUse,
+      subject:  sessionsTable.subject,
+    })
+    .from(sessionsTable)
+    .where(and(
+      eq(sessionsTable.studentId, student.id),
+      eq(sessionsTable.domain, domain),
+      eq(sessionsTable.tier, tier),
+    ))
+    .orderBy(desc(sessionsTable.createdAt))
+    .limit(16);
+
+  const lastDomainSession = recentCompletedDomainSessions[0];
   const domainPriorPracticeReport = parsePracticeReport(lastDomainSession?.practiceReport);
 
   const lastDomainScore    = lastDomainSession?.scorePct ?? 100;
@@ -1355,10 +1373,16 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
       ? (lastDomainSession?.subject as "math" | "science" | "social_studies" | "ela")
       : null;
   let academicSubject: "math" | "science" | "social_studies" | "ela" | null = null;
+  const lastAcademicSubject = asAcademicSubject(lastDomainSession?.subject);
   if (academicDomain === "writing") {
     academicSubject = nextWritingAcademicSubject(recentDomainSessions, academicIsRetry, lastWritingSubject);
   } else if (academicDomain) {
-    academicSubject = pickSubjectForKeyUse(nextKeyUse(lastDomainKeyUse, academicIsRetry), recentDomainSessions, academicIsRetry);
+    academicSubject = nextAcademicSubject(
+      recentDomainSessions,
+      academicIsRetry,
+      lastAcademicSubject,
+      () => KEY_USE_ROTATION,
+    );
   }
   const academicKeyUse = academicDomain === "writing" && academicSubject
     ? nextWritingKeyUseForSubject(
@@ -1367,11 +1391,22 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
         academicIsRetry,
         lastDomainKeyUse,
       )
-    : academicDomain
-    ? nextKeyUse(lastDomainKeyUse, academicIsRetry)
+    : academicDomain && academicSubject
+    ? nextKeyUseForSubject(
+        recentDomainSessions,
+        academicSubject,
+        academicIsRetry,
+        lastDomainKeyUse,
+        () => KEY_USE_ROTATION,
+      )
     : null;
   const academicTopic = academicSubject
-    ? pickAcademicTopicLabel(academicSubject, currentLevel, domainPersistedTopic, topicsUsedToday)
+    ? pickAcademicTopicLabel(
+        academicSubject,
+        currentLevel,
+        domainPersistedTopic,
+        topicsUsedBySubject[academicSubject] ?? topicsUsedToday,
+      )
     : null;
   const academicLayer = academicSubject && academicDomain
     ? buildAcademicContentLayer({
@@ -1430,7 +1465,7 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
   const skipLibraryPhoto = elpFloor <= 2 && pictureUse === "not_needed";
   const requireLibraryPhoto = elpFloor <= 2 && pictureUse === "required";
   try {
-    if (domain !== "writing" && !skipLibraryPhoto) {
+    if (!skipLibraryPhoto) {
     const terms = preferredTopic ? topicSearchTerms(preferredTopic) : [];
     const metaMatch = terms.length
       ? or(
@@ -1551,6 +1586,7 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
           topicsUsedToday,
           domainPersistedTopic,
           lastDomainKeyUse,
+          academicKeyUse,
         );
         sessionTopic  = preferredTopic ?? academicTopic ?? readingCtx.selectedTopic;
         sessionKeyUse = readingCtx.canDo.keyUse;
@@ -1587,6 +1623,7 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
           domainPersistedTopic,
           lastDomainKeyUse,
           isTelpas,
+          academicKeyUse,
         );
         sessionTopic  = preferredTopic ?? academicTopic ?? speakingCtx.selectedTopic;
         sessionKeyUse = speakingCtx.canDo.keyUse;
@@ -1621,14 +1658,52 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
         if (!academicSubject) {
           throw new Error("Writing requires an academic subject");
         }
+        const subjectTopicsUsed = topicsUsedBySubject[academicSubject] ?? topicsUsedToday;
         const writingCtx = buildWritingContext(
           currentLevel,
-          topicsUsedToday,
+          subjectTopicsUsed,
           domainPersistedTopic,
           lastWritingKeyUseForSubject(recentDomainSessions, academicSubject),
           academicSubject,
         );
-        sessionTopic  = academicTopic ?? writingCtx.selectedTopic;
+
+        // Pick unit + scenario (same rotation as academic listening) so Claude
+        // does not keep emitting the same prompt for one math unit label.
+        const subjectTopicList = subjectTopicsUsed;
+        let academicUnit: string | undefined;
+        let academicScenario: string | undefined;
+        let tier3Vocabulary: string[] | undefined;
+        let topicLabel = academicTopic ?? writingCtx.selectedTopic;
+
+        if (academicSubject === "math") {
+          const mathCtx = buildMathSessionContext(currentLevel, domainPersistedTopic, subjectTopicList);
+          academicUnit = mathCtx.unit;
+          academicScenario = mathCtx.scenario;
+          tier3Vocabulary = mathCtx.tier3Vocabulary;
+          topicLabel = mathCtx.topicLabel;
+        } else if (academicSubject === "science") {
+          const sciCtx = buildScienceSessionContext(currentLevel, domainPersistedTopic, subjectTopicList);
+          academicUnit = sciCtx.unit;
+          academicScenario = sciCtx.scenario;
+          tier3Vocabulary = sciCtx.tier3Vocabulary;
+          topicLabel = sciCtx.topicLabel;
+        } else if (academicSubject === "social_studies") {
+          const ssCtx = buildSocialStudiesSessionContext(currentLevel, domainPersistedTopic, subjectTopicList);
+          academicUnit = ssCtx.unit;
+          academicScenario = ssCtx.scenario;
+          tier3Vocabulary = ssCtx.tier3Vocabulary;
+          topicLabel = ssCtx.topicLabel;
+        } else if (academicSubject === "ela") {
+          const elaCtx = buildElaSessionContext(currentLevel, domainPersistedTopic, subjectTopicList);
+          academicUnit = elaCtx.unit;
+          academicScenario = elaCtx.scenario;
+          tier3Vocabulary = elaCtx.tier3Vocabulary;
+          topicLabel = elaCtx.topicLabel;
+        }
+
+        sessionTopic = academicScenario
+          ? `${topicLabel} :: ${academicScenario.slice(0, 120)}`
+          : topicLabel;
         sessionKeyUse = writingCtx.keyUse;
         sessionSubject = academicSubject;
         contentData   = await generateWritingContent({
@@ -1637,17 +1712,21 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
           fractionalLevel:        writingCtx.fractionalLevel,
           stepWithinLevel:        writingCtx.stepWithinLevel,
           complexityInstruction:  writingCtx.complexityInstruction,
-          writingFormat:          writingCtx.writingFormat,
           taskType:               writingCtx.taskType,
           minSentences:           writingCtx.minSentences,
-          sentenceFrameRequired:  writingCtx.sentenceFrameRequired,
-          wordBankRequired:       writingCtx.wordBankRequired,
           framework:              writingCtx.framework,
-          topic:                  sessionTopic,
+          topic:                  topicLabel,
           gradeBand:              student.gradeBand,
           mode,
           academicContentLayer:   academicLayer,
           academicSubject,
+          academicUnit,
+          academicScenario,
+          tier3Vocabulary,
+          hasLibraryImage,
+          imageTags:              domainAnchor?.tags,
+          imageDescription:       domainAnchor?.description ?? undefined,
+          imageConcept:           domainAnchor?.imageConcept ?? undefined,
           priorPracticeReport:    domainPriorPracticeReport,
         });
         break;
@@ -1982,6 +2061,8 @@ router.post("/students/:studentId/sessions/:sessionId/complete", requireStudentA
   const practiceReport = buildPracticeReport({
     domain,
     level: Math.floor(currentLevel),
+    fractionalLevel: currentLevel,
+    stepWithinLevel: Math.min(4, Math.round((currentLevel - Math.floor(currentLevel)) / 0.2)),
     scorePct,
     keyUse: session.keyUse,
     topic: session.topic,

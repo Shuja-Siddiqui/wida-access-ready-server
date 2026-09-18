@@ -130,17 +130,22 @@ function writingPracticeMinSentences(level: number, minSentences?: number): numb
   return raw;
 }
 
-function followedLastWritingTip(answer: string, lastTip?: string | null): boolean {
-  const tip = (lastTip ?? "").trim();
-  if (!tip) return false;
-  const after = tip.split(/you can write:\s*/i)[1] ?? "";
-  const model = after.replace(/\btap (try again|next).*$/i, "").trim().toLowerCase();
-  if (model.length < 8) return false;
-  const tokens = model.split(/[^a-z0-9]+/).filter((w) => w.length > 3);
-  if (tokens.length < 2) return false;
-  const text = answer.toLowerCase();
-  const hits = tokens.filter((w) => text.includes(w)).length;
-  return hits >= Math.min(3, tokens.length);
+function parseClaudeMeetsTask(result: Record<string, unknown>): boolean | null {
+  if (typeof result.meets_task === "boolean") return result.meets_task;
+  if (typeof result.meetsTask === "boolean") return result.meetsTask;
+  return null;
+}
+
+/** Example line when Claude omits model_response on a not-yet writing item. */
+function writingModelFallback(params: ItemFeedbackInput): string {
+  const prompt = (params.prompt ?? params.question ?? "").toLowerCase();
+  if (prompt.includes("equation") && (prompt.includes("mean") || prompt.includes("means"))) {
+    return "The equation 5 + 5 = 10 means the person has 10 books in all. I chose 5 because that is how many they started with.";
+  }
+  if (params.scaffold?.trim()) {
+    return params.scaffold.replace(/_+/g, "___").trim();
+  }
+  return "Add one sentence that finishes what the prompt asked.";
 }
 
 function stripWritingPassAssignments(text: string): string {
@@ -570,20 +575,19 @@ export async function generateItemFeedback(params: ItemFeedbackInput): Promise<I
       const raw = Number(result.score_point ?? result.scorePoint ?? result.score);
       accessWriting = Number.isFinite(raw) ? Math.max(1, Math.min(7, Math.round(raw))) : 1;
       const minForPass = writingPracticeMinSentences(params.level, params.minSentences);
-      meetsTask = writingScoreMeetsTask(accessWriting, params.level, minForPass);
-      if (
-        followedLastWritingTip(params.studentAnswer ?? "", params.lastCoachTip)
-        && accessWriting >= 2
-      ) {
-        meetsTask = true;
-      } else if (
-        (params.tryCount ?? 1) >= 2
-        && writingLooksComplete(params)
-        && accessWriting >= 2
-        && Boolean(params.lastCoachTip)
-      ) {
-        meetsTask = true;
+      const scorePass = writingScoreMeetsTask(accessWriting, params.level, minForPass);
+      const claudeMeets = parseClaudeMeetsTask(result);
+      const claudeJudgment = parseSpeakingJudgment(result.judgment ?? result.status);
+
+      // Claude decides task completion (prompt job done); score gate keeps language bar.
+      if (claudeMeets === false || claudeJudgment === "partial" || claudeJudgment === "rejected") {
+        meetsTask = false;
+      } else if (claudeMeets === true || claudeJudgment === "agree") {
+        meetsTask = scorePass;
+      } else {
+        meetsTask = scorePass;
       }
+
       judgment = meetsTask ? "agree" : accessWriting >= 2 ? "partial" : "rejected";
     }
     if (params.format === "writing" && !meetsTask) {
@@ -596,6 +600,9 @@ export async function generateItemFeedback(params: ItemFeedbackInput): Promise<I
     }
 
     let modelResponse = clip(result.model_response ?? result.modelResponse ?? "", 400);
+    if (params.format === "writing" && !meetsTask && !modelResponse) {
+      modelResponse = writingModelFallback(params);
+    }
     if (judgment === "agree") {
       modelResponse = "";
     }
