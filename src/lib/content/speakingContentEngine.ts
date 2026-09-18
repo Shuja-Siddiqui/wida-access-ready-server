@@ -264,11 +264,12 @@ export function buildSpeakingContext(
   persistedTopic: string | null = null,
   lastKeyUse: string | null = null,
   isTelpas = false,
+  keyUseOverride?: string | null,
 ): SpeakingContext {
   const elpLevel = floorLevel(fractionalLevel);
   const step     = subStep(fractionalLevel);
   const isRetry  = persistedTopic !== null;
-  const keyUse   = nextKeyUse(lastKeyUse, isRetry);
+  const keyUse   = keyUseOverride ?? nextKeyUse(lastKeyUse, isRetry);
 
   const defaultSeconds = SPEAKING_TARGET_SECONDS[elpLevel] ?? { min: 30, max: 60 };
   const targetSeconds  = isTelpas ? { min: 45, max: 90 } : defaultSeconds;

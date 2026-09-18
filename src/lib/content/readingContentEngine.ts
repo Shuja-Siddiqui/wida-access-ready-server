@@ -224,11 +224,12 @@ export function buildReadingContext(
   topicsUsedToday: string[] = [],
   persistedTopic: string | null = null,
   lastKeyUse: string | null = null,
+  keyUseOverride?: string | null,
 ): ReadingContext {
   const elpLevel = floorLevel(fractionalLevel);
   const step     = subStep(fractionalLevel);
   const isRetry  = persistedTopic !== null;
-  const keyUse   = nextKeyUse(lastKeyUse, isRetry);
+  const keyUse   = keyUseOverride ?? nextKeyUse(lastKeyUse, isRetry);
 
   return {
     elpLevel,

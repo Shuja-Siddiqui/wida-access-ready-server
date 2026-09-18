@@ -11,6 +11,10 @@ const MAX_SENTENCE = 400;
 export interface PracticeReport {
   domain: string;
   level: number;
+  /** Exact fractional level at session end (e.g. 1.4). */
+  fractionalLevel?: number;
+  /** Sub-step within the integer level (0=Entry … 4=Advanced). */
+  stepWithinLevel?: number;
   scorePct: number;
   keyUse: string | null;
   topic: string | null;
@@ -34,6 +38,8 @@ function clipList(values: string[] | undefined, maxItems = 4): string[] {
 export function buildPracticeReport(params: {
   domain: string;
   level: number;
+  fractionalLevel?: number;
+  stepWithinLevel?: number;
   scorePct: number;
   keyUse?: string | null;
   topic?: string | null;
@@ -42,9 +48,14 @@ export function buildPracticeReport(params: {
   const weaknesses = (params.feedback.mistakes ?? [])
     .map((m) => [m.whatHappened, m.howToImprove].filter(Boolean).join(" — "))
     .filter(Boolean);
+  const fractional = params.fractionalLevel ?? params.level;
+  const floor = Math.floor(fractional);
+  const step = params.stepWithinLevel ?? Math.min(4, Math.round((fractional - floor) / 0.2));
   return {
     domain: params.domain,
-    level: params.level,
+    level: floor,
+    fractionalLevel: fractional,
+    stepWithinLevel: step,
     scorePct: Math.round(params.scorePct),
     keyUse: params.keyUse ?? null,
     topic: params.topic ?? null,
@@ -64,9 +75,14 @@ export function parsePracticeReport(raw: unknown): PracticeReport | null {
   const strengths = Array.isArray(r.strengths) ? r.strengths.filter((s): s is string => typeof s === "string") : [];
   const weaknesses = Array.isArray(r.weaknesses) ? r.weaknesses.filter((s): s is string => typeof s === "string") : [];
   if (!summary && !coach && strengths.length === 0 && weaknesses.length === 0) return null;
+  const level = typeof r.level === "number" ? r.level : 0;
+  const fractionalLevel = typeof r.fractionalLevel === "number" ? r.fractionalLevel : level;
+  const stepWithinLevel = typeof r.stepWithinLevel === "number" ? r.stepWithinLevel : undefined;
   return {
     domain: typeof r.domain === "string" ? r.domain : "",
-    level: typeof r.level === "number" ? r.level : 0,
+    level,
+    fractionalLevel,
+    stepWithinLevel,
     scorePct: typeof r.scorePct === "number" ? r.scorePct : 0,
     keyUse: typeof r.keyUse === "string" ? r.keyUse : null,
     topic: typeof r.topic === "string" ? r.topic : null,
@@ -84,6 +100,9 @@ export function priorPracticeForGenerator(report: PracticeReport | null | undefi
   return {
     from_last_session: true,
     score_pct: report.scorePct,
+    level: report.level,
+    fractional_level: report.fractionalLevel ?? report.level,
+    step_within_level: report.stepWithinLevel,
     key_use: report.keyUse,
     topic: report.topic,
     summary: report.summary,

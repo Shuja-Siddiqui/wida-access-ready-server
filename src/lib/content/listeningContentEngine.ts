@@ -234,6 +234,35 @@ export function getContentPortrayal(
   };
 }
 
+/**
+ * Writing L1–2 with a library photo: the static guide assumes blank diagrams and printed
+ * word banks. On screen we already show the photo — do not steer Claude toward word_bank UI.
+ */
+export function getWritingPortrayalForPrompt(
+  level: number | undefined,
+  keyUse: string | null | undefined,
+  hasLibraryImage: boolean,
+): Record<string, unknown> | null {
+  const base = getContentPortrayal(level, "WRITING", keyUse);
+  if (!hasLibraryImage || (level ?? 0) > 2) return base;
+
+  return {
+    ...(base ?? {}),
+    how_to_portray:
+      "A library photograph is already on the student's screen. Write one open writing prompt about what is visible (image_tags). "
+      + "The photo is the visual — do not add a separate printed word bank or sentence frame. "
+      + "Ignore static-guide wording about blank diagrams, label lines, or copying from a word list.",
+    picture: {
+      use: "on_screen_library_photo",
+      note: "Real library photo replaces blank diagrams / printed word banks from the guide.",
+    },
+    output_scaffold: {
+      word_bank: "must_be_null",
+      sentence_frame: "must_be_null",
+    },
+  };
+}
+
 /** Shape sent to Claude: 2016 Can Do bullets + 2020 Key Language Use + portrayal from the content guide. */
 export function serializeCanDoForPrompt(
   canDo: CanDoEntry,
@@ -378,7 +407,9 @@ export function clampLevel(level: number): number {
  * Academic subjects for the academic tier (WIDA ELD Standards 2–5).
  * Standard 1 (Social & Instructional) is the everyday / photo path, not this list.
  */
-export const ACADEMIC_SUBJECTS = ["math", "science", "social_studies", "ela"] as const;
+/** ELA → Math → Science → Social Studies — subject-first rotation order. */
+export const ACADEMIC_SUBJECTS = ["ela", "math", "science", "social_studies"] as const;
+export const ACADEMIC_SUBJECT_ROTATION: readonly AcademicSubject[] = ACADEMIC_SUBJECTS;
 export type AcademicSubject = (typeof ACADEMIC_SUBJECTS)[number];
 
 const STANDARD_TO_SUBJECT: Record<string, AcademicSubject> = {
@@ -445,7 +476,7 @@ export type AcademicSessionRef = {
   subject?: string | null;
 };
 
-function asAcademicSubject(value: string | null | undefined): AcademicSubject | null {
+export function asAcademicSubject(value: string | null | undefined): AcademicSubject | null {
   return ACADEMIC_SUBJECTS.includes(value as AcademicSubject) ? (value as AcademicSubject) : null;
 }
 
@@ -454,6 +485,89 @@ function asAcademicSubject(value: string | null | undefined): AcademicSubject | 
  * Rotates inside that use's Table 3-11 pool (last time we practiced THIS key use),
  * so Narrate can move ela → social_studies instead of locking to one subject.
  */
+/** Last key use practiced for this subject only (ignores other subjects' sessions). */
+export function lastKeyUseForSubject(
+  recent: AcademicSessionRef[],
+  subject: AcademicSubject,
+): string | null {
+  for (const row of recent) {
+    if (asAcademicSubject(row.subject) === subject && row.keyUse) return row.keyUse;
+  }
+  return null;
+}
+
+/** True when every KLU in the pool has been used for this subject. */
+export function subjectKluCycleComplete(
+  pool: readonly KeyUse[],
+  lastKeyUseForSubject: string | null,
+): boolean {
+  if (pool.length === 0) return true;
+  const last = normalizeRotationKeyUse(lastKeyUseForSubject);
+  if (!last || !pool.includes(last)) return false;
+  return pool[pool.length - 1] === last;
+}
+
+function nextKeyUseInPool(
+  lastKeyUse: string | null,
+  isRetry: boolean,
+  pool: readonly KeyUse[],
+): KeyUse {
+  const last = normalizeRotationKeyUse(lastKeyUse);
+  if (isRetry && last && pool.includes(last)) return last;
+  if (!last || !pool.includes(last)) return pool[0] ?? "Inform";
+  return pool[(pool.indexOf(last) + 1) % pool.length];
+}
+
+/**
+ * Subject-first rotation: stay on a subject until its KLU pool is exhausted,
+ * then advance to the next subject in ACADEMIC_SUBJECT_ROTATION.
+ */
+export function nextAcademicSubject(
+  recent: AcademicSessionRef[],
+  isRetry: boolean,
+  lastSessionSubject: AcademicSubject | null,
+  keyUsePoolForSubject: (subject: AcademicSubject) => readonly KeyUse[],
+): AcademicSubject {
+  const rotation = ACADEMIC_SUBJECT_ROTATION.filter(
+    (s) => keyUsePoolForSubject(s).length > 0,
+  );
+  const fallback = rotation[0] ?? "ela";
+
+  if (isRetry && lastSessionSubject && rotation.includes(lastSessionSubject)) {
+    return lastSessionSubject;
+  }
+
+  if (lastSessionSubject && rotation.includes(lastSessionSubject)) {
+    const subjectLastKu = lastKeyUseForSubject(recent, lastSessionSubject);
+    const pool = keyUsePoolForSubject(lastSessionSubject);
+    if (!subjectKluCycleComplete(pool, subjectLastKu)) return lastSessionSubject;
+    const idx = rotation.indexOf(lastSessionSubject);
+    if (idx >= 0) return rotation[(idx + 1) % rotation.length];
+  }
+
+  return fallback;
+}
+
+/** Next KLU for this subject — uses that subject's history, not global last session. */
+export function nextKeyUseForSubject(
+  recent: AcademicSessionRef[],
+  subject: AcademicSubject,
+  isRetry: boolean,
+  retryKeyUse: string | null,
+  keyUsePoolForSubject: (subject: AcademicSubject) => readonly KeyUse[],
+): KeyUse {
+  const pool = keyUsePoolForSubject(subject);
+  if (pool.length === 0) return "Inform";
+
+  if (isRetry && retryKeyUse) {
+    const retry = normalizeRotationKeyUse(retryKeyUse);
+    if (retry && pool.includes(retry)) return retry;
+  }
+
+  const subjectLast = lastKeyUseForSubject(recent, subject);
+  return nextKeyUseInPool(subjectLast, false, pool);
+}
+
 export function pickSubjectForKeyUse(
   keyUse: string | null | undefined,
   recent: AcademicSessionRef[] | string | null = [],
