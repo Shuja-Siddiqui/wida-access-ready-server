@@ -7,6 +7,8 @@
 import type { AttemptFeedback } from "./claude/attempt-feedback";
 
 const MAX_SENTENCE = 400;
+/** Max list items kept when persisting or passing a practice report between sessions. */
+export const PRACTICE_REPORT_LIST_LIMIT = 4;
 
 export interface PracticeReport {
   domain: string;
@@ -31,7 +33,7 @@ function clip(text: string, max = MAX_SENTENCE): string {
   return `${t.slice(0, max)}…`;
 }
 
-function clipList(values: string[] | undefined, maxItems = 4): string[] {
+function clipList(values: string[] | undefined, maxItems = PRACTICE_REPORT_LIST_LIMIT): string[] {
   return (values ?? []).map((v) => clip(v, 240)).filter(Boolean).slice(0, maxItems);
 }
 
