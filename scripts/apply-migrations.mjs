@@ -70,30 +70,46 @@ export async function runMigrations(config) {
   console.log(`${label}: migration complete.`);
 }
 
-/** Machine-local Postgres (LOCAL_DATABASE_URL or localhost DATABASE_URL). */
-export async function runLocalMigrations(options = {}) {
+/**
+ * Dev database — Supabase or local Postgres via DATABASE_URL / LOCAL_DATABASE_URL.
+ * Skips when that URL points at the same host as POSTGRES_HOST (live RDS).
+ */
+export async function runDevMigrations(options = {}) {
   loadEnv();
 
+  const rdsHost = loadRdsConfigFromEnv()?.host ?? null;
   const url =
     options.connectionString ??
     process.env.LOCAL_DATABASE_URL ??
-    (process.env.DATABASE_URL && isLocalhostUrl(process.env.DATABASE_URL)
-      ? process.env.DATABASE_URL
-      : null);
+    process.env.DATABASE_URL ??
+    null;
 
   if (!url) {
     console.log(
-      "Skip local Postgres (set LOCAL_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/accessready)",
+      "Skip dev DB (set DATABASE_URL to your Supabase connection string, or LOCAL_DATABASE_URL for localhost Postgres)",
+    );
+    return;
+  }
+
+  const devHost = hostFromUrl(url);
+  if (rdsHost && devHost === rdsHost) {
+    console.log(
+      `Skip dev DB — DATABASE_URL host (${devHost}) is the same as POSTGRES_HOST (live RDS).`,
     );
     return;
   }
 
   await runMigrations({
     connectionString: url,
-    label: `local (${hostFromUrl(url) ?? "postgres"})`,
+    label: `dev (${devHost ?? "postgres"})`,
     pushSchema: options.pushSchema ?? false,
     pushTarget: "local",
   });
+}
+
+/** @deprecated Use runDevMigrations — kept for script compatibility. */
+export async function runLocalMigrations(options = {}) {
+  return runDevMigrations(options);
 }
 
 /** AWS RDS — defaults to POSTGRES_* from api-server/.env (same as db:push:aws). */
@@ -114,11 +130,11 @@ export async function runLiveMigrations(config) {
   });
 }
 
-/** Local Postgres (if configured) + RDS from .env — skips duplicate hosts. */
+/** Dev (Supabase / DATABASE_URL) + live RDS (POSTGRES_*). Skips dev when same host as RDS. */
 export async function runAllMigrations(liveOverrides = {}) {
   loadEnv();
 
-  await runLocalMigrations();
+  await runDevMigrations();
 
   const rds = loadRdsConfigFromEnv(liveOverrides);
   if (!rds) {
@@ -127,19 +143,37 @@ export async function runAllMigrations(liveOverrides = {}) {
     );
   }
 
-  // DATABASE_URL often points at the same RDS — don't migrate twice.
-  const rdsUrl = process.env.DATABASE_URL;
-  if (rdsUrl && hostFromUrl(rdsUrl) === rds.host && !isLocalhostUrl(rdsUrl)) {
-    console.log(`\nDATABASE_URL already targets ${rds.host} — single RDS migration.`);
-    await runLiveMigrations(liveOverrides);
-  } else {
-    await runLiveMigrations(liveOverrides);
-  }
+  await runLiveMigrations(liveOverrides);
+
+  const { syncLibraryCatalogFromLiveToDev } = await import("./sync-library-catalog.mjs");
+  await syncLibraryCatalogFromLiveToDev();
 
   console.log("\nAll configured databases migrated.");
 }
 
-function createClient(config) {
+/** Dev DB config when LOCAL_DATABASE_URL / DATABASE_URL differs from POSTGRES_HOST. */
+export function getDevDatabaseConfig(options = {}) {
+  loadEnv();
+
+  const rdsHost = loadRdsConfigFromEnv()?.host ?? null;
+  const url =
+    options.connectionString ??
+    process.env.LOCAL_DATABASE_URL ??
+    process.env.DATABASE_URL ??
+    null;
+
+  if (!url) return null;
+
+  const devHost = hostFromUrl(url);
+  if (rdsHost && devHost === rdsHost) return null;
+
+  return {
+    connectionString: url,
+    host: devHost,
+  };
+}
+
+export function createClient(config) {
   if (config.connectionString) {
     const needsSsl =
       config.ssl ??
@@ -223,10 +257,26 @@ async function applySqlMigrations(client) {
     console.log("  Skip 0011 (student_levels unique index already exists)");
   }
 
+  const libraryUseCountExists = async () => {
+    const { rows } = await client.query(`
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'library' AND column_name = 'use_count'
+      LIMIT 1
+    `);
+    return rows.length > 0;
+  };
+
+  if (!(await libraryUseCountExists())) {
+    await applyFile(client, "0012_library_use_count.sql");
+  } else {
+    console.log("  Skip 0012 (library.use_count already exists)");
+  }
+
   console.log("  After:", {
     themes: await tableExists(client, "themes"),
     content_categories: await tableExists(client, "content_categories"),
     student_levels_unique: await indexExists(client, "student_levels_student_id_domain_tier_unique"),
+    library_use_count: await libraryUseCountExists(),
   });
 }
 
