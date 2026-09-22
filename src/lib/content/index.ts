@@ -33,3 +33,14 @@ export {
   selectWritingTopic,
   buildWritingContext,
 } from "./writingContentEngine";
+export type {
+  WritingAcademicSubject,
+  WritingLibraryCandidate,
+  WritingLibraryMatchTier,
+} from "./writingLibraryCandidates";
+export {
+  retrieveWritingLibraryCandidates,
+  resolveWritingLibrarySelection,
+  serializeWritingLibraryCandidatesForPrompt,
+  incrementLibraryUseCount,
+} from "./writingLibraryCandidates";

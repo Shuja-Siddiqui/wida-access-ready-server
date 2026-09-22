@@ -40,6 +40,8 @@ export const libraryTable = pgTable("library", {
    * instead of the sparse Grounding DINO object labels.
    */
   academicVision:   jsonb("academic_vision").$type<Record<string, AcademicVisionResult>>().notNull().default({}),
+  /** Times this image was selected for a writing session (least-used picked on recycle). */
+  useCount:         integer("use_count").notNull().default(0),
 });
 
 /** Shape of one subject's vision analysis result. Stored in academicVision keyed by subject. */

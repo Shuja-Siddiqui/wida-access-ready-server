@@ -6,10 +6,13 @@ const { Pool } = pg;
 
 let pool: pg.Pool;
 
-if (process.env.POSTGRES_PASSWORD && process.env.POSTGRES_HOST) {
-  // Prefer discrete RDS vars. A DATABASE_URL with sslmode=require is parsed
-  // as verify-full by current `pg` and rejects the cert chain (antivirus /
-  // Amazon CA), which is why local login 500'd with "self-signed certificate".
+const localUrl = process.env.LOCAL_DATABASE_URL ?? process.env.DATABASE_URL;
+
+if (localUrl) {
+  // Local dev / Supabase — LOCAL_DATABASE_URL or DATABASE_URL (see api-server/.env).
+  pool = new Pool({ connectionString: localUrl });
+} else if (process.env.POSTGRES_PASSWORD && process.env.POSTGRES_HOST) {
+  // AWS RDS — POSTGRES_* only when no local DATABASE_URL is set (e.g. EC2 production).
   pool = new Pool({
     host: process.env.POSTGRES_HOST,
     port: Number(process.env.POSTGRES_PORT ?? 5432),
@@ -18,11 +21,9 @@ if (process.env.POSTGRES_PASSWORD && process.env.POSTGRES_HOST) {
     password: process.env.POSTGRES_PASSWORD,
     ssl: { rejectUnauthorized: false },
   });
-} else if (process.env.DATABASE_URL) {
-  pool = new Pool({ connectionString: process.env.DATABASE_URL });
 } else {
   throw new Error(
-    "No database connection configured. Set POSTGRES_HOST + POSTGRES_PASSWORD (AWS RDS) or DATABASE_URL.",
+    "No database connection configured. Set LOCAL_DATABASE_URL or DATABASE_URL (local), or POSTGRES_HOST + POSTGRES_PASSWORD (RDS).",
   );
 }
 

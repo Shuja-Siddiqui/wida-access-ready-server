@@ -1,13 +1,18 @@
 /**
  * Writing content generators:
- *   - generateWritingContent  — produces a writing prompt; scaffolding is the model's choice
+ *   - generateWritingContent  — retrieve→compose: AI picks library image + scaffolds
  *   - getWritingFeedback      — scores a student's response and provides coaching
  */
 
 import { callClaude, toDisplayText } from "./client";
 import { rethrowIfClaudeCapacity } from "./queue";
 import { OPTIONAL_LINE_VISUALS_BLOCK, parseVisual } from "./prompts/optional-line-visuals";
-import { getWritingPortrayalForPrompt } from "../content";
+import {
+  getWritingPortrayalForPrompt,
+  type WritingLibraryCandidate,
+  resolveWritingLibrarySelection,
+  serializeWritingLibraryCandidatesForPrompt,
+} from "../content";
 import { buildSystemPrompt } from "./prompts/compose";
 import { contentGenPrompt } from "./prompts/content";
 import { feedbackCoachPrompt } from "./prompts/wida-feedback-guide";
@@ -29,20 +34,12 @@ import {
   rubricPromptAudit,
 } from "../wida-access-rubric";
 
-// ── Per-level schema tables ───────────────────────────────────────────────────
-
-// ── Schema builder ────────────────────────────────────────────────────────────
-
-/**
- * Builds the OUTPUT SCHEMA section for this specific call.
- * word_bank and sentence_frame are the model's choice (array/string or null).
- */
 function buildWritingOutputSchema(params: {
   level: number;
   keyUse: string;
-  hasLibraryImage?: boolean;
+  hasLibraryCandidates: boolean;
 }): string {
-  const { level, hasLibraryImage } = params;
+  const { level, hasLibraryCandidates } = params;
 
   return [
     `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
@@ -51,56 +48,58 @@ function buildWritingOutputSchema(params: {
     ``,
     `{`,
     `  "task_descriptor": "<echo the 2–3 language_functions this prompt assesses>",`,
-    ``,
     `  "task_type": "<short name for this writing job>",`,
-    `  /* Primary key_use: ${params.keyUse} */`,
-    ``,
-    hasLibraryImage
-      ? `  "prompt": "<one writing job about the library photo — use image_tags; student can see the photo>",`
-      : `  "prompt": "<one academic writing job on THIS topic — do not say look/see/photo>",`,
-    `  /* Level ${level}: follow pld.level. Level 2 must not copy a level-1 name-objects pattern. */`,
-    `  /* If language_functions need two short sources, put two Grade 6–8 blurbs IN this prompt. Otherwise do not add sources. */`,
-    `  /* Do NOT mention the word bank or sentence frame inside the prompt */`,
+    hasLibraryCandidates
+      ? `  "selected_image_id": "<uuid from library_candidates OR null if no photo fits this key_use>",`
+      : `  "selected_image_id": null,`,
+    hasLibraryCandidates
+      ? `  "passage": "<2–4 short sentences: CONTEXT ONLY — tied to selected_image_id; no task, no frame, no word-bank words; null if selected_image_id is null>",`
+      : `  "passage": null,`,
+    hasLibraryCandidates
+      ? `  "prompt": "<writing JOB ONLY — what/how many sentences; do NOT copy sentence_frame or word_bank into this string>",`
+      : `  "prompt": "<writing JOB ONLY on THIS topic — no frame text, no word-bank list; do not say look/see/photo>",`,
     `  "visual": null,`,
-    ``,
-    hasLibraryImage
-      ? `  "word_bank": null,  /* MUST stay null — photo is on screen */`
-      : `  "word_bank": null,`,
-    hasLibraryImage
-      ? `  "sentence_frame": null,  /* MUST stay null — photo is on screen */`
-      : `  "sentence_frame": null,`,
+    `  "word_bank": null,  /* vocabulary ONLY — words must not appear in passage or prompt */`,
+    `  "sentence_frame": null,  /* starter ONLY — must not be duplicated inside prompt */`,
     `  "min_sentences": <number>,`,
     `}`,
     ``,
     `SCHEMA ENFORCEMENT RULES`,
-    `• Return task_descriptor, task_type, prompt, visual, word_bank, sentence_frame, min_sentences.`,
-    hasLibraryImage
-      ? `• has_library_image true → word_bank and sentence_frame MUST be null. Write one open prompt only; the photo is the visual.`
-      : `• You choose whether word_bank, sentence_frame, and visual are null or filled — match framework.pld.`,
-    hasLibraryImage
-      ? `• Refer to visible parts by name (from image_tags). Do not say "look at the picture" or "look at the diagram".`
-      : `• No library photo. Do NOT say look, picture, photo, "what do you see", or "places you see". Write from the topic and academic_subject only.`,
+    `• Return every key above.`,
+    hasLibraryCandidates
+      ? `• library_candidates are pre-filtered for academic_subject. Each entry includes id, tags, concept, and description — use that metadata when you pick selected_image_id and compose passage + prompt.`
+      : null,
+    hasLibraryCandidates
+      ? `• You choose selected_image_id (or null), passage, prompt, word_bank, and sentence_frame per content_portrayal and framework — server does not rewrite your output.`
+      : null,
+    hasLibraryCandidates
+      ? `• When selected_image_id is null: passage null; write from topic and academic_subject only.`
+      : `• No library images available. Do NOT say look, picture, photo, or "what do you see".`,
+    `• You choose word_bank, sentence_frame, and visual — match framework.pld and content_portrayal for required_key_use ${params.keyUse}.`,
     ...(level >= 2
-      ? [`• ALIGN: prompt assesses language_functions for key_use ${params.keyUse}. Follow pld.level ${level}. Do not add printed sources unless the functions require them.`]
+      ? [`• ALIGN: prompt assesses language_functions for key_use ${params.keyUse}. Follow pld.level ${level}.`]
       : []),
-    `• prompt must NOT mention the word bank, sentence frame, or their absence.`,
-  ].join("\n");
+    `• prompt and passage must NOT mention the word bank, sentence frame, or their absence.`,
+    `• LISTEN-ALOUD: passage = context | prompt = job only | sentence_frame = scaffold only | word_bank = words only. Never paste frame or bank into prompt.`,
+    ...(level <= 2
+      ? [`• If sentence_frame is set, prompt must not repeat that frame (app reads each field separately).`]
+      : []),
+  ].filter(Boolean).join("\n");
 }
-
-// ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface WritingContent {
   canDoDescriptor: string;
-  /** Writing task genre — size from key use × level, not a 2016 skill bullet */
   taskType: string;
   prompt: string;
+  /** Student-facing context narrative when a library image is selected. */
+  passage: string | null;
   visual?: string;
   wordBank: string[] | null;
   sentenceFrame: string | null;
   minSentences: number;
+  /** Resolved server-side for session storage — not required on client. */
+  selectedLibraryImageId: string | null;
 }
-
-// ── Fallback ──────────────────────────────────────────────────────────────────
 
 function mergeWritingWordBank(raw: unknown): string[] | null {
   const fromModel = Array.isArray(raw)
@@ -110,21 +109,15 @@ function mergeWritingWordBank(raw: unknown): string[] | null {
   return [...new Set(fromModel)];
 }
 
-function tidyWritingPrompt(prompt: string): string {
-  return prompt
-    .replace(/\s*Use words from the (word )?bank\.?/gi, "")
-    .replace(/\s*Use the (word )?bank( and (the )?sentence frame)?( to help you)?\.?/gi, "")
-    .replace(/\s*Use the sentence frame( to help you)?\.?/gi, "")
-    .replace(/\s+to help you\.?\s*$/i, "")
-    .replace(/\s+/g, " ")
-    .trim();
+/** Display normalization only — do not alter AI wording. */
+function displayText(value: string): string {
+  return toDisplayText(value).replace(/\s+/g, " ").trim();
 }
 
 function tidyWritingFrame(frame: string): string {
   return frame.replace(/_+/g, "_____").replace(/\s+/g, " ").trim();
 }
 
-/** Keep the model's frame. Do not invent a frame if they sent null. */
 export function normalizeWritingSentenceFrame(
   _prompt: string,
   frame: string | null | undefined,
@@ -138,12 +131,12 @@ const FALLBACK_WRITING: WritingContent = {
   canDoDescriptor: "Explain by comparing and contrasting information, events, or characters",
   taskType: "comparison_paragraph",
   prompt: "Explain why learning a new language is important. Give at least one reason with an example.",
+  passage: null,
   wordBank: null,
   sentenceFrame: "Learning a new language is important because...",
   minSentences: 3,
+  selectedLibraryImageId: null,
 };
-
-// ── Writing prompt generator ──────────────────────────────────────────────────
 
 export async function generateWritingContent(params: {
   assessment: string;
@@ -151,9 +144,7 @@ export async function generateWritingContent(params: {
   fractionalLevel: number;
   stepWithinLevel: number;
   complexityInstruction: string;
-  /** Fallback only — not sent to Claude. */
   taskType?: string;
-  /** Fallback only — not sent to Claude. */
   minSentences?: number;
   framework: FrameworkTask;
   topic: string;
@@ -161,22 +152,20 @@ export async function generateWritingContent(params: {
   mode: "standard" | "exit_proximity";
   academicContentLayer?: string;
   academicSubject: string;
-  /** Real-world scenario from the academic curriculum (math/science/etc.). */
   academicUnit?: string;
   academicScenario?: string;
   tier3Vocabulary?: string[];
-  hasLibraryImage?: boolean;
-  imageTags?: string[];
-  imageDescription?: string;
-  imageConcept?: string;
+  libraryCandidates?: WritingLibraryCandidate[];
   priorPracticeReport?: PracticeReport | null;
 }): Promise<WritingContent> {
   const keyUse = params.framework.key_language_use;
-  const hasLibraryImage = params.hasLibraryImage ?? false;
+  const libraryCandidates = params.libraryCandidates ?? [];
+  const hasLibraryCandidates = libraryCandidates.length > 0;
+
   const schemaSection = buildWritingOutputSchema({
     level: params.level,
     keyUse,
-    hasLibraryImage,
+    hasLibraryCandidates,
   });
   const systemPrompt = buildSystemPrompt(
     contentGenPrompt("writing", params.level, "2020"),
@@ -186,11 +175,11 @@ export async function generateWritingContent(params: {
     schemaSection,
   );
 
-  const contentPortrayal = getWritingPortrayalForPrompt(params.level, keyUse, hasLibraryImage);
-  const topicForPrompt = hasLibraryImage
-    ? (params.imageConcept?.trim() || params.imageDescription?.trim().slice(0, 160) || params.topic)
-    : params.topic;
-  const stripPhotoScaffold = hasLibraryImage && params.level <= 2;
+  const contentPortrayal = getWritingPortrayalForPrompt(
+    params.level,
+    keyUse,
+    hasLibraryCandidates,
+  );
 
   const userPrompt = JSON.stringify(mergePriorPractice({
     domain:                  "writing",
@@ -200,77 +189,84 @@ export async function generateWritingContent(params: {
     step_within_level:       params.stepWithinLevel,
     grade_band:              params.gradeBand,
     mode:                    params.mode,
-    topic:                   topicForPrompt,
+    topic:                   params.topic,
     curriculum_topic:        params.topic,
     framework:               serializeFrameworkTask(params.framework),
     content_portrayal:       contentPortrayal,
     goal:                    "Create one writing task this student can do so they become able to produce the writing in framework.pld (end of this integer level).",
     complexity_instruction:  params.complexityInstruction,
     required_key_use:        keyUse,
-    has_library_image:       hasLibraryImage,
-    image_tags:              params.imageTags ?? [],
-    image_description:       params.imageDescription ?? null,
-    image_concept:           params.imageConcept ?? null,
+    library_candidates:      serializeWritingLibraryCandidatesForPrompt(libraryCandidates),
+    library_candidate_note:
+      "Each library_candidates entry has tags (detected/subject labels), concept (short topic), and description (what the photo is about). Use this metadata when selecting an image and writing passage + prompt.",
     academic_subject:        params.academicSubject,
     academic_unit:           params.academicUnit ?? null,
     academic_scenario:       params.academicScenario ?? null,
-    ...(stripPhotoScaffold
-      ? {
-          academic_language_note:
-            "Use grade-appropriate terms inside the prompt text if needed. Do not output tier3 words as word_bank.",
-        }
-      : { tier3_vocabulary: params.tier3Vocabulary ?? [] }),
-    scenario_instruction:
-      params.academicScenario && !hasLibraryImage
-        ? "Build the student prompt from academic_scenario. Use different numbers, names, or details than any prior session — do not reuse the same triangle side lengths or identical word problem."
-        : null,
+    tier3_vocabulary:        params.tier3Vocabulary ?? [],
+    picture_use_hint:        contentPortrayal?.picture ?? null,
+    scenario_instruction:    params.academicScenario
+      ? "Use academic_scenario for topic context when no library image is selected. Vary details from prior sessions."
+      : null,
   }, params.priorPracticeReport));
 
   dumpContentGenRequest("writing", systemPrompt, userPrompt);
   try {
-    const result = (await callClaude(systemPrompt, userPrompt, 2000)) as {
+    const result = (await callClaude(systemPrompt, userPrompt, 2200)) as {
       task_descriptor?: string;
       can_do_descriptor?: string;
       task_type: string;
+      selected_image_id?: string | null;
+      passage?: string | null;
       prompt: string;
       word_bank: string[] | null;
       sentence_frame: string | null;
       min_sentences: number;
     };
-    const promptRaw = tidyWritingPrompt(toDisplayText(result.prompt));
+
+    const rawSelectedId = typeof result.selected_image_id === "string"
+      ? result.selected_image_id.trim()
+      : null;
+    const selectedCandidate = resolveWritingLibrarySelection(rawSelectedId, libraryCandidates);
+    const selectedLibraryImageId = selectedCandidate?.id ?? null;
+
+    const passageRaw = result.passage != null && String(result.passage).trim()
+      ? displayText(String(result.passage))
+      : null;
+    const promptRaw = displayText(result.prompt);
     const rawWordBank = mergeWritingWordBank(result.word_bank);
-    const rawFrame = normalizeWritingSentenceFrame(promptRaw, result.sentence_frame);
-    if (stripPhotoScaffold && (rawWordBank?.length || rawFrame)) {
-      logger.info(
-        {
-          stage: "writing-content scaffold stripped",
-          hadWordBank: Boolean(rawWordBank?.length),
-          hadFrame: Boolean(rawFrame),
-        },
-        "L1–2 library-photo writing: removed word_bank/sentence_frame from response",
-      );
-    }
+    const rawFrame = result.sentence_frame != null && String(result.sentence_frame).trim()
+      ? normalizeWritingSentenceFrame(promptRaw, result.sentence_frame)
+      : null;
+
     logger.info(
       {
-        stage:           "writing-content ← Claude",
-        topic:           params.topic,
-        academicSubject: params.academicSubject,
-        prompt:          promptRaw.slice(0, 240),
-        wordBank:        stripPhotoScaffold ? null : rawWordBank,
-        hasLibraryImage,
+        stage:                  "writing-content ← Claude",
+        topic:                  params.topic,
+        academicSubject:        params.academicSubject,
+        candidateCount:         libraryCandidates.length,
+        selectedLibraryImageId,
+        selectedTags:           selectedCandidate?.tags ?? null,
+        selectedDescription:    selectedCandidate?.description?.slice(0, 120) ?? null,
+        hasPassage:             Boolean(passageRaw),
+        prompt:                 promptRaw.slice(0, 240),
+        wordBank:               rawWordBank,
+        sentenceFrame:          rawFrame,
       },
       "writing content generated",
     );
+
     const modelMin = Number(result.min_sentences);
     return {
       canDoDescriptor: result.task_descriptor ?? result.can_do_descriptor
         ?? params.framework.language_functions.map((f) => f.function).join("; "),
-      taskType:        result.task_type ?? params.taskType ?? "paragraph",
-      prompt:          promptRaw,
-      visual:          parseVisual((result as { visual?: unknown }).visual),
-      wordBank:        stripPhotoScaffold ? null : rawWordBank,
-      sentenceFrame:   stripPhotoScaffold ? null : rawFrame,
-      minSentences:    Number.isFinite(modelMin) && modelMin > 0 ? modelMin : (params.minSentences ?? 1),
+      taskType:               result.task_type ?? params.taskType ?? "paragraph",
+      prompt:                 promptRaw,
+      passage:                passageRaw,
+      visual:                 parseVisual((result as { visual?: unknown }).visual),
+      wordBank:               rawWordBank,
+      sentenceFrame:          rawFrame,
+      minSentences:           Number.isFinite(modelMin) && modelMin > 0 ? modelMin : (params.minSentences ?? 1),
+      selectedLibraryImageId,
     };
   } catch (err) {
     logger.error({ err }, "generateWritingContent failed, using fallback");
@@ -280,17 +276,16 @@ export async function generateWritingContent(params: {
         || FALLBACK_WRITING.canDoDescriptor,
       taskType: params.taskType ?? FALLBACK_WRITING.taskType,
       prompt: FALLBACK_WRITING.prompt,
+      passage: null,
       wordBank: null,
       sentenceFrame: null,
       minSentences: params.minSentences ?? FALLBACK_WRITING.minSentences,
+      selectedLibraryImageId: null,
     };
   }
 }
 
-// ── Writing feedback scorer ───────────────────────────────────────────────────
-
 export interface WritingFeedback {
-  /** ACCESS writing score point 0–7 (not a 0–100 mix). */
   score: number;
   passed: boolean;
   strengths: string[];

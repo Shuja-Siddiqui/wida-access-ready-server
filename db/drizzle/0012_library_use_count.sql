@@ -1,0 +1,1 @@
+ALTER TABLE "library" ADD COLUMN IF NOT EXISTS "use_count" integer DEFAULT 0 NOT NULL;

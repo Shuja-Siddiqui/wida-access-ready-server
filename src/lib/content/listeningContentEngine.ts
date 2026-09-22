@@ -235,30 +235,29 @@ export function getContentPortrayal(
 }
 
 /**
- * Writing L1–2 with a library photo: the static guide assumes blank diagrams and printed
- * word banks. On screen we already show the photo — do not steer Claude toward word_bank UI.
+ * Writing retrieve→compose: when library_candidates are offered, remind Claude it may pick one
+ * (or none) and compose passage + scaffolds for the chosen key language use.
  */
 export function getWritingPortrayalForPrompt(
   level: number | undefined,
   keyUse: string | null | undefined,
-  hasLibraryImage: boolean,
+  hasLibraryCandidates: boolean,
 ): Record<string, unknown> | null {
   const base = getContentPortrayal(level, "WRITING", keyUse);
-  if (!hasLibraryImage || (level ?? 0) > 2) return base;
+  if (!base) return null;
+  if (!hasLibraryCandidates) return base;
 
+  const baseHow = typeof base.how_to_portray === "string" ? base.how_to_portray : "";
   return {
-    ...(base ?? {}),
+    ...base,
     how_to_portray:
-      "A library photograph is already on the student's screen. Write one open writing prompt about what is visible (image_tags). "
-      + "The photo is the visual — do not add a separate printed word bank or sentence frame. "
-      + "Ignore static-guide wording about blank diagrams, label lines, or copying from a word list.",
+      `${baseHow} library_candidates lists subject-matched photos (id, tags, concept, description). `
+      + "Pick selected_image_id or null, then compose passage, prompt, and scaffolds using that metadata and content_portrayal. "
+      + "Your JSON output is delivered to the student without server rewriting.",
     picture: {
-      use: "on_screen_library_photo",
-      note: "Real library photo replaces blank diagrams / printed word banks from the guide.",
-    },
-    output_scaffold: {
-      word_bank: "must_be_null",
-      sentence_frame: "must_be_null",
+      ...(typeof base.picture === "object" && base.picture ? base.picture : {}),
+      use: "candidate_library_photos",
+      note: "Model selects from library_candidates; subject already filtered server-side.",
     },
   };
 }

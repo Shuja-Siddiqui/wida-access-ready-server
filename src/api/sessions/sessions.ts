@@ -30,6 +30,9 @@ import {
   KEY_USE_ROTATION,
   asAcademicSubject,
   getContentPortrayal,
+  retrieveWritingLibraryCandidates,
+  resolveWritingLibrarySelection,
+  incrementLibraryUseCount,
 } from "../../lib/content";
 import {
   nextKeyUse,
@@ -59,6 +62,7 @@ import {
   getWritingFeedback,
   generateAttemptFeedback,
   generateItemFeedback,
+  type ItemFeedbackInput,
   generateImagePassageContent,
   isClaudeCapacityError,
   getClaudeQueueSnapshot,
@@ -125,32 +129,41 @@ function sendClaudeBusy(
 
 const ItemFeedbackBody = z.object({
   domain: z.string().min(1),
-  level: z.number(),
+  level: z.coerce.number(),
   format: z.enum(["picture", "selected_response", "speaking", "writing"]),
   question: z.string(),
   studentAnswer: z.string(),
-  correctAnswer: z.string().optional(),
-  passage: z.string().optional(),
-  imageDescription: z.string().optional(),
-  imageTags: z.array(z.string()).optional(),
-  targetObject: z.string().optional(),
-  prompt: z.string().optional(),
-  scaffold: z.string().optional(),
-  canDo: z.string().optional(),
-  keyUse: z.string().optional(),
-  canDoItems: z.array(z.string()).optional(),
-  canDoAction: z.string().optional(),
-  options: z.array(z.string()).optional(),
-  responseLength: z.string().optional(),
-  minSentences: z.number().optional(),
-  correct: z.boolean().optional(),
-  sttConfidence: z.number().optional(),
-  uncertainWords: z.array(z.string()).optional(),
-  tryCount: z.number().optional(),
-  lastJudgment: z.enum(["agree", "partial", "rejected"]).optional(),
-  lastCoachTip: z.string().optional(),
-  lastStudentAnswer: z.string().optional(),
+  correctAnswer: z.string().nullish(),
+  passage: z.string().nullish(),
+  imageDescription: z.string().nullish(),
+  imageTags: z.array(z.string()).nullish(),
+  targetObject: z.string().nullish(),
+  prompt: z.string().nullish(),
+  scaffold: z.string().nullish(),
+  canDo: z.string().nullish(),
+  keyUse: z.string().nullish(),
+  canDoItems: z.array(z.string()).nullish(),
+  canDoAction: z.string().nullish(),
+  options: z.array(z.string()).nullish(),
+  responseLength: z.string().nullish(),
+  minSentences: z.coerce.number().nullish(),
+  correct: z.boolean().nullish(),
+  sttConfidence: z.coerce.number().nullish(),
+  uncertainWords: z.array(z.string()).nullish(),
+  tryCount: z.coerce.number().nullish(),
+  lastJudgment: z.enum(["agree", "partial", "rejected"]).nullish(),
+  lastCoachTip: z.string().nullish(),
+  lastStudentAnswer: z.string().nullish(),
 });
+
+/** Zod nullish fields → undefined for generateItemFeedback. */
+function normalizeItemFeedbackBody(body: z.infer<typeof ItemFeedbackBody>): ItemFeedbackInput {
+  const out = { ...body } as Record<string, unknown>;
+  for (const key of Object.keys(out)) {
+    if (out[key] === null) delete out[key];
+  }
+  return out as unknown as ItemFeedbackInput;
+}
 
 function dinoLabels(row: { detectionResults: unknown }): string[] {
   const detections = ((row.detectionResults as { detections?: { label?: string }[] } | null)?.detections ?? [])
@@ -1462,10 +1475,13 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
   const domainKeyUseForPhoto = academicKeyUse ?? nextKeyUse(lastDomainKeyUse, domainPersistedTopic !== null);
   const portrayal = getContentPortrayal(elpFloor, domain.toUpperCase(), domainKeyUseForPhoto);
   const pictureUse = (portrayal?.picture as { use?: string } | null | undefined)?.use;
-  const skipLibraryPhoto = elpFloor <= 2 && pictureUse === "not_needed";
-  const requireLibraryPhoto = elpFloor <= 2 && pictureUse === "required";
+  // Writing L1–2: do not hard-skip or hard-require photos by KLU — attach topic-linked images
+  // when found and let the model choose scaffolds (word bank, frame, photo-led prompt).
+  const writingUsesCompose = domain === "writing";
+  const skipLibraryPhoto = !writingUsesCompose && elpFloor <= 2 && pictureUse === "not_needed";
+  const requireLibraryPhoto = !writingUsesCompose && elpFloor <= 2 && pictureUse === "required";
   try {
-    if (!skipLibraryPhoto) {
+    if (!skipLibraryPhoto && !writingUsesCompose) {
     const terms = preferredTopic ? topicSearchTerms(preferredTopic) : [];
     const metaMatch = terms.length
       ? or(
@@ -1706,7 +1722,16 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
           : topicLabel;
         sessionKeyUse = writingCtx.keyUse;
         sessionSubject = academicSubject;
-        contentData   = await generateWritingContent({
+
+        const libraryCandidates = await retrieveWritingLibraryCandidates({
+          academicSubject,
+          topic: topicLabel,
+          excludeImageIds,
+          level: writingCtx.elpLevel,
+          limit: 5,
+        });
+
+        const writingContent = await generateWritingContent({
           assessment,
           level:                  writingCtx.elpLevel,
           fractionalLevel:        writingCtx.fractionalLevel,
@@ -1723,12 +1748,40 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
           academicUnit,
           academicScenario,
           tier3Vocabulary,
-          hasLibraryImage,
-          imageTags:              domainAnchor?.tags,
-          imageDescription:       domainAnchor?.description ?? undefined,
-          imageConcept:           domainAnchor?.imageConcept ?? undefined,
+          libraryCandidates,
           priorPracticeReport:    domainPriorPracticeReport,
         });
+
+        const selectedLibrary = resolveWritingLibrarySelection(
+          writingContent.selectedLibraryImageId,
+          libraryCandidates,
+        );
+
+        if (selectedLibrary) {
+          domainAnchor = {
+            id:               selectedLibrary.id,
+            tags:             selectedLibrary.tags,
+            s3Key:            selectedLibrary.s3Key,
+            description:      selectedLibrary.description,
+            imageConcept:     selectedLibrary.imageConcept,
+            detectionResults: selectedLibrary.detectionResults,
+            contexts:         selectedLibrary.contexts,
+          };
+          domainAnchorUrl = await storage.getPresignedGetUrl(selectedLibrary.s3Key, 3600).catch(() => null);
+          req.log.info(
+            {
+              imageId: selectedLibrary.id,
+              tags: selectedLibrary.tags,
+              topic: topicLabel,
+              subject: academicSubject,
+              matchTier: selectedLibrary.matchTier,
+            },
+            "Writing library image selected by compose step",
+          );
+        }
+
+        const { selectedLibraryImageId: _omit, ...writingPayload } = writingContent;
+        contentData = writingPayload;
         break;
       }
     }
@@ -1761,6 +1814,12 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
       imageTags:      domainAnchor?.tags ?? null,
     })
     .returning();
+
+  if (domain === "writing" && domainAnchor?.id) {
+    incrementLibraryUseCount(domainAnchor.id).catch((err) => {
+      req.log.warn({ err, imageId: domainAnchor.id }, "Failed to increment library use count");
+    });
+  }
 
   if (contentData && typeof contentData === "object") {
     const row = contentData as Record<string, unknown>;
@@ -2211,6 +2270,7 @@ router.post("/students/:studentId/item-feedback", requireStudentAccess("studentI
 
   const parsed = ItemFeedbackBody.safeParse(req.body);
   if (!parsed.success) {
+    req.log.warn({ issues: parsed.error.issues, body: req.body }, "item-feedback validation failed");
     sendError(res, 400, "Missing or invalid item feedback fields");
     return;
   }
@@ -2236,7 +2296,7 @@ router.post("/students/:studentId/item-feedback", requireStudentAccess("studentI
 
   let feedback;
   try {
-    feedback = await generateItemFeedback(parsed.data);
+    feedback = await generateItemFeedback(normalizeItemFeedbackBody(parsed.data));
   } catch (err) {
     if (isClaudeCapacityError(err)) {
       sendClaudeBusy(req, res, err);
