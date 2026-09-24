@@ -11,6 +11,7 @@
  */
 
 import { logger } from "../config/logger";
+import { writingRubricLabel } from "./writing-level-progression";
 import type { ItemFeedback } from "./claude/item-feedback";
 import type { WritingFeedback } from "./claude/writing";
 import type { AttemptFeedback } from "./claude/attempt-feedback";
@@ -103,7 +104,7 @@ export function filterItemFeedbackForStudent(feedback: ItemFeedback): Record<str
     },
     "AI output filter (item-feedback)",
   );
-  return {
+  const base = {
     headline: filterStudentFacingText(feedback.headline) || feedback.headline,
     whyWrong: filterStudentFacingText(feedback.whyWrong) || feedback.whyWrong,
     correctAnswer: feedback.correctAnswer ?? "",
@@ -116,6 +117,15 @@ export function filterItemFeedbackForStudent(feedback: ItemFeedback): Record<str
     judgment: feedback.judgment,
     meetsTask: feedback.meetsTask,
   };
+  if (feedback.accessWriting != null && Number.isFinite(feedback.accessWriting)) {
+    const score = Math.max(0, Math.min(7, Math.round(feedback.accessWriting)));
+    return {
+      ...base,
+      accessWritingScore: score,
+      accessWritingLabel: writingRubricLabel(score),
+    };
+  }
+  return base;
 }
 
 export function filterWritingFeedbackForStudent(feedback: WritingFeedback): Record<string, unknown> {
@@ -139,5 +149,6 @@ export function filterAttemptFeedbackForStudent(feedback: AttemptFeedback): Atte
     strengths: scrubList(feedback.strengths),
     nextSteps: scrubList(feedback.nextSteps),
     coachForNextSession: "",
+    recommendedLevel: null,
   };
 }

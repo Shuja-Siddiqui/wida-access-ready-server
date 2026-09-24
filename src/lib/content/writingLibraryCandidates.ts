@@ -1,9 +1,16 @@
 /**
  * Writing library retrieval — subject-scoped candidate search for retrieve→compose.
  *
- * Server hard-filters by academic subject (`academic:science`, etc.), ranks by topic
- * relevance, and returns a shortlist for Claude to pick from. No cross-subject images.
+ * Server hard-filters by academic subject (`academic:science`, etc.), gathers a topic-
+ * relevant pool, then returns the top N least-used images for Claude to pick from.
+ * No cross-subject images.
  */
+
+/** Shortlist size passed to Claude compose (AI picks one id or null). */
+export const WRITING_LIBRARY_CANDIDATE_LIMIT = 3;
+
+/** Max rows collected before least-used ranking. */
+const WRITING_LIBRARY_POOL_SIZE = 15;
 
 import { and, asc, eq, or, sql, notInArray } from "drizzle-orm";
 import { db } from "../../../db";
@@ -98,7 +105,38 @@ type LibraryRow = {
   detectionResults: unknown;
   contexts: string[] | null;
   academicVision: Record<string, AcademicVisionResult> | null;
+  useCount: number;
 };
+
+const TIER_RANK: Record<WritingLibraryMatchTier, number> = {
+  topic_link:   0,
+  topic_meta:   1,
+  subject_tags: 2,
+  recycle:      3,
+};
+
+type PooledEntry = {
+  row: LibraryRow;
+  tier: WritingLibraryMatchTier;
+};
+
+/** Prefer topic relevance, then least-used, then random tie-break. */
+function rankShortlistByLeastUsed(
+  pool: PooledEntry[],
+  subject: WritingAcademicSubject,
+  limit: number,
+): WritingLibraryCandidate[] {
+  return [...pool]
+    .sort((a, b) => {
+      const tierDiff = TIER_RANK[a.tier] - TIER_RANK[b.tier];
+      if (tierDiff !== 0) return tierDiff;
+      const countDiff = a.row.useCount - b.row.useCount;
+      if (countDiff !== 0) return countDiff;
+      return Math.random() - 0.5;
+    })
+    .slice(0, limit)
+    .map(({ row, tier }) => toCandidate(row, subject, tier));
+}
 
 function toCandidate(
   row: LibraryRow,
@@ -174,9 +212,10 @@ async function fetchRecycleCandidates(params: {
 }
 
 /**
- * Retrieve up to `limit` subject-scoped library images ranked by topic relevance.
+ * Retrieve up to `limit` subject-scoped library images for Claude compose.
+ * Gathers a topic-relevant pool, then returns the least-used `limit` entries.
  * Never returns images outside `academic:{subject}`.
- * When every fresh image was recently used, falls back to least-used recycle pool.
+ * When no topic match exists, falls back to least-used recycle pool.
  */
 export async function retrieveWritingLibraryCandidates(params: {
   academicSubject: WritingAcademicSubject;
@@ -185,7 +224,7 @@ export async function retrieveWritingLibraryCandidates(params: {
   level: number;
   limit?: number;
 }): Promise<WritingLibraryCandidate[]> {
-  const limit = params.limit ?? 5;
+  const limit = params.limit ?? WRITING_LIBRARY_CANDIDATE_LIMIT;
   const exclude = params.excludeImageIds?.length
     ? notInArray(libraryTable.id, params.excludeImageIds)
     : undefined;
@@ -196,12 +235,12 @@ export async function retrieveWritingLibraryCandidates(params: {
   );
 
   const seen = new Set<string>();
-  const out: WritingLibraryCandidate[] = [];
+  const pool: PooledEntry[] = [];
 
   const push = (row: LibraryRow, tier: WritingLibraryMatchTier) => {
-    if (seen.has(row.id) || out.length >= limit) return;
+    if (seen.has(row.id) || pool.length >= WRITING_LIBRARY_POOL_SIZE) return;
     seen.add(row.id);
-    out.push(toCandidate(row, params.academicSubject, tier));
+    pool.push({ row, tier });
   };
 
   const terms = topicSearchTerms(params.topic);
@@ -232,24 +271,24 @@ export async function retrieveWritingLibraryCandidates(params: {
         ),
       )
       .orderBy(sql`CASE WHEN ${libraryTable.academicVision} != '{}' THEN 0 ELSE 1 END, RANDOM()`)
-      .limit(limit);
+      .limit(WRITING_LIBRARY_POOL_SIZE);
 
     for (const row of topicLinked) push(row as LibraryRow, "topic_link");
   }
 
-  if (out.length < limit && metaMatch) {
+  if (pool.length < WRITING_LIBRARY_POOL_SIZE && metaMatch) {
     const byMeta = await db
       .select(LIBRARY_COLS)
       .from(libraryTable)
       .where(and(subjectFilter, metaMatch))
       .orderBy(sql`CASE WHEN ${libraryTable.academicVision} != '{}' THEN 0 ELSE 1 END, RANDOM()`)
-      .limit(limit);
+      .limit(WRITING_LIBRARY_POOL_SIZE);
 
     for (const row of byMeta) push(row as LibraryRow, "topic_meta");
   }
 
   const anchorTags = SUBJECT_VISUAL_ANCHOR_TAGS[params.academicSubject] ?? [];
-  if (out.length < limit && anchorTags.length > 0) {
+  if (pool.length < WRITING_LIBRARY_POOL_SIZE && anchorTags.length > 0) {
     const byTags = await db
       .select(LIBRARY_COLS)
       .from(libraryTable)
@@ -263,12 +302,12 @@ export async function retrieveWritingLibraryCandidates(params: {
         ),
       )
       .orderBy(sql`CASE WHEN ${libraryTable.academicVision} != '{}' THEN 0 ELSE 1 END, RANDOM()`)
-      .limit(limit);
+      .limit(WRITING_LIBRARY_POOL_SIZE);
 
     for (const row of byTags) push(row as LibraryRow, "subject_tags");
   }
 
-  if (out.length === 0) {
+  if (pool.length === 0) {
     return fetchRecycleCandidates({
       academicSubject: params.academicSubject,
       level: params.level,
@@ -276,5 +315,5 @@ export async function retrieveWritingLibraryCandidates(params: {
     });
   }
 
-  return out;
+  return rankShortlistByLeastUsed(pool, params.academicSubject, limit);
 }

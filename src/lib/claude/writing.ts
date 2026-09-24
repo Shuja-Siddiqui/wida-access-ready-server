@@ -15,6 +15,10 @@ import {
 } from "../content";
 import { buildSystemPrompt } from "./prompts/compose";
 import { contentGenPrompt } from "./prompts/content";
+import {
+  buildWritingPassageSentenceTarget,
+  writingPassageSchemaHint,
+} from "./prompts/content/writing-image-passage";
 import { feedbackCoachPrompt } from "./prompts/wida-feedback-guide";
 import {
   formatExpressivePldBlock,
@@ -53,7 +57,7 @@ function buildWritingOutputSchema(params: {
       ? `  "selected_image_id": "<uuid from library_candidates OR null if no photo fits this key_use>",`
       : `  "selected_image_id": null,`,
     hasLibraryCandidates
-      ? `  "passage": "<2–4 short sentences: CONTEXT ONLY — tied to selected_image_id; no task, no frame, no word-bank words; null if selected_image_id is null>",`
+      ? `  "passage": "<${writingPassageSchemaHint(level)}: image-connected CONTEXT ONLY; null if selected_image_id is null>",`
       : `  "passage": null,`,
     hasLibraryCandidates
       ? `  "prompt": "<writing JOB ONLY — what/how many sentences; do NOT copy sentence_frame or word_bank into this string>",`
@@ -67,7 +71,10 @@ function buildWritingOutputSchema(params: {
     `SCHEMA ENFORCEMENT RULES`,
     `• Return every key above.`,
     hasLibraryCandidates
-      ? `• library_candidates are pre-filtered for academic_subject. Each entry includes id, tags, concept, and description — use that metadata when you pick selected_image_id and compose passage + prompt.`
+      ? `• library_candidates are pre-filtered for academic_subject. Each entry includes id, tags, concept, and description — pick selected_image_id, then compose passage FROM that metadata before writing the prompt.`
+      : null,
+    hasLibraryCandidates
+      ? `• passage must be a connected narrative/informational text about the selected photo (not generic topic text). Hardness follows passage_sentence_target in the JSON payload.`
       : null,
     hasLibraryCandidates
       ? `• You choose selected_image_id (or null), passage, prompt, word_bank, and sentence_frame per content_portrayal and framework — server does not rewrite your output.`
@@ -198,7 +205,8 @@ export async function generateWritingContent(params: {
     required_key_use:        keyUse,
     library_candidates:      serializeWritingLibraryCandidatesForPrompt(libraryCandidates),
     library_candidate_note:
-      "Each library_candidates entry has tags (detected/subject labels), concept (short topic), and description (what the photo is about). Use this metadata when selecting an image and writing passage + prompt.",
+      "Each library_candidates entry has tags (detected/subject labels), concept (short topic), and description (what the photo is about). Select an image, then write passage as a connected story/context FROM that metadata before composing the prompt.",
+    passage_sentence_target: buildWritingPassageSentenceTarget(params.level, keyUse),
     academic_subject:        params.academicSubject,
     academic_unit:           params.academicUnit ?? null,
     academic_scenario:       params.academicScenario ?? null,

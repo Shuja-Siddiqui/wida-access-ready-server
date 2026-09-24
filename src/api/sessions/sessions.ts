@@ -87,7 +87,15 @@ import {
   getExitThreshold,
   getLevelLabel,
 } from "../../lib/assessments";
-import { calculateLevelUpdate } from "../../lib/adaptive-engine";
+import { upsertStudentPracticeSuggestion } from "../../lib/practice-suggestion";
+import {
+  calculatePerformanceLevelUpdate,
+  fractionalStepWithinLevel,
+} from "../../lib/performance-level-update";
+import {
+  extractWritingMinSentencesFromAnswers,
+  extractWritingRubricFromAnswers,
+} from "../../lib/writing-level-progression";
 // (generateListeningContent and others imported above alongside generateImagePassageContent)
 import { sendError, sendSuccess } from "../../lib/http/api-response";
 import { requireAuth, requireStudentAccess } from "../../middlewares/auth";
@@ -386,14 +394,15 @@ router.use("/students", requireAuth);
 
 // Session end messages
 function getSessionEndMessage(domain: string, levelDelta: number, scorePct: number, name: string): string {
+  const deltaLabel = levelDelta > 0 ? `+${levelDelta.toFixed(1)}` : levelDelta.toFixed(1);
   if (levelDelta > 0) {
-    return `That's a wrap, ${name}. You gained +0.2 in ${capitalize(domain)} today. Keep it up. See you tomorrow.`;
+    return `That's a wrap, ${name}. You moved ${deltaLabel} in ${capitalize(domain)} today. Keep it up. See you tomorrow.`;
   }
   if (scorePct >= 70) {
     return `Solid session, ${name}. Keep that up and you'll keep climbing. See you tomorrow.`;
   }
   if (levelDelta < 0) {
-    return `Tough one, ${name}. You dropped 0.2 — but that's how you find your edge. Come back tomorrow.`;
+    return `Tough one, ${name}. You moved ${deltaLabel} in ${capitalize(domain)} — but that's how you find your edge. Come back tomorrow.`;
   }
   return `Keep going, ${name}. Every session counts. You'll get there. See you tomorrow.`;
 }
@@ -1728,7 +1737,6 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
           topic: topicLabel,
           excludeImageIds,
           level: writingCtx.elpLevel,
-          limit: 5,
         });
 
         const writingContent = await generateWritingContent({
@@ -1914,17 +1922,83 @@ router.post("/students/:studentId/sessions/:sessionId/complete", requireStudentA
 
   const currentLevel = levelRow ? parseFloat(levelRow.currentLevel) : 1.0;
   const exitThreshold = getExitThreshold(assessment, completionConfigDomain);
-  const consecutivePass = levelRow ? parseInt(levelRow.consecutivePassCount) : 0;
   const consecutiveFail = levelRow ? parseInt(levelRow.consecutiveFailCount) : 0;
 
-  // Calculate level update
-  const levelUpdate = calculateLevelUpdate(
+  const config = getAssessmentConfig(assessment);
+  const writingRubricScore = domain === "writing"
+    ? extractWritingRubricFromAnswers(parsed.data.answers)
+    : null;
+  const writingMinSentences = domain === "writing"
+    ? extractWritingMinSentencesFromAnswers(parsed.data.answers)
+    : 1;
+
+  req.log.info(
+    {
+      stage: "session-complete",
+      domain,
+      accessRubricExpected: domain === "speaking" || domain === "writing",
+    },
+    "session submit — end-of-session feedback",
+  );
+
+  let attemptFeedback;
+  try {
+    attemptFeedback = await generateAttemptFeedback({
+      domain,
+      tier,
+      level: currentLevel,
+      scorePct,
+      topic: session.topic,
+      keyUse: session.keyUse,
+      answers: parsed.data.answers ?? [],
+    });
+  } catch (err) {
+    req.log.error(
+      {
+        err,
+        stage: "session-complete",
+        domain,
+        code: isClaudeCapacityError(err) ? err.code : "ATTEMPT_FEEDBACK_FAILED",
+        jobId: isClaudeCapacityError(err) ? err.jobId : null,
+        queue: getClaudeQueueSnapshot(),
+      },
+      "End-of-session coach failed — using fallback notes",
+    );
+    attemptFeedback = {
+      summary: "You finished this practice. Review missed items and try again soon.",
+      mistakes: [],
+      strengths: ["You completed the session."],
+      nextSteps: ["Practice the same skill again tomorrow."],
+      coachForNextSession: "Give another similar job at this same English level. Keep the WIDA factors. Practice clear, complete answers.",
+      recommendedLevel: null,
+    };
+  }
+
+  const levelUpdate = calculatePerformanceLevelUpdate({
+    domain,
     currentLevel,
     exitThreshold,
+    minLevel: config.scale.min,
     scorePct,
-    consecutivePass,
+    recommendedLevel: attemptFeedback.recommendedLevel,
+    rubricScore: writingRubricScore,
+    meetsTask: scorePct >= 70,
+    minSentences: writingMinSentences,
     consecutiveFail,
-    assessment
+  });
+
+  req.log.info(
+    {
+      domain,
+      recommendedLevel: attemptFeedback.recommendedLevel,
+      writingRubricScore,
+      consecutiveFailIn: consecutiveFail,
+      consecutiveFailOut: levelUpdate.newConsecutiveFail,
+      levelBefore: currentLevel,
+      levelAfter: levelUpdate.newLevel,
+      delta: levelUpdate.delta,
+    },
+    "performance-based level update",
   );
 
   // Upsert level row — ON CONFLICT handles both first-time inserts and race conditions
@@ -2076,52 +2150,12 @@ router.post("/students/:studentId/sessions/:sessionId/complete", requireStudentA
 
   const message = getSessionEndMessage(domain, levelUpdate.delta, scorePct, student.name);
 
-  req.log.info(
-    {
-      stage: "session-complete",
-      domain,
-      accessRubricExpected: domain === "speaking" || domain === "writing",
-    },
-    "session submit — end-of-session feedback",
-  );
-
-  let attemptFeedback;
-  try {
-    attemptFeedback = await generateAttemptFeedback({
-      domain,
-      tier,
-      level: currentLevel,
-      scorePct,
-      topic: session.topic,
-      keyUse: session.keyUse,
-      answers: parsed.data.answers ?? [],
-    });
-  } catch (err) {
-    req.log.error(
-      {
-        err,
-        stage: "session-complete",
-        domain,
-        code: isClaudeCapacityError(err) ? err.code : "ATTEMPT_FEEDBACK_FAILED",
-        jobId: isClaudeCapacityError(err) ? err.jobId : null,
-        queue: getClaudeQueueSnapshot(),
-      },
-      "End-of-session coach failed — session already saved, using fallback notes",
-    );
-    attemptFeedback = {
-      summary: "You finished this practice. Review missed items and try again soon.",
-      mistakes: [],
-      strengths: ["You completed the session."],
-      nextSteps: ["Practice the same skill again tomorrow."],
-      coachForNextSession: "Give another similar job at this same English level. Keep the WIDA factors. Practice clear, complete answers.",
-    };
-  }
-
+  const reportLevel = levelUpdate.newLevel;
   const practiceReport = buildPracticeReport({
     domain,
-    level: Math.floor(currentLevel),
-    fractionalLevel: currentLevel,
-    stepWithinLevel: Math.min(4, Math.round((currentLevel - Math.floor(currentLevel)) / 0.2)),
+    level: Math.floor(reportLevel),
+    fractionalLevel: reportLevel,
+    stepWithinLevel: fractionalStepWithinLevel(reportLevel),
     scorePct,
     keyUse: session.keyUse,
     topic: session.topic,
@@ -2131,6 +2165,15 @@ router.post("/students/:studentId/sessions/:sessionId/complete", requireStudentA
     .update(sessionsTable)
     .set({ practiceReport })
     .where(eq(sessionsTable.id, session.id));
+
+  await upsertStudentPracticeSuggestion({
+    studentId: student.id,
+    domain,
+    sessionId: session.id,
+    feedback: attemptFeedback,
+  }).catch((err) => {
+    req.log.warn({ err, sessionId: session.id, domain }, "practice suggestion upsert failed");
+  });
 
   sendSuccess(res, {
     sessionId: session.id,

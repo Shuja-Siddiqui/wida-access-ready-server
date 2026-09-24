@@ -272,11 +272,18 @@ async function applySqlMigrations(client) {
     console.log("  Skip 0012 (library.use_count already exists)");
   }
 
+  if (!(await tableExists(client, "student_practice_suggestions"))) {
+    await applyFile(client, "0013_student_practice_suggestions.sql");
+  } else {
+    console.log("  Skip 0013 (student_practice_suggestions already exists)");
+  }
+
   console.log("  After:", {
     themes: await tableExists(client, "themes"),
     content_categories: await tableExists(client, "content_categories"),
     student_levels_unique: await indexExists(client, "student_levels_student_id_domain_tier_unique"),
     library_use_count: await libraryUseCountExists(),
+    student_practice_suggestions: await tableExists(client, "student_practice_suggestions"),
   });
 }
 
