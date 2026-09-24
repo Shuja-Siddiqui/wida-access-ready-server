@@ -469,23 +469,30 @@ export async function generateItemFeedback(params: ItemFeedbackInput): Promise<I
     serializeWritingRubricForPrompt(),
     "2. END-OF-THIS-LEVEL WRITING (pld — English hardness for this integer level only)",
     JSON.stringify(selectExpressivePld(params.level)),
-    "3. WHAT WAS ASKED (the only job — do not invent a second job)",
+    "3. CONTEXT THE STUDENT READ (when a library image session)",
+    payload.passage
+      ? `Context passage: ${payload.passage}`
+      : "Context passage: (none — no image narrative)",
+    payload.image_description ? `Picture description: ${payload.image_description}` : "",
+    payload.image_tags.length ? `Picture tags: ${payload.image_tags.join(", ")}` : "",
+    "4. WHAT WAS ASKED (the only job — do not invent a second job)",
     `Prompt: ${payload.prompt || payload.question || "(none)"}`,
     payload.scaffold ? `Sentence frame: ${payload.scaffold}` : "",
     payload.options?.length ? `Word bank: ${payload.options.join(", ")}` : "",
     payload.can_do ? `Task job: ${payload.can_do}` : "",
-    payload.image_description ? `Picture: ${payload.image_description}` : "",
-    payload.image_tags.length ? `Picture tags: ${payload.image_tags.join(", ")}` : "",
-    "4. THIS SUBMIT (what the student just wrote)",
+    "5. THIS SUBMIT (what the student just wrote)",
     payload.student_answer || "(empty)",
     `Try number: ${payload.try_count}.`,
     payload.last_student_answer
-      ? `5. LAST SUBMIT (before they tried again):\n${payload.last_student_answer}`
+      ? `6. LAST SUBMIT (before they tried again):\n${payload.last_student_answer}`
       : "",
     payload.last_coach_tip
-      ? `6. LAST TIP they were asked to apply:\n${payload.last_coach_tip}`
+      ? `7. LAST TIP they were asked to apply:\n${payload.last_coach_tip}`
       : "",
     "HOW TO DECIDE",
+    payload.passage
+      ? "When a context passage was provided, score whether the writing connects to that passage and the prompt — not unrelated topic text."
+      : "",
     "If THIS SUBMIT does the asked job and language is fine for this pld: PASS. spoken_text = praise only. No You can write.",
     "If NOT YET: you MUST teach. (1) what is wrong in their writing (2) why it is wrong in simple words so they can learn (3) You can write: one or two sentences they can copy. Do not skip the why. One gap only (grammar, verb, pronoun, spelling, or missing the job). Do not add a new topic.",
     "If this is a resubmit and they applied the last tip: PASS. Do not invent a new gap.",

@@ -26,6 +26,8 @@ export interface AttemptFeedback {
   nextSteps: string[];
   /** For the next content generator only — not shown to the student. */
   coachForNextSession: string;
+  /** Where the student should practice next (fractional WIDA level). Server-only. */
+  recommendedLevel: number | null;
 }
 
 const EMPTY_FEEDBACK: AttemptFeedback = {
@@ -34,6 +36,7 @@ const EMPTY_FEEDBACK: AttemptFeedback = {
   strengths: ["You completed the session."],
   nextSteps: ["Practice the same skill again and read each question twice before answering."],
   coachForNextSession: "Give another similar job at this same English level. Keep the WIDA factors. Practice clear, complete answers.",
+  recommendedLevel: null,
 };
 
 function clip(value: unknown, max = MAX_ANSWER_CHARS): string {
@@ -90,9 +93,11 @@ If an ACCESS speaking or writing rubric is above, judge remarks against that rub
 - strengths: what they did well on correct items (Language Forms if speaking/writing). Use [] only if every item was missed.
 - next_steps: at least one concrete practice action unless they scored 100%.
 - coach_for_next_session: 2–4 sentences for the NEXT item generator (teacher voice, not student-facing). Name the language to practice more. Stay in this domain and this English level. Do not tell it to skip WIDA functions or jump a level.
+- recommended_level: ONE decimal number — where this student should practice NEXT in this domain after THIS session only. Use current_level from the JSON as the starting point. Examples: small gain 1.0→1.3; halfway to next integer 1.0→1.5; clearly ready for next band 1.0→2.0; weak session hold at current or slightly lower. Do NOT use fixed +0.2 steps — judge from rubric/score and evidence.
 
 OUTPUT SCHEMA — every key required (use [] or "" if empty, never omit the key)
 {
+  "recommended_level": 1.5,
   "summary": "<2–3 sentences about this attempt>",
   "mistakes": [
     {
@@ -132,7 +137,7 @@ export async function generateAttemptFeedback(params: {
   const userPrompt = JSON.stringify({
     domain: params.domain,
     tier: params.tier ?? "general",
-    level: params.level,
+    current_level: params.level,
     score_pct: Math.round(params.scorePct),
     topic: params.topic ?? null,
     key_use: params.keyUse ?? null,
@@ -155,12 +160,18 @@ export async function generateAttemptFeedback(params: {
 
   try {
     const result = (await callClaude(systemPrompt, userPrompt, 900)) as {
+      recommended_level?: unknown;
       summary?: unknown;
       mistakes?: unknown;
       strengths?: unknown;
       next_steps?: unknown;
       coach_for_next_session?: unknown;
     };
+
+    const recommendedRaw = result.recommended_level;
+    const recommendedLevel = typeof recommendedRaw === "number" && Number.isFinite(recommendedRaw)
+      ? Math.round(recommendedRaw * 10) / 10
+      : null;
 
     const mistakesRaw = Array.isArray(result.mistakes) ? result.mistakes : [];
     const mistakes: AttemptFeedbackItem[] = mistakesRaw.slice(0, 4).map((row) => {
@@ -181,6 +192,7 @@ export async function generateAttemptFeedback(params: {
         : EMPTY_FEEDBACK.nextSteps,
       coachForNextSession: clip(result.coach_for_next_session ?? "", 600)
         || EMPTY_FEEDBACK.coachForNextSession,
+      recommendedLevel,
     };
   } catch (err) {
     rethrowIfClaudeCapacity(err);

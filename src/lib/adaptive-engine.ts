@@ -1,6 +1,7 @@
 // Adaptive pathway engine: gap calculation, domain ranking, level advancement, growth rate
 
 import { Assessment, Domain, getAssessmentConfig, normalizeScore } from "./assessments";
+import { calculatePerformanceLevelUpdate } from "./performance-level-update";
 
 export interface DomainGap {
   domain: Domain;
@@ -132,14 +133,7 @@ export interface LevelUpdateResult {
   atExit: boolean;
 }
 
-const STEP = 0.2;
-const PASS_THRESHOLD_PCT = 70; // ≥ 70% on a session = success
-
-/**
- * Simple ±0.2 model:
- *   score ≥ 70%  →  +0.2, capped at exitThreshold (4.7 for WIDA)
- *   score < 70%  →  −0.2, floored at scale minimum (1.0)
- */
+/** @deprecated Use calculatePerformanceLevelUpdate from performance-level-update.ts */
 export function calculateLevelUpdate(
   currentLevel: number,
   exitThreshold: number,
@@ -149,29 +143,14 @@ export function calculateLevelUpdate(
   assessment: Assessment
 ): LevelUpdateResult {
   const config = getAssessmentConfig(assessment);
-  const minLevel = config.scale.min;
-
-  const passed = scorePct >= PASS_THRESHOLD_PCT;
-  let newLevel: number;
-  let reason: LevelUpdateResult["reason"];
-
-  if (passed) {
-    newLevel = parseFloat(Math.min(currentLevel + STEP, exitThreshold).toFixed(2));
-    reason   = newLevel >= exitThreshold ? "exit" : "advance";
-  } else {
-    newLevel = parseFloat(Math.max(currentLevel - STEP, minLevel).toFixed(2));
-    reason   = newLevel <= minLevel ? "floor" : "drop";
-  }
-
-  return {
-    newLevel,
-    changed: newLevel !== currentLevel,
-    delta: parseFloat((newLevel - currentLevel).toFixed(2)),
-    reason,
-    newConsecutivePass: 0,
-    newConsecutiveFail: 0,
-    atExit: newLevel >= exitThreshold,
-  };
+  const result = calculatePerformanceLevelUpdate({
+    domain: "listening",
+    currentLevel,
+    exitThreshold,
+    minLevel: config.scale.min,
+    scorePct,
+  });
+  return result;
 }
 
 // Stall detection: 8 sessions without level movement

@@ -41,6 +41,7 @@ import {
   getStartingLevel,
   telpasToNumeric,
 } from "../../lib/assessments";
+import { listStudentPracticeSuggestions } from "../../lib/practice-suggestion";
 import {
   calculateGaps,
   rankDomains,
@@ -1182,6 +1183,30 @@ router.get("/students/:studentId/pathway", requireStudentAccess("studentId"), as
     domains: domainsWithAllocation,
     suggestedMode: allAtExit ? "single" : "all_four",
     nudgeMessage,
+  });
+});
+
+router.get("/students/:studentId/suggestions", requireStudentAccess("studentId"), async (req, res): Promise<void> => {
+  const studentId = req.params.studentId as string;
+
+  const [student] = await db
+    .select({ id: studentsTable.id })
+    .from(studentsTable)
+    .where(eq(studentsTable.id, studentId))
+    .limit(1);
+
+  if (!student) {
+    sendError(res, 404, "Student not found");
+    return;
+  }
+
+  const suggestions = await listStudentPracticeSuggestions(student.id);
+  sendSuccess(res, {
+    suggestions: suggestions.map((row) => ({
+      domain: row.domain,
+      message: row.message,
+      updatedAt: row.updatedAt?.toISOString() ?? new Date().toISOString(),
+    })),
   });
 });
 

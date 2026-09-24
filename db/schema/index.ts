@@ -12,6 +12,7 @@ export * from "./students";
 export * from "./student_levels";
 export * from "./sessions";
 export * from "./session_answers";
+export * from "./student_practice_suggestions";
 export * from "./student_object_mastery";
 
 // Auth session management
