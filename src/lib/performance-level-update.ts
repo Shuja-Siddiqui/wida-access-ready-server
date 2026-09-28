@@ -147,9 +147,15 @@ export function calculatePerformanceLevelUpdate(params: {
     scorePct,
     consecutiveFail = 0,
   } = params;
-  const meetsTask = params.meetsTask ?? scorePct >= 70;
   const rubricScore = params.rubricScore ?? null;
   const minSentences = params.minSentences ?? 1;
+  const meetsTask = domain === "writing"
+    ? (params.meetsTask ?? (
+        rubricScore != null
+          ? writingScoreMeetsTask(rubricScore, Math.floor(currentLevel), minSentences)
+          : false
+      ))
+    : (params.meetsTask ?? scorePct >= 70);
 
   let proposed = parseRecommendedLevel(params.recommendedLevel);
 

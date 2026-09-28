@@ -2,6 +2,8 @@
  * Writing rubric helpers — level placement lives in performance-level-update.ts.
  */
 
+import { writingScoreMeetsTask } from "./wida-access-rubric";
+
 /** Student-facing 1–2 word label for ACCESS writing score points. */
 export function writingRubricLabel(scorePoint: number): string {
   const s = Math.max(0, Math.min(7, Math.round(scorePoint)));
@@ -43,4 +45,20 @@ export function extractWritingMinSentencesFromAnswers(
   const raw = readAnswerContentField(answers, "minSentences");
   const n = typeof raw === "number" ? raw : Number(raw);
   return Number.isFinite(n) && n > 0 ? n : 1;
+}
+
+/** Whether the writing item met the ACCESS rubric + task bar (not score %). */
+export function extractWritingMeetsTaskFromAnswers(
+  answers: Array<{ correct?: boolean; content?: unknown }> | undefined,
+  rubricScore: number | null,
+  level: number,
+  minSentences: number,
+): boolean {
+  if (answers?.length && typeof answers[0]?.correct === "boolean") {
+    return answers[0].correct;
+  }
+  if (rubricScore != null && Number.isFinite(rubricScore)) {
+    return writingScoreMeetsTask(rubricScore, Math.floor(level), minSentences);
+  }
+  return false;
 }
