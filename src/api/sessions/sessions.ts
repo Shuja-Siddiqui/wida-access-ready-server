@@ -93,9 +93,11 @@ import {
   fractionalStepWithinLevel,
 } from "../../lib/performance-level-update";
 import {
+  extractWritingMeetsTaskFromAnswers,
   extractWritingMinSentencesFromAnswers,
   extractWritingRubricFromAnswers,
 } from "../../lib/writing-level-progression";
+import { normalizeRotationKeyUse } from "../../lib/content/listeningContentEngine";
 // (generateListeningContent and others imported above alongside generateImagePassageContent)
 import { sendError, sendSuccess } from "../../lib/http/api-response";
 import { requireAuth, requireStudentAccess } from "../../middlewares/auth";
@@ -109,6 +111,36 @@ import { resolveStudentAccess } from "../../lib/billing/subscription";
 import { buildPracticeReport, parsePracticeReport } from "../../lib/practice-report";
 
 const storage = new ObjectStorageService();
+
+/** Writing: did the last completed session pass the ACCESS rubric gate (not score %)? */
+async function resolveLastWritingMeetsTask(
+  sessionId: string,
+  practiceReportRaw: unknown,
+  currentLevel: number,
+): Promise<boolean | null> {
+  const report = parsePracticeReport(practiceReportRaw);
+  if (report?.meetsTask != null) return report.meetsTask;
+
+  const answerRows = await db
+    .select({
+      questionIndex: sessionAnswersTable.questionIndex,
+      content: sessionAnswersTable.content,
+      correct: sessionAnswersTable.correct,
+    })
+    .from(sessionAnswersTable)
+    .where(eq(sessionAnswersTable.sessionId, sessionId))
+    .orderBy(sessionAnswersTable.questionIndex);
+
+  if (answerRows.length === 0) return null;
+
+  const answers = answerRows.map((r) => ({
+    content: r.content,
+    correct: r.correct ?? undefined,
+  }));
+  const rubric = extractWritingRubricFromAnswers(answers);
+  const minS = extractWritingMinSentencesFromAnswers(answers);
+  return extractWritingMeetsTaskFromAnswers(answers, rubric, currentLevel, minS);
+}
 
 function sendClaudeBusy(
   req: { log: { warn: (obj: object, msg: string) => void } },
@@ -393,12 +425,21 @@ const router: IRouter = Router();
 router.use("/students", requireAuth);
 
 // Session end messages
-function getSessionEndMessage(domain: string, levelDelta: number, scorePct: number, name: string): string {
+function getSessionEndMessage(
+  domain: string,
+  levelDelta: number,
+  scorePct: number,
+  name: string,
+  meetsTask?: boolean,
+): string {
   const deltaLabel = levelDelta > 0 ? `+${levelDelta.toFixed(1)}` : levelDelta.toFixed(1);
   if (levelDelta > 0) {
     return `That's a wrap, ${name}. You moved ${deltaLabel} in ${capitalize(domain)} today. Keep it up. See you tomorrow.`;
   }
-  if (scorePct >= 70) {
+  const sessionStrong = domain === "writing"
+    ? meetsTask === true
+    : scorePct >= 70;
+  if (sessionStrong) {
     return `Solid session, ${name}. Keep that up and you'll keep climbing. See you tomorrow.`;
   }
   if (levelDelta < 0) {
@@ -495,9 +536,24 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
   // Both are independent axes stored in separate columns — no composite strings.
   const domain = parsed.data.domain as Domain;
   // Writing is always academic WIDA — coerce legacy clients that omit tier or send "general".
-  const tier: Tier = domain === "writing" ? "academic" : (parsed.data.tier as Tier);
+  let tier: Tier = domain === "writing" ? "academic" : (parsed.data.tier as Tier);
   const configDomain = domain; // domain is always a core Domain — no mapping needed
   const config = getAssessmentConfig(assessment);
+
+  // One listening domain in the UI — alternate general/academic content server-side.
+  if (domain === "listening") {
+    const [lastListeningSession] = await db
+      .select({ tier: sessionsTable.tier })
+      .from(sessionsTable)
+      .where(and(
+        eq(sessionsTable.studentId, student.id),
+        eq(sessionsTable.domain, "listening"),
+      ))
+      .orderBy(desc(sessionsTable.createdAt))
+      .limit(1);
+    tier = lastListeningSession?.tier === "academic" ? "general" : "academic";
+    if (!lastListeningSession) tier = "general";
+  }
 
   // Get current level — ORDER BY updatedAt DESC so duplicates never serve a stale row
   const [levelRow] = await db
@@ -569,10 +625,8 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
 
     const lastScore      = lastCompletedSession?.scorePct ?? 100;
     const priorPracticeReport = parsePracticeReport(lastCompletedSession?.practiceReport);
-    const persistedTopic =
-      lastCompletedSession && lastScore < 70
-        ? lastCompletedSession.topic
-        : null;
+    // Always pick a fresh topic/scenario — do not reuse failed sessions (24h dedup handles variety).
+    const persistedTopic: string | null = null;
 
     const [lastAnySession] = await db
       .select({ keyUse: sessionsTable.keyUse })
@@ -585,9 +639,7 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
       .orderBy(desc(sessionsTable.createdAt))
       .limit(1);
 
-    const lastKeyUse = persistedTopic
-      ? (lastCompletedSession?.keyUse ?? null)
-      : (lastAnySession?.keyUse ?? lastCompletedSession?.keyUse ?? null);
+    const lastKeyUse = lastAnySession?.keyUse ?? lastCompletedSession?.keyUse ?? null;
 
     // ── Levels 0, 1, 2 → image-library object-tap sessions ────────────────
     if (Math.floor(currentLevel) <= 2) {
@@ -856,11 +908,8 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
     const lastAnyAcademic = recentAcademicSessions[0];
     const lastAcademicSession = recentAcademicSessions.find((s) => s.completed);
     const lastScore      = lastAcademicSession?.scorePct ?? 100;
-    const persistedTopic =
-      lastAcademicSession && lastScore < 70 ? lastAcademicSession.topic : null;
-    const lastKeyUse = persistedTopic
-      ? (lastAcademicSession?.keyUse ?? null)
-      : (lastAnyAcademic?.keyUse ?? null);
+    const persistedTopic: string | null = null;
+    const lastKeyUse = lastAnyAcademic?.keyUse ?? lastAcademicSession?.keyUse ?? null;
     const priorPracticeReport = parsePracticeReport(lastAcademicSession?.practiceReport);
 
     const academicCtx = buildAcademicListeningContext(
@@ -1318,10 +1367,10 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
   }
 
   // ── Non-listening domains ─────────────────────────────────────────────────
-  // Fetch the last completed session for this domain/tier to drive key-use
-  // rotation and topic persistence (reuse topic if last session score < 70).
+  // Fetch recent sessions for key-use / subject rotation (always fresh topic next session).
   const recentCompletedDomainSessions = await db
     .select({
+      id:             sessionsTable.id,
       topic:          sessionsTable.topic,
       scorePct:       sessionsTable.scorePct,
       keyUse:         sessionsTable.keyUse,
@@ -1358,10 +1407,19 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
   const lastDomainSession = recentCompletedDomainSessions[0];
   const domainPriorPracticeReport = parsePracticeReport(lastDomainSession?.practiceReport);
 
-  const lastDomainScore    = lastDomainSession?.scorePct ?? 100;
   const lastDomainKeyUse   = lastDomainSession?.keyUse   ?? null;
-  const domainPersistedTopic =
-    lastDomainSession && lastDomainScore < 70 ? lastDomainSession.topic : null;
+  const domainPersistedTopic: string | null = null;
+
+  const lastWritingMetTask =
+    domain === "writing" && lastDomainSession
+      ? await resolveLastWritingMeetsTask(
+          lastDomainSession.id ?? "",
+          lastDomainSession.practiceReport,
+          currentLevel,
+        )
+      : null;
+  const writingSameKluRetry =
+    domain === "writing" && lastWritingMetTask === false && Boolean(lastDomainKeyUse);
 
   const recentImageRows = await db
     .select({ libraryImageId: sessionsTable.libraryImageId })
@@ -1388,7 +1446,7 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
   const academicDomain = tier === "academic" && (domain === "reading" || domain === "speaking" || domain === "writing")
     ? (domain as "reading" | "speaking" | "writing")
     : null;
-  const academicIsRetry = domainPersistedTopic !== null;
+  const academicIsRetry = false;
   const lastWritingSubject =
     academicDomain === "writing"
     && ACADEMIC_SUBJECT_LABELS[lastDomainSession?.subject as keyof typeof ACADEMIC_SUBJECT_LABELS]
@@ -1397,7 +1455,11 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
   let academicSubject: "math" | "science" | "social_studies" | "ela" | null = null;
   const lastAcademicSubject = asAcademicSubject(lastDomainSession?.subject);
   if (academicDomain === "writing") {
-    academicSubject = nextWritingAcademicSubject(recentDomainSessions, academicIsRetry, lastWritingSubject);
+    if (writingSameKluRetry && lastDomainKeyUse) {
+      academicSubject = pickSubjectForKeyUse(lastDomainKeyUse, recentDomainSessions, false);
+    } else {
+      academicSubject = nextWritingAcademicSubject(recentDomainSessions, academicIsRetry, lastWritingSubject);
+    }
   } else if (academicDomain) {
     academicSubject = nextAcademicSubject(
       recentDomainSessions,
@@ -1406,13 +1468,17 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
       () => KEY_USE_ROTATION,
     );
   }
+  const writingFrozenKeyUse = writingSameKluRetry
+    ? normalizeRotationKeyUse(lastDomainKeyUse)
+    : null;
   const academicKeyUse = academicDomain === "writing" && academicSubject
-    ? nextWritingKeyUseForSubject(
-        recentDomainSessions,
-        academicSubject,
-        academicIsRetry,
-        lastDomainKeyUse,
-      )
+    ? (writingFrozenKeyUse
+        ?? nextWritingKeyUseForSubject(
+          recentDomainSessions,
+          academicSubject,
+          academicIsRetry,
+          lastDomainKeyUse,
+        ))
     : academicDomain && academicSubject
     ? nextKeyUseForSubject(
         recentDomainSessions,
@@ -1463,6 +1529,7 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
         domainPersistedTopic,
         lastWritingKeyUseForSubject(recentDomainSessions, academicSubject),
         academicSubject,
+        writingFrozenKeyUse,
       ).selectedTopic;
     }
   }
@@ -1481,7 +1548,7 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
     ? notInArray(libraryTable.id, excludeImageIds)
     : undefined;
   const elpFloor = Math.floor(currentLevel);
-  const domainKeyUseForPhoto = academicKeyUse ?? nextKeyUse(lastDomainKeyUse, domainPersistedTopic !== null);
+  const domainKeyUseForPhoto = academicKeyUse ?? nextKeyUse(lastDomainKeyUse, false);
   const portrayal = getContentPortrayal(elpFloor, domain.toUpperCase(), domainKeyUseForPhoto);
   const pictureUse = (portrayal?.picture as { use?: string } | null | undefined)?.use;
   // Writing L1–2: do not hard-skip or hard-require photos by KLU — attach topic-linked images
@@ -1690,6 +1757,7 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
           domainPersistedTopic,
           lastWritingKeyUseForSubject(recentDomainSessions, academicSubject),
           academicSubject,
+          writingFrozenKeyUse,
         );
 
         // Pick unit + scenario (same rotation as academic listening) so Claude
@@ -1974,6 +2042,15 @@ router.post("/students/:studentId/sessions/:sessionId/complete", requireStudentA
     };
   }
 
+  const writingMeetsTask = domain === "writing"
+    ? extractWritingMeetsTaskFromAnswers(
+        parsed.data.answers,
+        writingRubricScore,
+        currentLevel,
+        writingMinSentences,
+      )
+    : undefined;
+
   const levelUpdate = calculatePerformanceLevelUpdate({
     domain,
     currentLevel,
@@ -1982,7 +2059,7 @@ router.post("/students/:studentId/sessions/:sessionId/complete", requireStudentA
     scorePct,
     recommendedLevel: attemptFeedback.recommendedLevel,
     rubricScore: writingRubricScore,
-    meetsTask: scorePct >= 70,
+    meetsTask: domain === "writing" ? writingMeetsTask : scorePct >= 70,
     minSentences: writingMinSentences,
     consecutiveFail,
   });
@@ -2148,7 +2225,13 @@ router.post("/students/:studentId/sessions/:sessionId/complete", requireStudentA
 
   const newTotalXp = student.totalXp + xpEarned;
 
-  const message = getSessionEndMessage(domain, levelUpdate.delta, scorePct, student.name);
+  const message = getSessionEndMessage(
+    domain,
+    levelUpdate.delta,
+    scorePct,
+    student.name,
+    domain === "writing" ? writingMeetsTask : undefined,
+  );
 
   const reportLevel = levelUpdate.newLevel;
   const practiceReport = buildPracticeReport({
@@ -2157,6 +2240,7 @@ router.post("/students/:studentId/sessions/:sessionId/complete", requireStudentA
     fractionalLevel: reportLevel,
     stepWithinLevel: fractionalStepWithinLevel(reportLevel),
     scorePct,
+    meetsTask: domain === "writing" ? writingMeetsTask : undefined,
     keyUse: session.keyUse,
     topic: session.topic,
     feedback: attemptFeedback,

@@ -18,6 +18,8 @@ export interface PracticeReport {
   /** Sub-step within the integer level (0=Entry … 4=Advanced). */
   stepWithinLevel?: number;
   scorePct: number;
+  /** Writing: item passed ACCESS rubric + task gate (not derived from score %). */
+  meetsTask?: boolean;
   keyUse: string | null;
   topic: string | null;
   summary: string;
@@ -43,6 +45,7 @@ export function buildPracticeReport(params: {
   fractionalLevel?: number;
   stepWithinLevel?: number;
   scorePct: number;
+  meetsTask?: boolean;
   keyUse?: string | null;
   topic?: string | null;
   feedback: AttemptFeedback;
@@ -59,6 +62,7 @@ export function buildPracticeReport(params: {
     fractionalLevel: fractional,
     stepWithinLevel: step,
     scorePct: Math.round(params.scorePct),
+    meetsTask: params.meetsTask,
     keyUse: params.keyUse ?? null,
     topic: params.topic ?? null,
     summary: clip(params.feedback.summary ?? ""),
@@ -86,6 +90,7 @@ export function parsePracticeReport(raw: unknown): PracticeReport | null {
     fractionalLevel,
     stepWithinLevel,
     scorePct: typeof r.scorePct === "number" ? r.scorePct : 0,
+    meetsTask: typeof r.meetsTask === "boolean" ? r.meetsTask : undefined,
     keyUse: typeof r.keyUse === "string" ? r.keyUse : null,
     topic: typeof r.topic === "string" ? r.topic : null,
     summary: clip(summary),

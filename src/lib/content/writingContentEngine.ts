@@ -261,11 +261,12 @@ export function buildWritingContext(
   persistedTopic: string | null = null,
   lastKeyUse: string | null = null,
   academicSubject: AcademicSubject,
+  keyUseOverride: KeyUse | null = null,
 ): WritingContext {
   const elpLevel = floorLevel(fractionalLevel);
   const step     = subStep(fractionalLevel);
   const isRetry  = persistedTopic !== null;
-  const keyUse   = nextWritingKeyUse(lastKeyUse, isRetry, academicSubject);
+  const keyUse   = keyUseOverride ?? nextWritingKeyUse(lastKeyUse, isRetry, academicSubject);
 
   return {
     elpLevel,
