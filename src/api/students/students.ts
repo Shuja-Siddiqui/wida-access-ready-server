@@ -974,7 +974,7 @@ type ProgressDomainRow = {
   levelLabel: string;
   atExit: boolean;
   growthRate: ReturnType<typeof calculateGrowthRate>;
-  exitProjection: { domain: string; projectedDate: string | null; weeksRemaining: number | null };
+  exitProjection: { domain: string; projectedDate: string | null; weeksToExit: number | null; status: string };
   sessionHistory: Array<{ date: string; level: number; score: number }>;
   lastSessionScore: number | null;
   lastPracticed: string | null;
