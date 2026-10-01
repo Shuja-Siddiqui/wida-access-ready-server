@@ -10,16 +10,21 @@ import { OPTIONAL_LINE_VISUALS_BLOCK, parseVisual } from "./prompts/optional-lin
 import {
   getWritingPortrayalForPrompt,
   type WritingLibraryCandidate,
-  resolveWritingLibrarySelection,
+  resolveWritingLibrarySelectionWithPolicy,
   serializeWritingLibraryCandidatesForPrompt,
 } from "../content";
 import { buildSystemPrompt } from "./prompts/compose";
-import { contentGenPrompt } from "./prompts/content";
+import { CONTENT_KERNEL } from "./prompts/content/kernel";
+import { buildWritingContentSlice } from "./prompts/content/writing";
+import { frameworkDomainSlice, frameworkPromptSlice } from "./standards";
+import { contentBand } from "./prompts/content/router";
 import {
+  buildLevel1PassageFromLibraryMeta,
   buildWritingPassageSentenceTarget,
   writingPassageSchemaHint,
 } from "./prompts/content/writing-image-passage";
 import { feedbackCoachPrompt } from "./prompts/wida-feedback-guide";
+import { stripWritingCopyableModels } from "./writing-coach-guard";
 import {
   formatExpressivePldBlock,
   serializeFrameworkTask,
@@ -42,8 +47,9 @@ function buildWritingOutputSchema(params: {
   level: number;
   keyUse: string;
   hasLibraryCandidates: boolean;
+  libraryImageRequired: boolean;
 }): string {
-  const { level, hasLibraryCandidates } = params;
+  const { level, hasLibraryCandidates, libraryImageRequired } = params;
 
   return [
     `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
@@ -53,12 +59,16 @@ function buildWritingOutputSchema(params: {
     `{`,
     `  "task_descriptor": "<echo the 2–3 language_functions this prompt assesses>",`,
     `  "task_type": "<short name for this writing job>",`,
-    hasLibraryCandidates
-      ? `  "selected_image_id": "<uuid from library_candidates OR null if no photo fits this key_use>",`
-      : `  "selected_image_id": null,`,
-    hasLibraryCandidates
-      ? `  "passage": "<${writingPassageSchemaHint(level)}: image-connected CONTEXT ONLY; null if selected_image_id is null>",`
-      : `  "passage": null,`,
+    !hasLibraryCandidates
+      ? `  "selected_image_id": null,`
+      : libraryImageRequired
+        ? `  "selected_image_id": "<REQUIRED uuid from library_candidates — Level 1 must pick one>",`
+        : `  "selected_image_id": "<uuid from library_candidates OR null if no photo fits this key_use>",`,
+    !hasLibraryCandidates
+      ? `  "passage": null,`
+      : libraryImageRequired
+        ? `  "passage": "<REQUIRED ${writingPassageSchemaHint(level)} image-connected context>",`
+        : `  "passage": "<${writingPassageSchemaHint(level)}: image-connected CONTEXT ONLY; null if selected_image_id is null>",`,
     hasLibraryCandidates
       ? `  "prompt": "<writing JOB ONLY — what/how many sentences; do NOT copy sentence_frame or word_bank into this string>",`
       : `  "prompt": "<writing JOB ONLY on THIS topic — no frame text, no word-bank list; do not say look/see/photo>",`,
@@ -73,15 +83,21 @@ function buildWritingOutputSchema(params: {
     hasLibraryCandidates
       ? `• library_candidates are pre-filtered for academic_subject. Each entry includes id, tags, concept, and description — pick selected_image_id, then compose passage FROM that metadata before writing the prompt.`
       : null,
+    libraryImageRequired
+      ? `• Level 1: selected_image_id is REQUIRED when library_candidates exist. Never return null.`
+      : null,
     hasLibraryCandidates
       ? `• passage must be a connected narrative/informational text about the selected photo (not generic topic text). Hardness follows passage_sentence_target in the JSON payload.`
       : null,
     hasLibraryCandidates
-      ? `• You choose selected_image_id (or null), passage, prompt, word_bank, and sentence_frame per content_portrayal and framework — server does not rewrite your output.`
+      ? `• Level 2+: you choose selected_image_id or null, passage, prompt, word_bank, and sentence_frame per content_portrayal and framework — server does not rewrite your output.`
       : null,
-    hasLibraryCandidates
+    hasLibraryCandidates && !libraryImageRequired
       ? `• When selected_image_id is null: passage null; write from topic and academic_subject only.`
-      : `• No library images available. Do NOT say look, picture, photo, or "what do you see".`,
+      : null,
+    !hasLibraryCandidates
+      ? `• No library images available. Do NOT say look, picture, photo, or "what do you see".`
+      : null,
     `• You choose word_bank, sentence_frame, and visual — match framework.pld and content_portrayal for required_key_use ${params.keyUse}.`,
     ...(level >= 2
       ? [`• ALIGN: prompt assesses language_functions for key_use ${params.keyUse}. Follow pld.level ${level}.`]
@@ -168,14 +184,21 @@ export async function generateWritingContent(params: {
   const keyUse = params.framework.key_language_use;
   const libraryCandidates = params.libraryCandidates ?? [];
   const hasLibraryCandidates = libraryCandidates.length > 0;
+  const levelFloor = Math.floor(params.level);
+  const libraryImageRequired = levelFloor === 1 && hasLibraryCandidates;
 
   const schemaSection = buildWritingOutputSchema({
     level: params.level,
     keyUse,
     hasLibraryCandidates,
+    libraryImageRequired,
   });
+  const band = contentBand(params.level);
   const systemPrompt = buildSystemPrompt(
-    contentGenPrompt("writing", params.level, "2020"),
+    CONTENT_KERNEL,
+    frameworkPromptSlice("2020"),
+    buildWritingContentSlice(hasLibraryCandidates),
+    frameworkDomainSlice("writing", band, "2020", { hasLibraryCandidates }),
     params.level <= 2 ? OPTIONAL_LINE_VISUALS_BLOCK : "",
     formatExpressivePldBlock(params.framework.pld),
     params.academicContentLayer ?? "",
@@ -188,7 +211,7 @@ export async function generateWritingContent(params: {
     hasLibraryCandidates,
   );
 
-  const userPrompt = JSON.stringify(mergePriorPractice({
+  const userPayload: Record<string, unknown> = {
     domain:                  "writing",
     assessment:              params.assessment,
     level:                   params.level,
@@ -203,19 +226,30 @@ export async function generateWritingContent(params: {
     goal:                    "Create one writing task this student can do so they become able to produce the writing in framework.pld (end of this integer level).",
     complexity_instruction:  params.complexityInstruction,
     required_key_use:        keyUse,
-    library_candidates:      serializeWritingLibraryCandidatesForPrompt(libraryCandidates),
-    library_candidate_note:
-      "Each library_candidates entry has tags (detected/subject labels), concept (short topic), and description (what the photo is about). Select an image, then write passage as a connected story/context FROM that metadata before composing the prompt.",
-    passage_sentence_target: buildWritingPassageSentenceTarget(params.level, keyUse),
     academic_subject:        params.academicSubject,
     academic_unit:           params.academicUnit ?? null,
     academic_scenario:       params.academicScenario ?? null,
     tier3_vocabulary:        params.tier3Vocabulary ?? [],
-    picture_use_hint:        contentPortrayal?.picture ?? null,
     scenario_instruction:    params.academicScenario
       ? "Use academic_scenario for topic context when no library image is selected. Vary details from prior sessions."
       : null,
-  }, params.priorPracticeReport));
+  };
+
+  if (hasLibraryCandidates) {
+    Object.assign(userPayload, {
+      library_candidates: serializeWritingLibraryCandidatesForPrompt(libraryCandidates),
+      library_image_required: libraryImageRequired,
+      library_image_policy: libraryImageRequired
+        ? "Level 1: you MUST pick selected_image_id from library_candidates. Never return null when candidates exist."
+        : "Level 2–6: pick selected_image_id when a photo fits key_use and framework, otherwise null.",
+      library_candidate_note:
+        "Each library_candidates entry has tags, concept, and description. When an image is selected, write passage as connected context FROM that metadata before composing the prompt.",
+      passage_sentence_target: buildWritingPassageSentenceTarget(params.level, keyUse),
+      picture_use_hint: contentPortrayal?.picture ?? null,
+    });
+  }
+
+  const userPrompt = JSON.stringify(mergePriorPractice(userPayload, params.priorPracticeReport));
 
   dumpContentGenRequest("writing", systemPrompt, userPrompt);
   try {
@@ -234,12 +268,34 @@ export async function generateWritingContent(params: {
     const rawSelectedId = typeof result.selected_image_id === "string"
       ? result.selected_image_id.trim()
       : null;
-    const selectedCandidate = resolveWritingLibrarySelection(rawSelectedId, libraryCandidates);
+    const selectedCandidate = resolveWritingLibrarySelectionWithPolicy(
+      rawSelectedId,
+      libraryCandidates,
+      params.level,
+    );
     const selectedLibraryImageId = selectedCandidate?.id ?? null;
 
-    const passageRaw = result.passage != null && String(result.passage).trim()
+    if (libraryImageRequired && !rawSelectedId && selectedLibraryImageId) {
+      logger.info(
+        { forcedImageId: selectedLibraryImageId, level: params.level },
+        "writing: Level 1 required library image — Claude returned null, server picked candidate",
+      );
+    }
+
+    let passageRaw = result.passage != null && String(result.passage).trim()
       ? displayText(String(result.passage))
       : null;
+    if (!passageRaw && selectedCandidate && levelFloor === 1) {
+      passageRaw = buildLevel1PassageFromLibraryMeta({
+        tags: selectedCandidate.tags,
+        description: selectedCandidate.description,
+        imageConcept: selectedCandidate.imageConcept,
+      });
+      logger.info(
+        { imageId: selectedCandidate.id, level: params.level },
+        "writing: Level 1 fallback passage from library metadata",
+      );
+    }
     const promptRaw = displayText(result.prompt);
     const rawWordBank = mergeWritingWordBank(result.word_bank);
     const rawFrame = result.sentence_frame != null && String(result.sentence_frame).trim()
@@ -338,18 +394,17 @@ export async function getWritingFeedback(params: {
     serializeWritingRubricForPrompt(),
     feedbackCoachPrompt("writing", params.level),
     `Score holistically on ACCESS score points 0–7 only. Do not use a 100-point weighted mix.
-If the writing does not match THIS prompt's job, or has a teachable grammar/verb/spelling slip, set passed false.
-coaching_note for NOT YET must teach: what is wrong, why it is wrong in simple words, then You can write: plus one or two sentences about THIS prompt. Do not skip the why.
+If the writing does not match THIS prompt's job, or has a teachable language slip (grammar, verb, pronoun, spelling), set passed false.
 OUTPUT SCHEMA — return every key. Never omit a field.
 {
   "score_point": 4,
   "passed": true,
   "strengths": ["<Language Form they showed: Discourse, Sentence, or Word-Phrase>"],
   "improvements": ["<Language Form to work on>"],
-  "coaching_note": "<student-facing; no 0–7 numbers>"
+  "coaching_note": "<student-facing; no 0–7 numbers; hint-only — never full sentences to paste>"
 }
 strengths and improvements must name Language Forms. Use [] only if there is nothing to say; do not drop the keys.
-coaching_note is required student coaching.`,
+coaching_note for NOT YET: what is wrong, why (simple), one revision hint — never "You can write:" or a complete model answer.`,
   );
   const audit = rubricPromptAudit(`${systemPrompt}\n${userPrompt}`);
   logger.info(
@@ -382,7 +437,7 @@ coaching_note is required student coaching.`,
       passed,
       strengths:     result.strengths ?? [],
       improvements:  result.improvements ?? writingDescriptorBullets(Math.min(7, scorePoint + 1)).slice(0, 2),
-      coachingNote:  result.coaching_note ?? "",
+      coachingNote:  stripWritingCopyableModels(result.coaching_note ?? ""),
     };
   } catch (err) {
     rethrowIfClaudeCapacity(err);

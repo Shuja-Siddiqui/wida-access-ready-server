@@ -31,7 +31,7 @@ import {
   asAcademicSubject,
   getContentPortrayal,
   retrieveWritingLibraryCandidates,
-  resolveWritingLibrarySelection,
+  resolveWritingLibrarySelectionWithPolicy,
   incrementLibraryUseCount,
 } from "../../lib/content";
 import {
@@ -1806,6 +1806,12 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
           excludeImageIds,
           level: writingCtx.elpLevel,
         });
+        if (Math.floor(writingCtx.elpLevel) === 1 && libraryCandidates.length === 0) {
+          req.log.warn(
+            { subject: academicSubject, topic: topicLabel, level: writingCtx.elpLevel },
+            "Writing Level 1: no library candidates — check library ingest and contexts",
+          );
+        }
 
         const writingContent = await generateWritingContent({
           assessment,
@@ -1828,9 +1834,10 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
           priorPracticeReport:    domainPriorPracticeReport,
         });
 
-        const selectedLibrary = resolveWritingLibrarySelection(
+        const selectedLibrary = resolveWritingLibrarySelectionWithPolicy(
           writingContent.selectedLibraryImageId,
           libraryCandidates,
+          writingCtx.elpLevel,
         );
 
         if (selectedLibrary) {

@@ -1,10 +1,12 @@
 import express, { type Express } from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
+import helmet from "helmet";
 import pinoHttp from "pino-http";
 import router from "./api";
 import { logger } from "./config/logger";
 import { WebhookHandlers } from "./lib/billing/webhookHandlers";
+import { buildCorsOptions } from "./lib/security/cors";
 
 const app: Express = express();
 
@@ -56,7 +58,13 @@ app.post(
   },
 );
 
-app.use(cors());
+app.use(
+  helmet({
+    // Presigned S3 URLs and inline images may be loaded cross-origin.
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+  }),
+);
+app.use(cors(buildCorsOptions()));
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true, limit: "20mb" }));
 app.use(cookieParser());

@@ -1,6 +1,14 @@
 import { pgTable, uuid, text, integer, jsonb, timestamp } from "drizzle-orm/pg-core";
 import { usersTable } from "./users";
 
+/** How the row entered the library (admin UI vs Image Factory). */
+export const LIBRARY_INGEST_SOURCES = ["admin_upload", "image_factory"] as const;
+export type LibraryIngestSource = typeof LIBRARY_INGEST_SOURCES[number];
+
+/** HF / FLUX backend when ingest_source is image_factory. */
+export const LIBRARY_GENERATION_BACKENDS = ["hf-inference", "flux-sidecar"] as const;
+export type LibraryGenerationBackend = typeof LIBRARY_GENERATION_BACKENDS[number];
+
 export const libraryTable = pgTable("library", {
   id:               uuid("id").primaryKey().defaultRandom(),
   s3Key:            text("s3_key").notNull(),
@@ -42,6 +50,10 @@ export const libraryTable = pgTable("library", {
   academicVision:   jsonb("academic_vision").$type<Record<string, AcademicVisionResult>>().notNull().default({}),
   /** Times this image was selected for a writing session (least-used picked on recycle). */
   useCount:         integer("use_count").notNull().default(0),
+  /** admin_upload = manual library upload; image_factory = HF/FLUX factory ingest. */
+  ingestSource:     text("ingest_source").notNull().default("admin_upload").$type<LibraryIngestSource>(),
+  /** Set for image_factory rows: hf-inference | flux-sidecar. */
+  generationBackend: text("generation_backend").$type<LibraryGenerationBackend | null>(),
 });
 
 /** Shape of one subject's vision analysis result. Stored in academicVision keyed by subject. */

@@ -41,6 +41,7 @@ export type {
 export {
   retrieveWritingLibraryCandidates,
   resolveWritingLibrarySelection,
+  resolveWritingLibrarySelectionWithPolicy,
   serializeWritingLibraryCandidatesForPrompt,
   incrementLibraryUseCount,
 } from "./writingLibraryCandidates";

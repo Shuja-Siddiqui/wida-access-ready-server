@@ -12,6 +12,7 @@ import { config } from "./config";
 import { logger } from "./config/logger";
 import { startLogCleanupJob } from "./lib/jobs/logCleanup";
 import { startRenewalCrons } from "./lib/jobs/renewalCron";
+import { startImageFactoryCron } from "./lib/jobs/imageFactoryCron";
 import { getStripeSync } from "./lib/billing/stripeClient";
 
 const rawPort = process.env["PORT"] ?? "8080";
@@ -72,6 +73,7 @@ app.listen(port, "0.0.0.0", (err) => {
   logger.info({ port }, "Server listening");
   startLogCleanupJob();
   startRenewalCrons();
+  startImageFactoryCron();
 });
 export * from "./generated/api";
 export * as generatedTypes from "./generated/types";

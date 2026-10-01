@@ -20,6 +20,7 @@ const TextToSpeechBody = z.object({
   text: z.string().min(1).max(4000),
   voice: z.string().min(1).max(100).optional(),
   delivery: z.enum(["passage", "coaching"]).optional(),
+  tone: z.enum(["default", "praise", "mistake", "teach", "action"]).optional(),
 });
 
 // Audio clips are short practice-answer recordings (a few seconds to ~60s).
@@ -54,6 +55,7 @@ router.post("/speech/text-to-speech", rateLimitStudentAi(), async (req: Request,
       parsed.data.text,
       parsed.data.voice,
       parsed.data.delivery ?? "passage",
+      parsed.data.tone ?? "default",
     );
     res.status(200);
     res.setHeader("Content-Type", "audio/mpeg");

@@ -8,7 +8,12 @@ import { callClaude, toDisplayText, limitSentences } from "./client";
 import { selectExpressivePld } from "./standards/2020";
 import { rethrowIfClaudeCapacity } from "./queue";
 import { logger } from "../../config/logger";
+import { LANGUAGE_FORMS_NOT_YET_EVIDENCE_LINE } from "./prompts/grammar-correction-rules";
 import { cluePacing, feedbackCoachPrompt } from "./prompts/wida-feedback-guide";
+import {
+  stripWritingCopyableModels,
+  writingAnswerEchoesCoach,
+} from "./writing-coach-guard";
 import { speakingCanDoCoachNote, getKeyLanguageUseGuide } from "../content";
 import {
   applySpeakingHardRules,
@@ -136,27 +141,20 @@ function parseClaudeMeetsTask(result: Record<string, unknown>): boolean | null {
   return null;
 }
 
-/** Example line when Claude omits model_response on a not-yet writing item. */
-function writingModelFallback(params: ItemFeedbackInput): string {
-  const prompt = (params.prompt ?? params.question ?? "").toLowerCase();
-  if (prompt.includes("equation") && (prompt.includes("mean") || prompt.includes("means"))) {
-    return "The equation 5 + 5 = 10 means the person has 10 books in all. I chose 5 because that is how many they started with.";
-  }
-  if (params.scaffold?.trim()) {
-    return params.scaffold.replace(/_+/g, "___").trim();
-  }
-  return "Add one sentence that finishes what the prompt asked.";
-}
+const WRITING_COACH_NO_MODEL = `
+WRITING COACHING — NO PASTE-READY ANSWERS
+• model_response must always be "" for writing.
+• spoken_text and try_again_tip: what is wrong, why (simple), one revision hint only.
+• Never "You can write:", "Try writing:", "Example response:", or full sentences they could copy.
+• On retry: meets_task false if they pasted or lightly edited prior coaching instead of revising in their own words.
 
-function stripWritingPassAssignments(text: string): string {
-  return text
-    .replace(/\s*you can write:[\s\S]*/i, "")
-    .replace(/\s*now add more[^.?!]*[.?!]?/gi, "")
-    .replace(/\s*now write why[^.?!]*[.?!]?/gi, "")
-    .replace(/\s*add more sentences[^.?!]*[.?!]?/gi, "")
-    .replace(/\bgood start!?\s*/gi, "")
-    .trim();
-}
+SPOKEN ALOUD — separate blocks with " || " (pause between each; student must hear mistake vs rule vs try)
+1. Optional brief praise
+2. Mistake block — start with "Listen." Point to the error; wrap the wrong word in *asterisks* (e.g. You wrote *is*.)
+3. Rule block — one simple why (e.g. Two things take *are*, not *is*.)
+4. Try block — one short action (change that word, reread)
+Example shape: "You gave a good reason. || Listen. You wrote *is* — line breaks and stanzas are two things. || When you have two things, use *are*. || Change that one word and reread."
+`.trim();
 
 function writingLooksComplete(params: ItemFeedbackInput): boolean {
   const text = clip(params.studentAnswer, 1200).toLowerCase();
@@ -212,8 +210,7 @@ function composeSpokenText(params: ItemFeedbackInput, extra?: { objectClue?: str
     return speakingHelpSpoken(params);
   }
   if (params.format === "writing") {
-    const model = extra?.modelResponse?.trim();
-    return model ? `You can write: ${model}` : "";
+    return "";
   }
   if (extra?.objectClue) return extra.objectClue;
   return "Not yet. Listen or read again, then try again.";
@@ -302,7 +299,7 @@ OUTPUT SCHEMA — return every key. Never omit a field. Use "" or [] only when t
   "why_wrong": "<levels 3–6: what missed; levels 1–2: empty string>",
   "correct_answer": "<selected-response label or empty>",
   "object_clue": "<listening picture: same words as spoken_text when they missed; else empty>",
-  "model_response": "<speaking/writing not yet: one model line they can copy; empty on agree>",
+  "model_response": "<speaking not yet: one short phrase they can try; writing: always empty string>",
   "how_to_say_it": "<speaking: pronunciation/frame hint if needed; else empty>",
   "keep_in_mind": ["<optional short reminder; [] if none>"],
   "strengths": [],
@@ -317,7 +314,8 @@ SCHEMA ENFORCEMENT
 • Speaking: always set access_category. judgment and meets_task stay in the JSON (code may recompute them).
 • Writing: always set score_point 0–7 AND judgment and meets_task.
 • Listening/reading/picture: still set judgment, spoken_text, meets_task, headline, correct_answer. access_category and score_point may be unused but keep the keys (use "" / 0).
-• Do not skip model_response or try_again_tip on a not-yet speaking/writing item. Put the model line in model_response; put the hearable coach in spoken_text (they may overlap).
+• Speaking not yet: model_response may hold one short phrase; spoken_text coaches aloud.
+• Writing not yet: model_response must be ""; coach only in spoken_text / try_again_tip (hint-only, no full answer).
 • strengths and next_steps: [] for item coaching (end-of-session uses those keys). keep_in_mind: fill if useful, else [].
 • meets_task is true only when judgment is agree.
 • Do not name ACCESS categories or 0–7 numbers in student-facing strings.
@@ -325,6 +323,9 @@ SCHEMA ENFORCEMENT
 
 function itemSystemPrompt(params: ItemFeedbackInput): string {
   const base = `${feedbackCoachPrompt(params.domain, params.level, params.format)}\n\n${ITEM_OUTPUT_SCHEMA}`;
+  if (params.format === "writing") {
+    return `${base}\n\n${WRITING_COACH_NO_MODEL}`;
+  }
   if (params.format !== "speaking") return base;
   return `${base}\n\n${speakingCanDoCoachNote(params.level, params.keyUse || params.canDo)}`;
 }
@@ -493,9 +494,13 @@ export async function generateItemFeedback(params: ItemFeedbackInput): Promise<I
     payload.passage
       ? "When a context passage was provided, score whether the writing connects to that passage and the prompt — not unrelated topic text."
       : "",
-    "If THIS SUBMIT does the asked job and language is fine for this pld: PASS. spoken_text = praise only. No You can write.",
-    "If NOT YET: you MUST teach. (1) what is wrong in their writing (2) why it is wrong in simple words so they can learn (3) You can write: one or two sentences they can copy. Do not skip the why. One gap only (grammar, verb, pronoun, spelling, or missing the job). Do not add a new topic.",
-    "If this is a resubmit and they applied the last tip: PASS. Do not invent a new gap.",
+    "If THIS SUBMIT does the asked job and language is fine for this pld: PASS. spoken_text = praise only.",
+    LANGUAGE_FORMS_NOT_YET_EVIDENCE_LINE,
+    "Also NOT YET when the asked job is missing. Do not add a new topic.",
+    "If this is a resubmit: PASS only if they fixed the last tip in their own words — NOT if they pasted coaching text.",
+    (params.tryCount ?? 0) > 1 && params.lastCoachTip
+      ? "If THIS SUBMIT mostly copies LAST TIP or prior coaching, meets_task must be false."
+      : "",
     "If the prompt says OR, one choice is enough. Do not switch topics.",
     "Never praise as finished while also asking to try again. Do not say the 0–7 number to the student.",
   ].filter(Boolean).join("\n");
@@ -596,9 +601,19 @@ export async function generateItemFeedback(params: ItemFeedbackInput): Promise<I
       }
 
       judgment = meetsTask ? "agree" : accessWriting >= 2 ? "partial" : "rejected";
-    }
-    if (params.format === "writing" && !meetsTask) {
-      // Keep Claude's coaching; never flip to agree on a filled L1–2 frame alone.
+
+      if (
+        meetsTask &&
+        (params.tryCount ?? 0) > 1 &&
+        writingAnswerEchoesCoach(
+          params.studentAnswer ?? "",
+          params.lastCoachTip,
+          params.lastStudentAnswer,
+        )
+      ) {
+        meetsTask = false;
+        judgment = accessWriting >= 2 ? "partial" : "rejected";
+      }
     }
 
     let objectClue = clip(result.object_clue ?? result.objectClue ?? "", 400);
@@ -607,10 +622,9 @@ export async function generateItemFeedback(params: ItemFeedbackInput): Promise<I
     }
 
     let modelResponse = clip(result.model_response ?? result.modelResponse ?? "", 400);
-    if (params.format === "writing" && !meetsTask && !modelResponse) {
-      modelResponse = writingModelFallback(params);
-    }
-    if (judgment === "agree") {
+    if (params.format === "writing") {
+      modelResponse = "";
+    } else if (judgment === "agree") {
       modelResponse = "";
     }
 
@@ -623,18 +637,24 @@ export async function generateItemFeedback(params: ItemFeedbackInput): Promise<I
       spokenRaw = composeSpokenText(params, { objectClue, modelResponse });
     }
     if (params.format === "picture") spokenRaw = stripStrategy(spokenRaw);
-    if (params.format === "writing" && meetsTask) {
-      spokenRaw = spokenRaw.replace(/\s*Tap try again(?:,? or skip to move on)?\.?/gi, "").trim();
-      spokenRaw = stripWritingPassAssignments(spokenRaw);
-      if (!spokenRaw) spokenRaw = "Yes. That writing is enough for this level.";
-      modelResponse = "";
-    }
-    if (params.format === "writing" && !meetsTask) {
-      if (modelResponse && spokenRaw && !spokenRaw.toLowerCase().includes(modelResponse.toLowerCase().slice(0, 24))) {
-        spokenRaw = `${spokenRaw} You can write: ${modelResponse}`.trim();
-      } else if (!spokenRaw && modelResponse) {
-        spokenRaw = `You can write: ${modelResponse}`;
+    if (params.format === "writing") {
+      spokenRaw = stripWritingCopyableModels(spokenRaw);
+      if (meetsTask) {
+        spokenRaw = spokenRaw.replace(/\s*Tap try again(?:,? or skip to move on)?\.?/gi, "").trim();
+        if (!spokenRaw) spokenRaw = "Yes. That writing is enough for this level.";
+      } else if (
+        (params.tryCount ?? 0) > 1 &&
+        writingAnswerEchoesCoach(
+          params.studentAnswer ?? "",
+          params.lastCoachTip,
+          params.lastStudentAnswer,
+        ) &&
+        !spokenRaw.toLowerCase().includes("own words")
+      ) {
+        spokenRaw =
+          `${spokenRaw} Revise in your own words — do not copy the coaching.`.trim();
       }
+      modelResponse = "";
     }
     if (params.format === "speaking" && spokenFromModel) {
       spokenRaw = spokenFromModel;

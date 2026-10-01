@@ -24,8 +24,9 @@ import { ObjectStorageService } from "../../lib/images/objectStorage";
 import { runImagePipeline, type SupportedMediaType } from "../../lib/images/image-pipeline";
 import { db } from "../../../db";
 import { libraryTable } from "../../../db/schema";
-import { optionalAuth } from "../../middlewares/auth";
+import { requireAuthOrInternalJob } from "../../middlewares/internal-job";
 import { rateLimitStudentAi } from "../../middlewares/rate-limit";
+import { rateLimitExpensiveImage } from "../../middlewares/rate-limit-public";
 
 const router: IRouter = Router();
 const storage = new ObjectStorageService();
@@ -65,7 +66,12 @@ async function persistScan({
 
 // ── Route ─────────────────────────────────────────────────────────────────────
 
-router.post("/images/generate-object-question", optionalAuth, rateLimitStudentAi(), async (req: Request, res) => {
+router.post(
+  "/images/generate-object-question",
+  requireAuthOrInternalJob,
+  rateLimitExpensiveImage(),
+  rateLimitStudentAi(),
+  async (req: Request, res) => {
   try {
     const { image } = req.body as { image?: string };
 
@@ -100,7 +106,7 @@ router.post("/images/generate-object-question", optionalAuth, rateLimitStudentAi
       ? [labelsForQuestion[0]!, labelsForQuestion[1]!]
       : [labelsForQuestion[0]!, labelsForQuestion[0]!];
 
-    const uploaderId = (req as any).auth?.userId as string | undefined;
+    const uploaderId = req.auth?.userId;
 
     const [q1, q2, scanId] = await Promise.all([
       generateObjectDetectContent(description, targets[0]),
@@ -124,6 +130,7 @@ router.post("/images/generate-object-question", optionalAuth, rateLimitStudentAi
     logger.error({ err }, "generate-object-question failed");
     res.status(500).json({ error: "Could not generate question from image" });
   }
-});
+  },
+);
 
 export default router;
