@@ -1,7 +1,7 @@
 /** Writing library-image passage rules — connected narrative scaled by ELP level. */
 
 export const WRITING_IMAGE_PASSAGE_RULES = `
-IMAGE-CONNECTED PASSAGE (required when selected_image_id is set)
+IMAGE-CONNECTED PASSAGE (when selected_image_id is set — any level; REQUIRED at Level 1 when library_candidates exist)
 • Pick selected_image_id FIRST from library_candidates using id, tags, concept, and description.
 • passage MUST be a short connected narrative or informational text about THAT photo — not a generic topic paragraph.
 • Build the text FROM the chosen candidate: weave tag names, concept, and description into one coherent scene the student can write from.
@@ -32,6 +32,23 @@ export function buildWritingPassageSentenceTarget(level: number, keyUse: string)
 
   const ku = kuNote[keyUse] ?? "Ground every sentence in the selected candidate tags, concept, and description.";
   return `${baseByLevel[lv] ?? baseByLevel[6]} ${ku}`;
+}
+
+/** Server fallback when L1 has a library image but Claude omitted passage. */
+export function buildLevel1PassageFromLibraryMeta(meta: {
+  tags: string[];
+  description?: string | null;
+  imageConcept?: string | null;
+}): string {
+  const desc = meta.description?.trim() || meta.imageConcept?.trim();
+  if (desc) {
+    return desc.length > 280 ? `${desc.slice(0, 277).trim()}…` : desc;
+  }
+  const tags = meta.tags.filter(Boolean).slice(0, 4);
+  if (tags.length > 0) {
+    return `In this picture you can see ${tags.join(", ")}.`;
+  }
+  return "Look at the picture. It shows one clear scene.";
 }
 
 export function writingPassageSchemaHint(level: number): string {

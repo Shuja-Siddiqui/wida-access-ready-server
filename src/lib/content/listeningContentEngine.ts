@@ -248,16 +248,22 @@ export function getWritingPortrayalForPrompt(
   if (!hasLibraryCandidates) return base;
 
   const baseHow = typeof base.how_to_portray === "string" ? base.how_to_portray : "";
+  const level1Required = level != null && Math.floor(level) === 1;
   return {
     ...base,
     how_to_portray:
       `${baseHow} library_candidates lists subject-matched photos (id, tags, concept, description). `
-      + "Pick selected_image_id or null, then compose passage, prompt, and scaffolds using that metadata and content_portrayal. "
+      + (level1Required
+        ? "Level 1: you MUST pick selected_image_id from library_candidates. "
+        : "Level 2+: pick selected_image_id or null when no photo fits. ")
+      + "When an image is selected, compose passage, prompt, and scaffolds from that metadata. "
       + "Your JSON output is delivered to the student without server rewriting.",
     picture: {
       ...(typeof base.picture === "object" && base.picture ? base.picture : {}),
-      use: "candidate_library_photos",
-      note: "Model selects from library_candidates; subject already filtered server-side.",
+      use: level1Required ? "required_library_photo" : "candidate_library_photos",
+      note: level1Required
+        ? "Level 1 always uses a library photo when candidates exist."
+        : "Model selects from library_candidates; subject already filtered server-side.",
     },
   };
 }

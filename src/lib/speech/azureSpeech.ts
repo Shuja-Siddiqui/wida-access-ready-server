@@ -40,6 +40,9 @@ export const FEEDBACK_VOICE = "en-US-JennyNeural";
 
 export type SpeechDelivery = "passage" | "coaching";
 
+/** Prosody for segmented writing/speaking coach lines. */
+export type CoachingTone = "default" | "praise" | "mistake" | "teach" | "action";
+
 export function voiceForDelivery(delivery: SpeechDelivery): string {
   return delivery === "coaching" ? FEEDBACK_VOICE : PASSAGE_VOICE;
 }
@@ -59,45 +62,86 @@ function sentenceChunks(text: string): string[] {
     .filter(Boolean);
 }
 
-function withWordStress(escaped: string): string {
+function withWordStress(escaped: string, emphasisLevel: "moderate" | "strong"): string {
   const fromMarks = escaped.replace(
     /\*([^*]+)\*/g,
-    '<emphasis level="moderate">$1</emphasis>',
+    `<emphasis level="${emphasisLevel}">$1</emphasis>`,
   );
   return fromMarks.replace(
     /\b(agree|disagree|not|never|listen|look|find|tap)\b/gi,
     (word, _capture: string, offset: number, full: string) => {
       const before = full.slice(Math.max(0, offset - 24), offset);
       if (before.includes("<emphasis")) return word;
-      return `<emphasis level="moderate">${word}</emphasis>`;
+      return `<emphasis level="${emphasisLevel}">${word}</emphasis>`;
     },
   );
 }
 
-function toTeacherSsml(text: string, voice: string, delivery: SpeechDelivery): string {
+function prosodyForCoachingTone(tone: CoachingTone, sentenceIndex: number, sentenceCount: number): {
+  rate: string;
+  pitch: string;
+  emphasis: "moderate" | "strong";
+  breakBeforeMs: number;
+  breakAfterMs: number;
+} {
+  const last = sentenceIndex === sentenceCount - 1;
+  switch (tone) {
+    case "praise":
+      return { rate: "+4%", pitch: "+6%", emphasis: "moderate", breakBeforeMs: 0, breakAfterMs: last ? 0 : 320 };
+    case "mistake":
+      return { rate: "-6%", pitch: "-14%", emphasis: "strong", breakBeforeMs: 420, breakAfterMs: last ? 0 : 380 };
+    case "teach":
+      return { rate: "-4%", pitch: "+2%", emphasis: "moderate", breakBeforeMs: 280, breakAfterMs: last ? 0 : 300 };
+    case "action":
+      return { rate: "+6%", pitch: "+14%", emphasis: "moderate", breakBeforeMs: 200, breakAfterMs: 0 };
+    default:
+      return {
+        rate: "+4%",
+        pitch: sentenceIndex === 0 ? "-6%" : last ? "+10%" : "+4%",
+        emphasis: "moderate",
+        breakBeforeMs: 0,
+        breakAfterMs: last ? 0 : 220,
+      };
+  }
+}
+
+function toTeacherSsml(
+  text: string,
+  voice: string,
+  delivery: SpeechDelivery,
+  tone: CoachingTone = "default",
+): string {
   const coaching = delivery === "coaching";
   const chunks = sentenceChunks(text);
+  const toneProsody = coaching ? prosodyForCoachingTone(tone, 0, Math.max(1, chunks.length)) : null;
+  const leadBreak =
+    coaching && toneProsody && toneProsody.breakBeforeMs > 0
+      ? `<break time="${toneProsody.breakBeforeMs}ms"/>`
+      : "";
+
   const inner = chunks
     .map((sent, i) => {
       const last = i === chunks.length - 1;
-      // Normal speed. Only pitch moves: low on the correction, high on the key point.
-      const pitch = coaching
-        ? i === 0
-          ? "-8%"
-          : last
-            ? "+12%"
-            : "+4%"
-        : i === 0
-          ? "-4%"
-          : last
-            ? "+8%"
-            : "+2%";
-      const pause = last ? "" : `<break time="180ms"/>`;
-      return `<prosody rate="+8%" pitch="${pitch}">${withWordStress(escapeSsml(sent))}</prosody>${pause}`;
+      let rate = "+8%";
+      let pitch = i === 0 ? "-4%" : last ? "+8%" : "+2%";
+      let emphasis: "moderate" | "strong" = "moderate";
+      let pauseMs = last ? 0 : 180;
+
+      if (coaching) {
+        const p = prosodyForCoachingTone(tone, i, chunks.length);
+        rate = p.rate;
+        pitch = p.pitch;
+        emphasis = p.emphasis;
+        pauseMs = last ? 0 : p.breakAfterMs;
+      }
+
+      const pause = pauseMs > 0 ? `<break time="${pauseMs}ms"/>` : "";
+      const stressed = withWordStress(escapeSsml(sent), emphasis);
+      return `<prosody rate="${rate}" pitch="${pitch}">${stressed}</prosody>${pause}`;
     })
     .join("");
 
-  return `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US"><voice name="${escapeSsml(voice)}">${inner}</voice></speak>`;
+  return `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US"><voice name="${escapeSsml(voice)}">${leadBreak}${inner}</voice></speak>`;
 }
 
 /**
@@ -108,10 +152,11 @@ export async function textToSpeech(
   text: string,
   voice?: string,
   delivery: SpeechDelivery = "passage",
+  tone: CoachingTone = "default",
 ): Promise<Buffer> {
   const { key, region, endpoint } = assertConfigured();
   const resolvedVoice = voice?.trim() || voiceForDelivery(delivery);
-  const ssml = toTeacherSsml(text, resolvedVoice, delivery);
+  const ssml = toTeacherSsml(text, resolvedVoice, delivery, tone);
 
   // `api.cognitive.microsoft.com` is the generic Cognitive Services gateway —
   // it does not serve TTS requests. Ignore it and always build the correct

@@ -12,44 +12,55 @@
 import { Router, type IRouter } from "express";
 import { logger } from "../../config/logger";
 import { runImagePipeline, type SupportedMediaType } from "../../lib/images/image-pipeline";
+import { requireAuthOrInternalJob } from "../../middlewares/internal-job";
+import { rateLimitExpensiveImage } from "../../middlewares/rate-limit-public";
 
 const router: IRouter = Router();
 
-router.post("/images/scan", async (req, res) => {
-  try {
-    const { image } = req.body as { image?: string };
+router.post(
+  "/images/scan",
+  requireAuthOrInternalJob,
+  rateLimitExpensiveImage(),
+  async (req, res) => {
+    try {
+      const { image } = req.body as { image?: string };
 
-    if (!image || !image.startsWith("data:image/")) {
-      res.status(400).json({ error: "image must be a base64 data URI" });
-      return;
+      if (!image || !image.startsWith("data:image/")) {
+        res.status(400).json({ error: "image must be a base64 data URI" });
+        return;
+      }
+
+      const [header, base64Data] = image.split(",");
+      const mediaType = (header.match(/data:(image\/[^;]+);/) ?? [])[1] as SupportedMediaType | undefined;
+
+      if (!mediaType || !base64Data) {
+        res.status(400).json({ error: "Could not parse image data URI" });
+        return;
+      }
+
+      const { candidates, confirmedTags, detectionResults } =
+        await runImagePipeline(image, base64Data, mediaType);
+
+      logger.info(
+        {
+          candidates: candidates.length,
+          confirmed: confirmedTags.length,
+          detections: detectionResults.detections.length,
+        },
+        "scan: done",
+      );
+
+      res.json({
+        candidates,
+        confirmedTags,
+        detections: detectionResults.detections,
+        model: detectionResults.model,
+      });
+    } catch (err) {
+      logger.error({ err }, "scan failed");
+      res.status(500).json({ error: "Scan failed" });
     }
-
-    const [header, base64Data] = image.split(",");
-    const mediaType = (header.match(/data:(image\/[^;]+);/) ?? [])[1] as SupportedMediaType | undefined;
-
-    if (!mediaType || !base64Data) {
-      res.status(400).json({ error: "Could not parse image data URI" });
-      return;
-    }
-
-    const { candidates, confirmedTags, detectionResults } =
-      await runImagePipeline(image, base64Data, mediaType);
-
-    logger.info(
-      { candidates: candidates.length, confirmed: confirmedTags.length, detections: detectionResults.detections.length },
-      "scan: done",
-    );
-
-    res.json({
-      candidates,
-      confirmedTags,
-      detections: detectionResults.detections,
-      model:      detectionResults.model,
-    });
-  } catch (err) {
-    logger.error({ err }, "scan failed");
-    res.status(500).json({ error: "Scan failed" });
-  }
-});
+  },
+);
 
 export default router;

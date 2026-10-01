@@ -33,9 +33,10 @@ export function frameworkDomainSlice(
   domain: FrameworkDomain,
   band: FrameworkBand,
   version: WidaFrameworkVersion = WIDA_FRAMEWORK_VERSION,
+  opts?: { hasLibraryCandidates?: boolean },
 ): string {
   return version === "2020"
-    ? framework2020DomainSlice(domain, band)
+    ? framework2020DomainSlice(domain, band, opts)
     : framework2016DomainSlice(domain, band);
 }
 

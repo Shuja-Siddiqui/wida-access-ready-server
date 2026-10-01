@@ -7,7 +7,7 @@
  */
 
 import { Router, type IRouter, type Request, type Response } from "express";
-import { eq, desc } from "drizzle-orm";
+import { and, eq, desc } from "drizzle-orm";
 import { logger } from "../../config/logger";
 import { requireAuth } from "../../middlewares/auth";
 import { db } from "../../../db";
@@ -17,12 +17,21 @@ import { ObjectStorageService } from "../../lib/images/objectStorage";
 const router: IRouter = Router();
 const storage = new ObjectStorageService();
 
+function canAccessScan(
+  req: Request,
+  uploaderId: string | null,
+): boolean {
+  const auth = req.auth!;
+  if (auth.role === "super_admin") return true;
+  return Boolean(uploaderId && uploaderId === auth.userId);
+}
+
 // ── GET /api/image-scans ──────────────────────────────────────────────────────
 
 router.get("/image-scans", requireAuth, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user?.id as string;
-    const limit  = Math.min(Number(req.query.limit ?? 50), 100);
+    const userId = req.auth!.userId;
+    const limit = Math.min(Number(req.query.limit ?? 50), 100);
     const offset = Number(req.query.offset ?? 0);
 
     const rows = await db
@@ -44,8 +53,7 @@ router.get("/image-scans", requireAuth, async (req: Request, res: Response) => {
 
 router.get("/image-scans/:id", requireAuth, async (req: Request, res: Response) => {
   try {
-    const id     = req.params.id as string;
-    const userId = (req as any).user?.id as string;
+    const id = req.params.id as string;
 
     const [scan] = await db
       .select()
@@ -58,8 +66,7 @@ router.get("/image-scans/:id", requireAuth, async (req: Request, res: Response) 
       return;
     }
 
-    // Only the owner (or unauthenticated scans) can fetch this
-    if (scan.uploaderId && scan.uploaderId !== userId) {
+    if (!canAccessScan(req, scan.uploaderId)) {
       res.status(403).json({ error: "Forbidden" });
       return;
     }
@@ -77,8 +84,9 @@ router.get("/image-scans/:id", requireAuth, async (req: Request, res: Response) 
 
 router.delete("/image-scans/:id", requireAuth, async (req: Request, res: Response) => {
   try {
-    const id     = req.params.id as string;
-    const userId = (req as any).user?.id as string;
+    const id = req.params.id as string;
+    const userId = req.auth!.userId;
+    const isSuperAdmin = req.auth!.role === "super_admin";
 
     const [scan] = await db
       .select()
@@ -91,16 +99,20 @@ router.delete("/image-scans/:id", requireAuth, async (req: Request, res: Respons
       return;
     }
 
-    if (scan.uploaderId && scan.uploaderId !== userId) {
+    if (!canAccessScan(req, scan.uploaderId)) {
       res.status(403).json({ error: "Forbidden" });
       return;
     }
 
-    // Delete from S3 then DB (non-fatal S3 error)
     await storage.deleteObject(scan.s3Key).catch((err: unknown) =>
-      logger.warn({ err, key: scan.s3Key }, "image-scans: S3 delete failed, removing DB record anyway")
+      logger.warn({ err, key: scan.s3Key }, "image-scans: S3 delete failed, removing DB record anyway"),
     );
-    await db.delete(libraryTable).where(eq(libraryTable.id, id));
+
+    const deleteWhere = isSuperAdmin
+      ? eq(libraryTable.id, id)
+      : and(eq(libraryTable.id, id), eq(libraryTable.uploaderId, userId));
+
+    await db.delete(libraryTable).where(deleteWhere);
 
     res.json({ deleted: true });
   } catch (err) {

@@ -111,6 +111,11 @@ router.get("/media/:id", requireAuth, async (req: Request, res: Response) => {
       return;
     }
 
+    if (asset.uploadedBy !== req.auth!.userId && req.auth!.role !== "super_admin") {
+      sendError(res, 403, "Forbidden");
+      return;
+    }
+
     const presignedUrl = await storageService.getPresignedGetUrl(asset.s3Key);
 
     sendSuccess(res, { ...asset, presignedUrl });
@@ -128,9 +133,26 @@ router.get("/media/:id", requireAuth, async (req: Request, res: Response) => {
 
 router.delete("/media/:id", requireAuth, async (req: Request, res: Response) => {
   try {
+    const id = String(req.params.id);
+    const [asset] = await db
+      .select()
+      .from(mediaAssetsTable)
+      .where(eq(mediaAssetsTable.id, id))
+      .limit(1);
+
+    if (!asset) {
+      sendError(res, 404, "Media asset not found");
+      return;
+    }
+
+    if (asset.uploadedBy !== req.auth!.userId && req.auth!.role !== "super_admin") {
+      sendError(res, 403, "Forbidden");
+      return;
+    }
+
     const [deleted] = await db
       .delete(mediaAssetsTable)
-      .where(eq(mediaAssetsTable.id, String(req.params.id)))
+      .where(eq(mediaAssetsTable.id, id))
       .returning();
 
     if (!deleted) {

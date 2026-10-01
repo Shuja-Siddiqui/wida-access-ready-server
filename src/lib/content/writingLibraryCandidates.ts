@@ -183,6 +183,23 @@ export function resolveWritingLibrarySelection(
   return candidates.find((c) => c.id === selectedId) ?? null;
 }
 
+/**
+ * Level 1 always uses a library image when candidates exist.
+ * Level 2+ respects Claude's choice (including null).
+ */
+export function resolveWritingLibrarySelectionWithPolicy(
+  selectedId: string | null | undefined,
+  candidates: WritingLibraryCandidate[],
+  level: number,
+): WritingLibraryCandidate | null {
+  if (candidates.length === 0) return null;
+  const picked = resolveWritingLibrarySelection(selectedId, candidates);
+  if (Math.floor(level) === 1) {
+    return picked ?? candidates[0];
+  }
+  return picked;
+}
+
 /** Bump global use count when a writing session commits to this library image. */
 export async function incrementLibraryUseCount(libraryImageId: string): Promise<void> {
   await db
@@ -191,10 +208,48 @@ export async function incrementLibraryUseCount(libraryImageId: string): Promise<
     .where(eq(libraryTable.id, libraryImageId));
 }
 
+function isLevel1(level: number): boolean {
+  return Math.floor(level) === 1;
+}
+
+/** Level 1: when subject pool is empty, still offer photos from the wider library. */
+async function fetchLevel1BroadCandidates(params: {
+  academicSubject: WritingAcademicSubject;
+  level: number;
+  limit: number;
+  excludeImageIds?: string[];
+}): Promise<WritingLibraryCandidate[]> {
+  const exclude = params.excludeImageIds?.length
+    ? notInArray(libraryTable.id, params.excludeImageIds)
+    : undefined;
+  const quality = subjectQualityFilter(params.level);
+  const preferredTag = subjectContextTag(params.academicSubject);
+
+  const rows = await db
+    .select(LIBRARY_COLS)
+    .from(libraryTable)
+    .where(and(quality, ...(exclude ? [exclude] : [])))
+    .orderBy(
+      sql`CASE WHEN ${libraryTable.contexts} @> ARRAY[${preferredTag}]::text[] THEN 0
+           WHEN EXISTS (
+             SELECT 1 FROM unnest(${libraryTable.contexts}) AS c WHERE c LIKE 'academic:%'
+           ) THEN 1
+           ELSE 2 END`,
+      asc(libraryTable.useCount),
+      sql`RANDOM()`,
+    )
+    .limit(Math.max(params.limit, WRITING_LIBRARY_POOL_SIZE));
+
+  return rows
+    .slice(0, params.limit)
+    .map((row) => toCandidate(row as LibraryRow, params.academicSubject, "recycle"));
+}
+
 async function fetchRecycleCandidates(params: {
   academicSubject: WritingAcademicSubject;
   level: number;
   limit: number;
+  excludeImageIds?: string[];
 }): Promise<WritingLibraryCandidate[]> {
   const rows = await db
     .select(LIBRARY_COLS)
@@ -203,6 +258,9 @@ async function fetchRecycleCandidates(params: {
       and(
         subjectContextFilter(params.academicSubject),
         subjectQualityFilter(params.level),
+        ...(params.excludeImageIds?.length
+          ? [notInArray(libraryTable.id, params.excludeImageIds)]
+          : []),
       ),
     )
     .orderBy(asc(libraryTable.useCount), sql`RANDOM()`)
@@ -308,11 +366,23 @@ export async function retrieveWritingLibraryCandidates(params: {
   }
 
   if (pool.length === 0) {
-    return fetchRecycleCandidates({
+    const recycled = await fetchRecycleCandidates({
       academicSubject: params.academicSubject,
       level: params.level,
       limit,
+      excludeImageIds: params.excludeImageIds,
     });
+    if (recycled.length > 0) return recycled;
+
+    if (isLevel1(params.level)) {
+      return fetchLevel1BroadCandidates({
+        academicSubject: params.academicSubject,
+        level: params.level,
+        limit,
+        excludeImageIds: params.excludeImageIds,
+      });
+    }
+    return [];
   }
 
   return rankShortlistByLeastUsed(pool, params.academicSubject, limit);

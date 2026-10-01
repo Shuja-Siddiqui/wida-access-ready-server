@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
+import { config } from "../config/index";
 import { getRateLimitStore } from "../lib/rate-limit";
 import { getOrgRateLimitBucket, getRateLimitSettings } from "../lib/rate-limit/settings";
 import { recordAiUsage, usageKindFromPath } from "../lib/rate-limit/usage";
@@ -45,6 +46,11 @@ function reject(req: Request, res: Response, result: { resetAt: number }, reason
  */
 export function rateLimitStudentAi() {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    if (req.internalJob) {
+      next();
+      return;
+    }
+
     try {
       const settings = await getRateLimitSettings();
       const id = studentKey(req);
@@ -79,7 +85,11 @@ export function rateLimitStudentAi() {
       recordAiUsage(id, kind);
       next();
     } catch (err) {
-      req.log?.error({ err }, "Rate limit store failed; allowing request");
+      req.log?.error({ err }, "Rate limit store failed");
+      if (config.rateLimit.failClosed) {
+        sendError(res, 503, "Service temporarily unavailable");
+        return;
+      }
       next();
     }
   };

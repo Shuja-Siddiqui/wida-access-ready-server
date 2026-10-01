@@ -1,18 +1,21 @@
-export const WRITING_2020_1_2 = `
-WRITING — APPLY THE SIX FRAMEWORK PARTS
-This call is writing (expressive). The student WRITES.
-The job (what to write about / which steps) comes from language_expectations + language_functions in the JSON. That job is the same at every English level.
-How hard the writing is comes only from the PLD column we copied into framework.pld (end_of_level_1 vs end_of_level_2 vs …). That column is different at every level. Do not write a Level 1 look-and-name item when the column is end_of_level_2.
-Do not invent a student prompt from a template list. Build it from those JSON fields plus the session topic.
-Use ONLY the academic_subject's functions. Science 6–8 expressive cells are Explain and Argue only.
-If has_library_image (levels 1–2): word_bank and sentence_frame MUST be null — the photo is the visual. One open prompt only.
-Otherwise you choose word_bank, sentence_frame, and item shape from framework.pld.
+export const WRITING_2020_TEXT = `
+WRITING — APPLY THE SIX FRAMEWORK PARTS (text-only — no library photo)
+This call is writing (expressive). The student WRITES from topic and academic_subject.
+Job from language_expectations + language_functions. English hardness from framework.pld only.
+Do not say look, picture, photo, or what you see.
 `.trim();
 
-export const WRITING_2020_3_6 = `
-WRITING — LEVELS 3–6 — APPLY THE SIX FRAMEWORK PARTS
-This call is writing, so framework.mode is expressive: the student WRITES connected text.
-The functions are the same job as at lower levels. framework.pld is the end-of-this-level writing goal: make English denser at this integer level so the student can reach that writing, not the next level.
-You choose word_bank, sentence_frame, task_type, and min_sentences from framework.pld and content_portrayal.
-If has_library_image, write about the photo; otherwise write from the topic.
+export const WRITING_2020_WITH_LIBRARY = `
+WRITING — APPLY THE SIX FRAMEWORK PARTS (library photo may be used)
+This call is writing (expressive). The student WRITES.
+Job from language_expectations + language_functions. English hardness from framework.pld only.
+Level 1: when library_candidates exist, selected_image_id is REQUIRED — always use a library photo.
+Level 2–6: you may set selected_image_id or null. When set, write passage + prompt from photo metadata; when null, write from topic only.
 `.trim();
+
+/** @deprecated */
+export const WRITING_2020 = WRITING_2020_WITH_LIBRARY;
+
+export function buildWriting2020Slice(hasLibraryCandidates: boolean): string {
+  return hasLibraryCandidates ? WRITING_2020_WITH_LIBRARY : WRITING_2020_TEXT;
+}

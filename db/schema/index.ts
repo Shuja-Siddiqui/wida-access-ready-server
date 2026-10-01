@@ -44,3 +44,6 @@ export * from "./library";
 export * from "./content_categories";
 export * from "./topics";
 export * from "./library_topics";
+
+// Image Factory — HF generation pools + job audit trail
+export * from "./image_generation";

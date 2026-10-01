@@ -15,9 +15,11 @@ import { libraryTable, libraryTopicsTable, topicsTable, contentCategoriesTable }
 import { asc } from "drizzle-orm";
 import { sendError, sendSuccess } from "../../lib/http/api-response";
 import { requireAuth, requireSuperAdmin } from "../../middlewares/auth";
+import { requireSuperAdminOrInternalJob } from "../../middlewares/internal-job";
 import { getUncachableStripeClient } from "../../lib/billing/stripeClient";
 import { ObjectStorageService } from "../../lib/images/objectStorage";
 import { runImagePipeline, type SupportedMediaType } from "../../lib/images/image-pipeline";
+import { runDetection } from "../images/detect-core";
 import { logger } from "../../config/logger";
 import {
   getRateLimitSettings,
@@ -25,10 +27,83 @@ import {
   RATE_LIMIT_BOUNDS,
 } from "../../lib/rate-limit/settings";
 import adminLibraryCatalogRouter from "./library-catalog";
+import { imageFactoryRouter } from "../../image-factory";
 
 const storage = new ObjectStorageService();
 
 const router: IRouter = Router();
+
+// Image factory + cron job routes use requireSuperAdminOrInternalJob internally.
+router.use(imageFactoryRouter);
+
+// Cron may re-run DINO on library rows — must register before blanket super-admin middleware.
+router.post("/admin/library/:id/run-dino", requireSuperAdminOrInternalJob, async (req, res): Promise<void> => {
+  const id = req.params.id as string;
+
+  try {
+    const [row] = await db
+      .select()
+      .from(libraryTable)
+      .where(eq(libraryTable.id, id))
+      .limit(1);
+
+    if (!row) {
+      sendError(res, 404, "Item not found");
+      return;
+    }
+
+    const { buffer, contentType } = await storage.getImageBuffer(row.s3Key);
+    const mediaType = (contentType ?? "image/jpeg") as SupportedMediaType;
+    const base64 = buffer.toString("base64");
+    const image = `data:${mediaType};base64,${base64}`;
+
+    const prev = (row.detectionResults ?? {}) as { visionTags?: unknown };
+    const visionTags = Array.isArray(prev.visionTags)
+      ? prev.visionTags.filter((t): t is string => typeof t === "string" && t.trim().length > 0)
+      : [];
+
+    const labels = [
+      ...new Set(
+        [...row.tags, ...visionTags]
+          .map((t) => t.trim().toLowerCase())
+          .filter(Boolean),
+      ),
+    ];
+
+    if (labels.length === 0) {
+      sendError(res, 400, "No labels to detect — add tags or vision labels first");
+      return;
+    }
+
+    const { detections } = await runDetection(image, labels, { verify: false });
+
+    if (detections.length === 0) {
+      sendError(res, 422, "DINO found no objects. Draw boxes manually or edit labels and retry.");
+      return;
+    }
+
+    const tags = [...new Set(detections.map((d) => d.label))];
+
+    await db
+      .update(libraryTable)
+      .set({
+        tags,
+        detectionResults: {
+          ...prev,
+          detections,
+          model: "grounding_dino",
+          visionTags,
+        } as Record<string, unknown>,
+      })
+      .where(eq(libraryTable.id, id));
+
+    logger.info({ id, boxCount: detections.length, tags }, "admin/library: run-dino complete");
+    sendSuccess(res, { detections, tags });
+  } catch (err) {
+    logger.error({ err, id }, "admin/library: run-dino failed");
+    sendError(res, 502, err instanceof Error ? err.message : "DINO failed");
+  }
+});
 
 router.use("/admin", requireAuth, requireSuperAdmin);
 router.use(adminLibraryCatalogRouter);
@@ -474,6 +549,8 @@ router.get("/admin/library", async (req, res): Promise<void> => {
         detectionResults: libraryTable.detectionResults,
         contexts:         libraryTable.contexts,
         imageConcept:     libraryTable.imageConcept,
+        ingestSource:     libraryTable.ingestSource,
+        generationBackend: libraryTable.generationBackend,
         uploaderId:       libraryTable.uploaderId,
         createdAt:        libraryTable.createdAt,
         uploaderEmail:    usersTable.email,
@@ -709,6 +786,8 @@ router.post("/admin/library/upload", async (req, res): Promise<void> => {
         contexts:         userContexts ?? [],
         imageConcept:     userImageConcept ?? pipelineResult?.imageConcept ?? null,
         uploaderId,
+        ingestSource: "admin_upload",
+        generationBackend: null,
       })
       .returning();
 

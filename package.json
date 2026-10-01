@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "nodemon",
     "build": "node ./build.mjs",
-    "start": "node --enable-source-maps ./dist/index.mjs",
+    "start": "node --env-file=.env --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "codegen": "orval --config ./api-spec/orval.config.ts",
     "db:push": "drizzle-kit push --config=db/drizzle.config.ts",
@@ -21,7 +21,8 @@
     "db:sync:library": "node scripts/sync-library-catalog.mjs",
     "db:sync": "npm run db:push && npm run db:push:aws",
     "db:generate": "drizzle-kit generate --config=db/drizzle.config.ts",
-    "db:studio": "drizzle-kit studio --config=db/drizzle.config.ts"
+    "db:studio": "drizzle-kit studio --config=db/drizzle.config.ts",
+    "image-factory:once": "node --env-file=.env scripts/image-factory-once.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.88.0",
@@ -35,6 +36,7 @@
     "drizzle-orm": "^0.45.1",
     "drizzle-zod": "^0.8.3",
     "express": "^5",
+    "helmet": "^8.3.0",
     "node-cron": "^4.5.0",
     "nodemailer": "^9.0.1",
     "pg": "^8.20.0",

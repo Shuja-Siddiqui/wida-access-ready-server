@@ -21,6 +21,7 @@ import { verificationEmail, passwordResetEmail } from "../../lib/mail/email-temp
 import { config } from "../../config/index";
 import { sendError, sendSuccess } from "../../lib/http/api-response";
 import { getRequestOrigin } from "../../lib/http/request-origin";
+import { rateLimitAuth } from "../../middlewares/rate-limit-public";
 
 const router: IRouter = Router();
 
@@ -179,7 +180,7 @@ router.get("/auth/config", (_req, res): void => {
 // ── Email / Password: Register ─────────────────────────────────────────────
 // Creates a new student account with email + password.
 // Source of truth is the users table; students table holds the profile.
-router.post("/auth/register", async (req: Request, res: Response): Promise<void> => {
+router.post("/auth/register", rateLimitAuth(), async (req: Request, res: Response): Promise<void> => {
   const { name, email, password, gradeBand, stateAssessment, homeLanguage, teacherCode, track } = req.body as {
     name?: string;
     email?: string;
@@ -273,7 +274,7 @@ router.post("/auth/register", async (req: Request, res: Response): Promise<void>
 });
 
 // ── Email / Password: Login ────────────────────────────────────────────────
-router.post("/auth/login", async (req: Request, res: Response): Promise<void> => {
+router.post("/auth/login", rateLimitAuth(), async (req: Request, res: Response): Promise<void> => {
   const { email, password, role } = req.body as {
     email?: string;
     password?: string;
@@ -606,7 +607,7 @@ router.post("/auth/refresh", async (req: Request, res: Response): Promise<void> 
 
 // ── Educator Register ──────────────────────────────────────────────────────
 // Creates a unified user record + educator profile + teacher profile row.
-router.post("/auth/register/educator", async (req: Request, res: Response): Promise<void> => {
+router.post("/auth/register/educator", rateLimitAuth(), async (req: Request, res: Response): Promise<void> => {
   const { name, email, password, school } = req.body as {
     name?: string;
     email?: string;
@@ -772,7 +773,7 @@ router.get("/auth/verify-email", async (req: Request, res: Response): Promise<vo
 });
 
 // ── Resend Verification Email ──────────────────────────────────────────────
-router.post("/auth/resend-verification", async (req: Request, res: Response): Promise<void> => {
+router.post("/auth/resend-verification", rateLimitAuth(), async (req: Request, res: Response): Promise<void> => {
   const { email, role } = req.body as { email?: string; role?: string };
 
   // Always 200 to prevent enumeration
@@ -799,7 +800,7 @@ router.post("/auth/resend-verification", async (req: Request, res: Response): Pr
 });
 
 // ── Forgot Password ────────────────────────────────────────────────────────
-router.post("/auth/forgot-password", async (req: Request, res: Response): Promise<void> => {
+router.post("/auth/forgot-password", rateLimitAuth(), async (req: Request, res: Response): Promise<void> => {
   const { email, role } = req.body as { email?: string; role?: string };
 
   // Always respond 200 to prevent email enumeration
@@ -845,7 +846,7 @@ router.post("/auth/forgot-password", async (req: Request, res: Response): Promis
 });
 
 // ── Reset Password ─────────────────────────────────────────────────────────
-router.post("/auth/reset-password", async (req: Request, res: Response): Promise<void> => {
+router.post("/auth/reset-password", rateLimitAuth(), async (req: Request, res: Response): Promise<void> => {
   const { token, newPassword } = req.body as { token?: string; newPassword?: string };
 
   if (!token || !newPassword) {
@@ -1178,7 +1179,7 @@ router.post("/auth/google/complete-profile/parent", async (req: Request, res: Re
 });
 
 // ── District Admin Register ────────────────────────────────────────────────
-router.post("/auth/register/district", async (req: Request, res: Response): Promise<void> => {
+router.post("/auth/register/district", rateLimitAuth(), async (req: Request, res: Response): Promise<void> => {
   const { name, email, password, district, title } = req.body as {
     name?: string;
     email?: string;
@@ -1237,7 +1238,7 @@ router.post("/auth/register/district", async (req: Request, res: Response): Prom
 });
 
 // ── Parent Register ────────────────────────────────────────────────────────
-router.post("/auth/register/parent", async (req: Request, res: Response): Promise<void> => {
+router.post("/auth/register/parent", rateLimitAuth(), async (req: Request, res: Response): Promise<void> => {
   const { name, email, password } = req.body as {
     name?: string;
     email?: string;

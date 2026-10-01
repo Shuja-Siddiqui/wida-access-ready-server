@@ -9,6 +9,13 @@ export { BASE_BLOCK }                                               from "./base
 export { LISTENING_CORE_BLOCK }                                     from "./listening-core";
 export { OPTIONAL_LINE_VISUALS_BLOCK, LIBRARY_IMAGE_GROUNDS_CONTENT } from "./optional-line-visuals";
 export { buildSystemPrompt, blockIf }                               from "./compose";
+export {
+  LANGUAGE_FORMS_ACCURACY_FOR_CONTENT,
+  LANGUAGE_FORMS_CORRECTION_COACHING,
+  LANGUAGE_FORMS_NOT_YET_EVIDENCE_LINE,
+  languageFormsCorrectionCoachingForDomain,
+  type LanguageFormsCoachingDomain,
+} from "./grammar-correction-rules";
 export { contentGenPrompt, contentBand, CONTENT_KERNEL }            from "./content";
 export type { ContentDomain, ContentBand }                          from "./content";
 export { ACADEMIC_IMAGE_ANCHOR_BLOCK, buildImageAnchorPromptFields } from "./academic-image-anchor";
