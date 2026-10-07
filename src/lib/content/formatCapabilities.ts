@@ -14,11 +14,11 @@ export {
   SPEAKING_PROMPT_TYPES,
   WRITING_TASK_TYPES,
   SESSION_DOMAINS,
-} from "../../../../shared/session-content-schema.js";
+} from "./session-content-schema.js";
 
 export type {
   SessionDomain,
   SessionUiComponent,
   AiFormatGuide,
   QuestionTypeDefinition,
-} from "../../../../shared/session-content-schema.js";
+} from "./session-content-schema.js";
