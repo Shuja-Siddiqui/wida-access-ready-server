@@ -12,6 +12,8 @@ export type AiTokenCallKind =
 
 export interface AiTokenContext {
   studentId?: string;
+  userId?: string;
+  imageJobId?: string;
   sessionId?: string;
   domain?: string;
   callKind?: AiTokenCallKind;

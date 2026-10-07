@@ -7,6 +7,8 @@ import {
 } from "../../../db/schema/image_generation";
 import { logger } from "../../config/logger";
 import { callClaude } from "../../lib/claude/client";
+import { withAiTokenContext } from "../../lib/ai-token-context";
+import { linkImageFactoryTokenToJob } from "../../lib/ai-token-usage";
 import { buildImageFactoryAcademicBundle } from "./academic-context";
 import { buildImageFactoryPromptUserPayload } from "../prompts/user-payload";
 import { IMAGE_FACTORY_CLAUDE_SYSTEM_PROMPT } from "../prompts/system";
@@ -107,7 +109,14 @@ export async function buildAndPersistImagePrompt(
     "image-factory: claude prompt context (2020 framework + academic session)",
   );
 
-  const raw = await callClaude(IMAGE_FACTORY_CLAUDE_SYSTEM_PROMPT, userPrompt, 900);
+  const raw = await withAiTokenContext(
+    {
+      userId: input.createdByUserId,
+      callKind: "image_factory",
+      domain: input.subject,
+    },
+    () => callClaude(IMAGE_FACTORY_CLAUDE_SYSTEM_PROMPT, userPrompt, 900),
+  );
   const data = parseClaudeImagePrompt(raw);
 
   const contextSnapshot = {
@@ -141,6 +150,8 @@ export async function buildAndPersistImagePrompt(
       status: "prompt_ready",
     })
     .returning({ id: imageGenerationJobsTable.id });
+
+  await linkImageFactoryTokenToJob(input.createdByUserId, job.id);
 
   return {
     jobId: job.id,
