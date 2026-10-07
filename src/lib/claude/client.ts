@@ -160,9 +160,11 @@ export async function callClaude(
 
     const usage = response.usage;
     const tokenCtx = getAiTokenContext();
-    if (tokenCtx?.studentId && usage) {
+    if ((tokenCtx?.studentId || tokenCtx?.userId) && usage) {
       recordAiTokenCall({
         studentId:    tokenCtx.studentId,
+        userId:       tokenCtx.userId,
+        imageJobId:   tokenCtx.imageJobId,
         sessionId:    tokenCtx.sessionId,
         callKind:     tokenCtx.callKind ?? "other",
         domain:       tokenCtx.domain,

@@ -6,7 +6,14 @@ import type { IRouter } from "express";
 import { createApiRouter } from "../../lib/http/create-api-router";
 import { and, desc, eq, gte, inArray, isNotNull, lte, sql, type SQL } from "drizzle-orm";
 import { z } from "zod/v4";
-import { aiTokenCallsTable, db, sessionsTable, studentsTable } from "../../../db";
+import {
+  aiTokenCallsTable,
+  db,
+  imageGenerationJobsTable,
+  sessionsTable,
+  studentsTable,
+  usersTable,
+} from "../../../db";
 import { sendError, sendSuccess } from "../../lib/http/api-response";
 import { requireSuperAdminApiStack } from "../../middlewares/admin-guard";
 import {
@@ -45,6 +52,11 @@ const ListSessionsQuery = z.object({
   completed: z.enum(["true", "false"]).optional(),
 });
 
+const ListImageFactoryQuery = z.object({
+  page:  z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+});
+
 function buildFilters(q: {
   studentId?: string;
   sessionId?: string;
@@ -71,7 +83,9 @@ function roundUsd(n: number): number {
 function formatCallRow(
   row: {
     id: string;
-    studentId: string;
+    studentId: string | null;
+    userId: string | null;
+    imageJobId: string | null;
     sessionId: string | null;
     callKind: string;
     domain: string | null;
@@ -81,6 +95,7 @@ function formatCallRow(
     totalTokens: number;
     createdAt: Date;
     studentName: string | null;
+    userName: string | null;
     sessionDomain: string | null;
   },
   pricing: ReturnType<typeof getPricingCacheForEstimate>,
@@ -93,6 +108,11 @@ function formatCallRow(
     id:             row.id,
     studentId:      row.studentId,
     studentName:    row.studentName,
+    userId:         row.userId,
+    userName:       row.userName,
+    actorName:      row.studentName ?? row.userName,
+    actorType:      row.studentId ? "student" : row.userId ? "admin" : null,
+    imageJobId:     row.imageJobId,
     sessionId:      row.sessionId,
     sessionDomain:  row.sessionDomain,
     callKind:       row.callKind,
@@ -130,6 +150,8 @@ router.get("/admin/ai-usage/calls", async (req, res): Promise<void> => {
       .select({
         id:            aiTokenCallsTable.id,
         studentId:       aiTokenCallsTable.studentId,
+        userId:          aiTokenCallsTable.userId,
+        imageJobId:      aiTokenCallsTable.imageJobId,
         sessionId:       aiTokenCallsTable.sessionId,
         callKind:        aiTokenCallsTable.callKind,
         domain:          aiTokenCallsTable.domain,
@@ -139,10 +161,12 @@ router.get("/admin/ai-usage/calls", async (req, res): Promise<void> => {
         totalTokens:     aiTokenCallsTable.totalTokens,
         createdAt:       aiTokenCallsTable.createdAt,
         studentName:     studentsTable.name,
+        userName:        usersTable.name,
         sessionDomain:   sessionsTable.domain,
       })
       .from(aiTokenCallsTable)
       .leftJoin(studentsTable, eq(aiTokenCallsTable.studentId, studentsTable.id))
+      .leftJoin(usersTable, eq(aiTokenCallsTable.userId, usersTable.id))
       .leftJoin(sessionsTable, eq(aiTokenCallsTable.sessionId, sessionsTable.id))
       .where(where)
       .orderBy(desc(aiTokenCallsTable.createdAt))
@@ -387,6 +411,101 @@ router.get("/admin/ai-usage/summary", async (req, res): Promise<void> => {
       fetchedAt: pricingMeta.fetchedAt,
       expiresAt: pricingMeta.expiresAt,
       source: pricingMeta.source,
+    },
+  });
+});
+
+/** GET /admin/ai-usage/image-factory — image prompt jobs with linked Claude token/cost. */
+router.get("/admin/ai-usage/image-factory", async (req, res): Promise<void> => {
+  const parsed = ListImageFactoryQuery.safeParse(req.query);
+  if (!parsed.success) {
+    sendError(res, 400, parsed.error.message);
+    return;
+  }
+
+  const { page, limit } = parsed.data;
+  const offset = (page - 1) * limit;
+
+  await ensurePricingLoaded();
+  const pricing = getPricingCacheForEstimate();
+
+  const [jobs, countRow] = await Promise.all([
+    db
+      .select({
+        jobId:           imageGenerationJobsTable.id,
+        subject:         imageGenerationJobsTable.subject,
+        level:           imageGenerationJobsTable.level,
+        complexityStep:  imageGenerationJobsTable.complexityStep,
+        keyUse:          imageGenerationJobsTable.keyUse,
+        imageConcept:    imageGenerationJobsTable.imageConcept,
+        status:          imageGenerationJobsTable.status,
+        createdAt:       imageGenerationJobsTable.createdAt,
+        createdByName:   usersTable.name,
+        createdByEmail:  usersTable.email,
+        tokenId:         aiTokenCallsTable.id,
+        model:           aiTokenCallsTable.model,
+        inputTokens:     aiTokenCallsTable.inputTokens,
+        outputTokens:    aiTokenCallsTable.outputTokens,
+        totalTokens:     aiTokenCallsTable.totalTokens,
+      })
+      .from(imageGenerationJobsTable)
+      .leftJoin(usersTable, eq(imageGenerationJobsTable.createdBy, usersTable.id))
+      .leftJoin(aiTokenCallsTable, eq(aiTokenCallsTable.imageJobId, imageGenerationJobsTable.id))
+      .orderBy(desc(imageGenerationJobsTable.createdAt))
+      .limit(limit)
+      .offset(offset),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(imageGenerationJobsTable),
+  ]);
+
+  const rows = jobs.map((job) => {
+    const cost = job.tokenId
+      ? estimateCallCost(
+          {
+            model: job.model,
+            inputTokens: job.inputTokens ?? 0,
+            outputTokens: job.outputTokens ?? 0,
+          },
+          pricing,
+        )
+      : null;
+    return {
+      jobId:          job.jobId,
+      subject:        job.subject,
+      level:          job.level,
+      complexityStep: job.complexityStep,
+      keyUse:         job.keyUse,
+      imageConcept:   job.imageConcept,
+      status:         job.status,
+      createdAt:      job.createdAt.toISOString(),
+      createdByName:  job.createdByName,
+      createdByEmail: job.createdByEmail,
+      tokenTracked:   Boolean(job.tokenId),
+      inputTokens:    job.inputTokens ?? 0,
+      outputTokens:   job.outputTokens ?? 0,
+      totalTokens:    job.totalTokens ?? 0,
+      model:          job.model,
+      totalCostUsd:     cost ? roundUsd(cost.totalCostUsd) : 0,
+      priced:           cost?.priced ?? false,
+    };
+  });
+
+  const total = Number(countRow[0]?.count ?? 0);
+
+  sendSuccess(res, {
+    jobs: rows,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+    },
+    pageSummary: {
+      jobCount: rows.length,
+      trackedPrompts: rows.filter((r) => r.tokenTracked).length,
+      totalTokens: rows.reduce((s, r) => s + r.totalTokens, 0),
+      totalCostUsd: roundUsd(rows.reduce((s, r) => s + r.totalCostUsd, 0)),
     },
   });
 });

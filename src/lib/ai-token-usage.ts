@@ -8,7 +8,9 @@ const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export interface RecordAiTokenCallParams {
-  studentId: string;
+  studentId?: string | null;
+  userId?: string | null;
+  imageJobId?: string | null;
   sessionId?: string | null;
   callKind: AiTokenCallKind;
   domain?: string | null;
@@ -23,8 +25,11 @@ function normalizeTokens(n: number): number {
 
 /** Fire-and-forget: one row in ai_token_calls + roll up to session and daily totals. */
 export function recordAiTokenCall(params: RecordAiTokenCallParams): void {
-  const studentId = params.studentId?.trim();
-  if (!studentId || !UUID_RE.test(studentId)) return;
+  const studentIdRaw = params.studentId?.trim();
+  const userIdRaw = params.userId?.trim();
+  const studentId = studentIdRaw && UUID_RE.test(studentIdRaw) ? studentIdRaw : null;
+  const userId = userIdRaw && UUID_RE.test(userIdRaw) ? userIdRaw : null;
+  if (!studentId && !userId) return;
 
   const inputTokens = normalizeTokens(params.inputTokens);
   const outputTokens = normalizeTokens(params.outputTokens);
@@ -34,11 +39,16 @@ export function recordAiTokenCall(params: RecordAiTokenCallParams): void {
   const sessionId = params.sessionId?.trim() && UUID_RE.test(params.sessionId.trim())
     ? params.sessionId.trim()
     : null;
+  const imageJobId = params.imageJobId?.trim() && UUID_RE.test(params.imageJobId.trim())
+    ? params.imageJobId.trim()
+    : null;
 
   void (async () => {
     try {
       await db.insert(aiTokenCallsTable).values({
         studentId,
+        userId,
+        imageJobId,
         sessionId,
         callKind: params.callKind,
         domain: params.domain ?? null,
@@ -48,7 +58,7 @@ export function recordAiTokenCall(params: RecordAiTokenCallParams): void {
         totalTokens,
       });
 
-      if (sessionId) {
+      if (sessionId && studentId) {
         await db
           .update(sessionsTable)
           .set({
@@ -60,14 +70,43 @@ export function recordAiTokenCall(params: RecordAiTokenCallParams): void {
           .where(eq(sessionsTable.id, sessionId));
       }
 
-      incrementDailyTokenUsage(studentId, inputTokens, outputTokens, totalTokens);
+      if (studentId) {
+        incrementDailyTokenUsage(studentId, inputTokens, outputTokens, totalTokens);
+      }
     } catch (err) {
       logger.warn(
-        { err, studentId, sessionId, callKind: params.callKind },
+        { err, studentId, userId, sessionId, callKind: params.callKind },
         "ai_token_calls insert failed",
       );
     }
   })();
+}
+
+/** Link the most recent image_factory token row to the job created right after Claude returns. */
+export async function linkImageFactoryTokenToJob(userId: string, imageJobId: string): Promise<void> {
+  if (!UUID_RE.test(userId) || !UUID_RE.test(imageJobId)) return;
+  try {
+    const [row] = await db
+      .select({ id: aiTokenCallsTable.id })
+      .from(aiTokenCallsTable)
+      .where(and(
+        eq(aiTokenCallsTable.userId, userId),
+        eq(aiTokenCallsTable.callKind, "image_factory"),
+        isNull(aiTokenCallsTable.imageJobId),
+        sql`${aiTokenCallsTable.createdAt} >= NOW() - INTERVAL '5 minutes'`,
+      ))
+      .orderBy(desc(aiTokenCallsTable.createdAt))
+      .limit(1);
+
+    if (!row) return;
+
+    await db
+      .update(aiTokenCallsTable)
+      .set({ imageJobId })
+      .where(eq(aiTokenCallsTable.id, row.id));
+  } catch (err) {
+    logger.warn({ err, userId, imageJobId }, "link image_factory token to job failed");
+  }
 }
 
 /**
