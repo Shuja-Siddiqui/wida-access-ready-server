@@ -1,4 +1,5 @@
-import { Router, type IRouter } from "express";
+import type { IRouter } from "express";
+import { createApiRouter } from "../../lib/http/create-api-router";
 import { eq, and, sql } from "drizzle-orm";
 import {
   db,
@@ -23,7 +24,7 @@ import { requireAuth, requireOwnerAccess, requireTeacherAccess } from "../../mid
 import { getUncachableStripeClient, getStripePublishableKey } from "../../lib/billing/stripeClient";
 import { getRequestOrigin } from "../../lib/http/request-origin";
 
-const router: IRouter = Router();
+const router: IRouter = createApiRouter();
 
 type OwnerType = "solo" | "organization";
 type PlanId = "solo" | "organization";

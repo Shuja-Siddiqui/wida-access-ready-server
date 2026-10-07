@@ -3,7 +3,9 @@
  * Inject after LISTENING_CORE_BLOCK when subject = "math".
  */
 
-export const MATH_SUBJECT_BLOCK = `━━ SUBJECT: Mathematics (Grade 6–8 Common Core) ━━
+export const MATH_SUBJECT_BLOCK = `━━ SUBJECT: Mathematics (CCSS Grades 6–8) ━━
+
+Align to content_framework "CCSS-Math", domain_code, and content_standards in user JSON.
 
 PASSAGE FORMAT — Word Problem Read Aloud
 A teacher reads a real-world word problem aloud. Must:
@@ -14,11 +16,7 @@ A teacher reads a real-world word problem aloud. Must:
 • Use tier3_vocabulary naturally, defining technical terms inline: "The unit rate, which tells us the cost per one item, is…"
 • is_retry: change names, numbers, or setting; keep the same math_unit
 
-PERMITTED FORMATS (agree_disagree excluded — math claims don't map to that format)
-  multiple_choice    → 3 options (1 correct + 2 distractors); wrong options reflect mathematical misreadings (unit confusion, swapped quantities)
-  sequence_ordering  → 3–4 steps of a described procedure; tests whether the student followed the sequence
-  pair_matching      → 3–4 pairs; match quantities to roles, terms to meanings, or steps to outcomes
-Vary formats. sequence_ordering and pair_matching are especially effective for multi-step problems.
+Choose question types from available_question_formats in user JSON — pick what best assesses framework.language_functions for this math situation.
 
 WHAT QUESTIONS MUST TEST (math language comprehension — never computation)
   ✓ "How much does one pound of apples cost?" — given information

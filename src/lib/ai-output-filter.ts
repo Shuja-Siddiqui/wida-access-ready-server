@@ -128,7 +128,31 @@ export function filterItemFeedbackForStudent(feedback: ItemFeedback): Record<str
       accessWritingLabel: writingRubricLabel(score),
     };
   }
+  if (feedback.accessSpeaking) {
+    return {
+      ...base,
+      accessSpeakingCategory: feedback.accessSpeaking,
+      accessSpeakingLabel: speakingRubricLabel(feedback.accessSpeaking),
+    };
+  }
   return base;
+}
+
+function speakingRubricLabel(category: string): string {
+  switch (category) {
+    case "Exemplary":
+      return "Exemplary response";
+    case "Strong":
+      return "Strong response";
+    case "Adequate":
+      return "Adequate response";
+    case "Attempted":
+      return "Attempted response";
+    case "No Response":
+      return "No response";
+    default:
+      return category;
+  }
 }
 
 export function filterWritingFeedbackForStudent(feedback: WritingFeedback): Record<string, unknown> {

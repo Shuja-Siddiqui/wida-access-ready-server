@@ -3,21 +3,19 @@
  *
  * Assembles the full context used to generate a targeted writing session:
  *   - WIDA 2020 ELD standard × Key Language Use × expressive functions + PLDs
- *   - Curriculum topics scaled to the student's level (from writingCurriculum.json)
- *   - Sub-step complexity instruction calibrated from the student's fractional score
+ *   - SF academic topics come from lib/academic/* (sessions.ts)
  *
  * This module is pure data transformation — no DB calls.
  * DB fetching happens in the session route (sessions.ts) and the result
  * is passed here for assembly, keeping this layer testable without mocks.
  */
 
-import curriculumData from "../../data/writingCurriculum.json";
 import {
-  hasExpressiveCell,
   selectFrameworkTask,
   type AcademicSubjectId,
   type FrameworkTask,
 } from "../claude/standards/2020";
+import { expressiveKeyUsesForSubject } from "./frameworkRotation";
 
 import {
   clampLevel,
@@ -151,9 +149,8 @@ const COMPLEXITY_INSTRUCTIONS: Record<number, (level: number) => string> = {
 };
 
 /** Table 3-11 6–8: Science/Math/SS = Explain+Argue only. ELA = Narrate+Inform+Argue. */
-export function expressiveKeyUsesForWritingSubject(subject: AcademicSubject): KeyUse[] {
-  return KEY_USE_ROTATION.filter((k) => hasExpressiveCell(subject as AcademicSubjectId, k));
-}
+/** @deprecated Use expressiveKeyUsesForSubject from frameworkRotation. */
+export const expressiveKeyUsesForWritingSubject = expressiveKeyUsesForSubject;
 
 function nextWritingKeyUse(
   lastKeyUse: string | null,
@@ -202,48 +199,6 @@ export function nextWritingKeyUseForSubject(
   return nextKeyUseForSubject(recent, subject, isRetry, retryKeyUse, writingKluPool);
 }
 
-// ── Curriculum helpers ────────────────────────────────────────────────────────
-
-/** Returns a flat list of writing curriculum topics for a given ELP level. */
-function getCurriculumTopicsForLevel(level: number): string[] {
-  const elpLevel = clampLevel(level);
-  const levelEntry = (curriculumData as any).levels.find(
-    (l: any) => l.elpLevel === elpLevel,
-  );
-  if (!levelEntry) return [];
-
-  const topics: string[] = [];
-  for (const category of (levelEntry.topicCategories ?? [])) {
-    for (const topic of (category.topics ?? [])) {
-      topics.push(`[${category.category}] ${topic}`);
-    }
-  }
-  return topics;
-}
-
-// ── Topic selection ───────────────────────────────────────────────────────────
-
-/**
- * Picks the topic for a writing session.
- * - Reuses the persisted topic if the last session failed (score < 70).
- * - Otherwise picks a random topic from the curriculum, skipping topics used today.
- */
-export function selectWritingTopic(
-  elpLevel: number,
-  persistedTopic: string | null,
-  topicsUsedToday: string[] = [],
-): string {
-  if (persistedTopic) return persistedTopic;
-
-  const allTopics = getCurriculumTopicsForLevel(elpLevel);
-  const usedLower = topicsUsedToday.map((t) => t.toLowerCase());
-  const available = allTopics.filter(
-    (t) => !usedLower.some((u) => t.toLowerCase().includes(u)),
-  );
-  const pool = available.length > 0 ? available : allTopics;
-  return pool[Math.floor(Math.random() * pool.length)] ?? "";
-}
-
 // ── Context assembly ──────────────────────────────────────────────────────────
 
 /**
@@ -283,6 +238,6 @@ export function buildWritingContext(
       mode: "expressive",
       academicSubject: academicSubject as AcademicSubjectId,
     }),
-    selectedTopic:         selectWritingTopic(elpLevel, persistedTopic, topicsUsedToday),
+    selectedTopic:         persistedTopic ?? "",
   };
 }

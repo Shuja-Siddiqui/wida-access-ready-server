@@ -7,7 +7,8 @@
 
 export { BASE_BLOCK }                                               from "./base";
 export { LISTENING_CORE_BLOCK }                                     from "./listening-core";
-export { OPTIONAL_LINE_VISUALS_BLOCK, LIBRARY_IMAGE_GROUNDS_CONTENT } from "./optional-line-visuals";
+export { OPTIONAL_LINE_VISUALS_BLOCK } from "./optional-line-visuals";
+export { LIBRARY_PHOTO_CORE as LIBRARY_IMAGE_GROUNDS_CONTENT } from "./content/library-photo-policy";
 export { buildSystemPrompt, blockIf }                               from "./compose";
 export {
   LANGUAGE_FORMS_ACCURACY_FOR_CONTENT,
@@ -16,9 +17,15 @@ export {
   languageFormsCorrectionCoachingForDomain,
   type LanguageFormsCoachingDomain,
 } from "./grammar-correction-rules";
-export { contentGenPrompt, contentBand, CONTENT_KERNEL }            from "./content";
+export { contentGenPrompt, contentBand, CONTENT_KERNEL, buildContentSystemPrompt } from "./content";
 export type { ContentDomain, ContentBand }                          from "./content";
-export { ACADEMIC_IMAGE_ANCHOR_BLOCK, buildImageAnchorPromptFields } from "./academic-image-anchor";
+export {
+  ACADEMIC_IMAGE_ANCHOR_BLOCK,
+  buildImageAnchorPromptFields,
+  buildLibraryComposeUserFields,
+  buildLibraryImageSceneUserFields,
+  LIBRARY_COMPOSE_CONTENT_POLICY,
+} from "./academic-image-anchor";
 
 // Subject blocks — guidelines, visual anchor tags, output schemas
 export { MATH_SUBJECT_BLOCK, MATH_VISUAL_ANCHOR_TAGS, MATH_OUTPUT_SCHEMA }                               from "./subjects/math";

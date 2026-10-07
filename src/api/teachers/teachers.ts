@@ -1,4 +1,5 @@
-import { Router, type IRouter } from "express";
+import type { IRouter } from "express";
+import { createApiRouter } from "../../lib/http/create-api-router";
 import { and, eq, inArray, or } from "drizzle-orm";
 import { z } from "zod/v4";
 import { db, profilesTable, studentsTable, sessionsTable, studentLevelsTable, usersTable, schoolsTable, districtsTable } from "../../../db";
@@ -16,7 +17,7 @@ import { sendError, sendSuccess } from "../../lib/http/api-response";
 import { requireAuth, requireTeacherAccess } from "../../middlewares/auth";
 import { assertTeacherBulkAssignAccess, sendAccessDenied } from "../../lib/auth/org-access";
 
-const router: IRouter = Router();
+const router: IRouter = createApiRouter();
 
 router.use("/teachers", requireAuth);
 

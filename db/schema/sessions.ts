@@ -8,7 +8,7 @@ export const sessionsTable = pgTable("sessions", {
   studentId: uuid("student_id").notNull().references(() => studentsTable.id),
   sessionType: text("session_type").notNull().default("single"), // 'single' | 'all_four'
   domain: text("domain").notNull(), // listening | speaking | reading | writing
-  tier: text("tier").notNull().default("general"), // 'general' | 'academic'
+  tier: text("tier").notNull().default("academic"), // 'academic' (legacy rows may still say 'general')
   levelStart: decimal("level_start", { precision: 5, scale: 2 }).notNull(),
   levelEnd: decimal("level_end", { precision: 5, scale: 2 }),
   scorePct: integer("score_pct"), // 0-100
@@ -31,6 +31,12 @@ export const sessionsTable = pgTable("sessions", {
 
   // AI practice report from session complete (strengths, weaknesses, coach note for next generate).
   practiceReport: jsonb("practice_report"),
+
+  /** Rolling sum of AI token usage for this practice session (all calls linked to session_id). */
+  aiInputTokens:  integer("ai_input_tokens").notNull().default(0),
+  aiOutputTokens: integer("ai_output_tokens").notNull().default(0),
+  aiTotalTokens:  integer("ai_total_tokens").notNull().default(0),
+  aiCallCount:    integer("ai_call_count").notNull().default(0),
 
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

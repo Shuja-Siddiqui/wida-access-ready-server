@@ -1,4 +1,5 @@
-import { Router, type IRouter, type Request } from "express";
+import type { IRouter, Request } from "express";
+import { createApiRouter } from "../../lib/http/create-api-router";
 import { eq, and, or, sql, count, desc } from "drizzle-orm";
 import crypto from "node:crypto";
 import { z } from "zod/v4";
@@ -59,17 +60,16 @@ import { requireAuth, requireStudentAccess } from "../../middlewares/auth";
 import { resolveStudentAccess } from "../../lib/billing/subscription";
 import { getStudentAiUsage } from "../../lib/rate-limit/usage";
 
-const router: IRouter = Router();
+const router: IRouter = createApiRouter();
 
 router.use("/students", requireAuth);
 
 // All (domain, tier) pairs for which student_levels rows must exist.
 // To add a new domain or tier in the future, append a pair here — nothing else needs to change.
 const DOMAIN_TIER_PAIRS: Array<{ domain: Domain; tier: Tier }> = [
-  { domain: "listening", tier: "general"  },
   { domain: "listening", tier: "academic" },
-  { domain: "speaking",  tier: "general"  },
-  { domain: "reading",   tier: "general"  },
+  { domain: "speaking",  tier: "academic" },
+  { domain: "reading",   tier: "academic" },
   { domain: "writing",   tier: "academic" },
 ];
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -176,11 +176,10 @@ async function applyGuardianScores(
           consecutiveFailCount: "0",
           updatedAt: new Date(),
         })
-        // Guardian scores: general tier for L/S/R; writing is academic WIDA only.
         .where(and(
           eq(studentLevelsTable.studentId, studentId),
           eq(studentLevelsTable.domain, domain),
-          eq(studentLevelsTable.tier, domain === "writing" ? "academic" : "general"),
+          eq(studentLevelsTable.tier, "academic"),
         ));
     }
   }
@@ -982,49 +981,6 @@ type ProgressDomainRow = {
   scaleMax: number;
 };
 
-/** Single listening card in UI — merges general + academic tier stats. */
-function mergeListeningProgress(
-  general: ProgressDomainRow,
-  academic: ProgressDomainRow,
-  assessment: Assessment,
-  config: ReturnType<typeof getAssessmentConfig>,
-): ProgressDomainRow {
-  const sessionHistory = [...general.sessionHistory, ...academic.sessionHistory]
-    .sort((a, b) => Date.parse(a.date) - Date.parse(b.date))
-    .slice(-20);
-  const currentLevel = Math.max(general.currentLevel, academic.currentLevel);
-  const gap = Math.max(0, general.exitThreshold - currentLevel);
-  const growthRate = calculateGrowthRate(
-    sessionHistory.map((s, i) => ({
-      levelStart: i > 0 ? sessionHistory[i - 1].level : general.currentLevel,
-      levelEnd: s.level,
-      createdAt: new Date(s.date),
-    })),
-    currentLevel,
-  );
-  const exitProjection = projectExitDate(gap, growthRate);
-
-  const lastPracticed = [general.lastPracticed, academic.lastPracticed]
-    .filter(Boolean)
-    .sort((a, b) => Date.parse(b!) - Date.parse(a!))[0] ?? null;
-
-  return {
-    ...general,
-    domain: "listening",
-    tier: "general",
-    currentLevel,
-    gap,
-    normalizedLevel: config.normalize(currentLevel),
-    levelLabel: getLevelLabel(currentLevel, assessment),
-    atExit: gap <= 0,
-    growthRate,
-    exitProjection: { domain: "listening", ...exitProjection },
-    sessionHistory,
-    lastSessionScore: general.lastSessionScore ?? academic.lastSessionScore,
-    lastPracticed,
-  };
-}
-
 async function buildProgress(studentId: string, assessment: Assessment) {
   const config = getAssessmentConfig(assessment);
 
@@ -1038,9 +994,7 @@ async function buildProgress(studentId: string, assessment: Assessment) {
   ]);
 
   const domainData = DOMAIN_TIER_PAIRS.map(({ domain, tier }) => {
-    // UI key: "listening_academic" for academic listening; writing stays "writing" (academic-only).
-    const domainKey =
-      tier === "academic" && domain === "listening" ? `${domain}_academic` : domain;
+    const domainKey = domain;
     const levelRow = levels.find((l) => l.domain === domain && l.tier === tier);
     const currentLevel = levelRow ? parseFloat(levelRow.currentLevel) : config.scale.min;
     const exitThreshold = getExitThreshold(assessment, domain);
@@ -1069,7 +1023,7 @@ async function buildProgress(studentId: string, assessment: Assessment) {
     const lastSession = domainSessions[domainSessions.length - 1];
 
     return {
-      domain: domainKey, // UI key — "listening_academic" or plain domain name
+      domain: domainKey,
       tier,              // raw tier for reference
       currentLevel,
       exitThreshold,
@@ -1087,20 +1041,8 @@ async function buildProgress(studentId: string, assessment: Assessment) {
     } satisfies ProgressDomainRow;
   });
 
-  const generalListening = domainData.find((d) => d.domain === "listening");
-  const academicListening = domainData.find((d) => d.domain === "listening_academic");
-  const mergedListening =
-    generalListening && academicListening
-      ? mergeListeningProgress(generalListening, academicListening, assessment, config)
-      : generalListening ?? academicListening;
-
   const domainOrder = ["listening", "speaking", "reading", "writing"] as const;
-  const consolidatedDomains = [
-    ...(mergedListening ? [mergedListening] : []),
-    ...domainData.filter(
-      (d) => d.domain !== "listening" && d.domain !== "listening_academic",
-    ),
-  ].sort(
+  const consolidatedDomains = [...domainData].sort(
     (a, b) => domainOrder.indexOf(a.domain as typeof domainOrder[number])
       - domainOrder.indexOf(b.domain as typeof domainOrder[number]),
   );

@@ -1,32 +1,29 @@
 /**
- * How content generation is assembled
- * -----------------------------------
- * prompts/content/     Always-on: JSON schema, item types, photo rules. No WIDA year.
- * standards/2016/      Can Do Descriptors, Key Uses Edition — data + extra prompt lines.
- * standards/2020/      ELD Standards Framework — functions JSON + PLDs + extra prompt lines.
+ * WIDA ELD Standards Framework — live content generation (2020 only).
  *
- * Live system prompt =
+ * prompts/content/     Always-on: JSON schema, item types, photo rules.
+ * standards/2020/      ELD Standards Framework — functions, PLDs, prompt slices.
+ * standards/2016/      ARCHIVED — Can Do Descriptors pack; not imported here.
+ *
+ * System prompt (buildContentSystemPrompt) =
  *   kernel
- * + standards/{year}/prompts/shared
+ * + standards/2020/prompts/shared
  * + prompts/content/{domain}-{band}
- * + standards/{year}/prompts/{domain}[band]
- *
- * Writing generate() sends 2020 functions + PLDs and uses the 2020 prompt slices.
- * Listening / reading / speaking stay on 2016 until their generate() payloads change.
- * Do not flip WIDA_FRAMEWORK_VERSION globally.
+ * + optional layers (line visuals, academic subject, library photo)
+ * + output schema
  */
 import type { FrameworkBand, FrameworkDomain, WidaFrameworkVersion } from "./types";
 export type { FrameworkBand, FrameworkDomain, WidaFrameworkVersion } from "./types";
-import { FRAMEWORK_2016_PROMPT_SLICE, framework2016DomainSlice } from "./2016";
 import { FRAMEWORK_2020_PROMPT_SLICE, framework2020DomainSlice } from "./2020";
 
-/** Active pack. Stay on 2016 until generate() sends 2020 fields instead of can_do. */
-export const WIDA_FRAMEWORK_VERSION: WidaFrameworkVersion = "2016";
+/** Active pack — all live generate/feedback paths use 2020. */
+export const WIDA_FRAMEWORK_VERSION: WidaFrameworkVersion = "2020";
 
 export function frameworkPromptSlice(
   version: WidaFrameworkVersion = WIDA_FRAMEWORK_VERSION,
 ): string {
-  return version === "2020" ? FRAMEWORK_2020_PROMPT_SLICE : FRAMEWORK_2016_PROMPT_SLICE;
+  assertLiveFrameworkVersion(version);
+  return FRAMEWORK_2020_PROMPT_SLICE;
 }
 
 export function frameworkDomainSlice(
@@ -35,10 +32,16 @@ export function frameworkDomainSlice(
   version: WidaFrameworkVersion = WIDA_FRAMEWORK_VERSION,
   opts?: { hasLibraryCandidates?: boolean },
 ): string {
-  return version === "2020"
-    ? framework2020DomainSlice(domain, band, opts)
-    : framework2016DomainSlice(domain, band);
+  assertLiveFrameworkVersion(version);
+  return framework2020DomainSlice(domain, band, opts);
 }
 
-export { FRAMEWORK_2016_PROMPT_SLICE } from "./2016";
+function assertLiveFrameworkVersion(version: WidaFrameworkVersion): void {
+  if (version !== "2020") {
+    throw new Error(
+      `WIDA framework version "${version}" is not supported. Live paths use 2020 only.`,
+    );
+  }
+}
+
 export { FRAMEWORK_2020_PROMPT_SLICE } from "./2020";

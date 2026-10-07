@@ -14,6 +14,9 @@ function ensureUsageTable(): Promise<void> {
           generate_calls INTEGER NOT NULL DEFAULT 0,
           coaching_calls INTEGER NOT NULL DEFAULT 0,
           speech_calls INTEGER NOT NULL DEFAULT 0,
+          input_tokens INTEGER NOT NULL DEFAULT 0,
+          output_tokens INTEGER NOT NULL DEFAULT 0,
+          total_tokens INTEGER NOT NULL DEFAULT 0,
           PRIMARY KEY (student_id, usage_date)
         )
       `)
@@ -33,6 +36,35 @@ export function usageKindFromPath(path: string): AiUsageKind {
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Fire-and-forget daily token totals (call counts still come from recordAiUsage). */
+export function incrementDailyTokenUsage(
+  studentId: string,
+  inputTokens: number,
+  outputTokens: number,
+  totalTokens: number,
+): void {
+  if (!UUID_RE.test(studentId)) return;
+  if (totalTokens <= 0) return;
+  void (async () => {
+    try {
+      await ensureUsageTable();
+      await pool.query(
+        `INSERT INTO ai_usage_daily
+           (student_id, usage_date, total_calls, generate_calls, coaching_calls, speech_calls,
+            input_tokens, output_tokens, total_tokens)
+         VALUES ($1, (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date, 0, 0, 0, 0, $2, $3, $4)
+         ON CONFLICT (student_id, usage_date) DO UPDATE SET
+           input_tokens = ai_usage_daily.input_tokens + $2,
+           output_tokens = ai_usage_daily.output_tokens + $3,
+           total_tokens = ai_usage_daily.total_tokens + $4`,
+        [studentId, inputTokens, outputTokens, totalTokens],
+      );
+    } catch (err) {
+      logger.warn({ err, studentId }, "ai_usage_daily token increment failed");
+    }
+  })();
+}
 
 /** Fire-and-forget daily increment. Safe to call after a rate-limit allow. */
 export function recordAiUsage(studentId: string, kind: AiUsageKind): void {
@@ -69,8 +101,12 @@ export async function getStudentAiUsage(studentId: string, days: number) {
     generate_calls: number;
     coaching_calls: number;
     speech_calls: number;
+    input_tokens: number;
+    output_tokens: number;
+    total_tokens: number;
   }>(
-    `SELECT usage_date::text, total_calls, generate_calls, coaching_calls, speech_calls
+    `SELECT usage_date::text, total_calls, generate_calls, coaching_calls, speech_calls,
+            input_tokens, output_tokens, total_tokens
      FROM ai_usage_daily
      WHERE student_id = $1
        AND usage_date >= (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date - ($2::int - 1)
@@ -84,6 +120,9 @@ export async function getStudentAiUsage(studentId: string, days: number) {
     generate: number;
     coaching: number;
     speech: number;
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
   }[] = [];
   const today = new Date();
   for (let i = span - 1; i >= 0; i--) {
@@ -96,8 +135,12 @@ export async function getStudentAiUsage(studentId: string, days: number) {
       generate: Number(row?.generate_calls ?? 0),
       coaching: Number(row?.coaching_calls ?? 0),
       speech: Number(row?.speech_calls ?? 0),
+      inputTokens: Number(row?.input_tokens ?? 0),
+      outputTokens: Number(row?.output_tokens ?? 0),
+      totalTokens: Number(row?.total_tokens ?? 0),
     });
   }
   const total = series.reduce((sum, d) => sum + d.total, 0);
-  return { days: span, total, series };
+  const totalTokens = series.reduce((sum, d) => sum + d.totalTokens, 0);
+  return { days: span, total, totalTokens, series };
 }

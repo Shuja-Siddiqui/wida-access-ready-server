@@ -1,6 +1,6 @@
 /**
  * Slice one 2020 ELD cell + matching PLDs for Claude.
- * Writing is expressive. Blank Standard × KLU cells are not invented.
+ * Blank Standard × KLU cells are not invented.
  */
 import languageFunctions6to8 from "./data/wida_eld_language_functions_6-8.json";
 import proficiencyLevelDescriptors6to8 from "./data/wida_eld_proficiency_level_descriptors_6-8.json";
@@ -54,8 +54,10 @@ const MAX_FEATURES = 8;
 
 type KluCell = {
   reference_code?: string;
+  reference_code_interpretive?: string;
   reference_code_expressive?: string;
   language_expectations?: string[];
+  interpretive?: { intro?: string; language_expectations?: string[] };
   expressive?: { intro?: string; language_expectations?: string[] };
   language_functions?: Array<{ function?: string; language_features?: string[] }>;
 };
@@ -80,6 +82,7 @@ type PldDimension = {
 
 const pack = languageFunctions6to8 as StandardsPack;
 const plds = proficiencyLevelDescriptors6to8 as {
+  interpretive_communication_mode?: { framing?: string; dimensions?: PldDimension[] };
   expressive_communication_mode?: { framing?: string; dimensions?: PldDimension[] };
 };
 
@@ -107,6 +110,18 @@ export function hasExpressiveCell(
   return functions > 0 || expectations > 0;
 }
 
+export function hasInterpretiveCell(
+  subject: AcademicSubjectId | null | undefined,
+  keyUse: string | null | undefined,
+): boolean {
+  if (!subject) return false;
+  const cell = kluCell(SUBJECT_TO_STANDARD[subject], asKeyUse(keyUse));
+  if (!cell) return false;
+  const interp = cell.interpretive?.language_expectations?.length ?? 0;
+  const topLevel = cell.language_expectations?.length ?? 0;
+  return interp > 0 || topLevel > 0;
+}
+
 function resolveStandardId(
   keyUse: KeyLanguageUse,
   academicSubject?: AcademicSubjectId | null,
@@ -118,8 +133,15 @@ function resolveStandardId(
   return "1";
 }
 
-function pldLine(dimensionName: string, level: number): string {
-  const dims = plds.expressive_communication_mode?.dimensions ?? [];
+function pldLineFromMode(
+  mode: FrameworkMode,
+  dimensionName: string,
+  level: number,
+): string {
+  const modePack = mode === "interpretive"
+    ? plds.interpretive_communication_mode
+    : plds.expressive_communication_mode;
+  const dims = modePack?.dimensions ?? [];
   const dim = dims.find((d) => d.dimension === dimensionName);
   if (!dim) return "";
   const clamped = Math.min(6, Math.max(1, Math.round(level)));
@@ -131,32 +153,70 @@ function pldLine(dimensionName: string, level: number): string {
   return dim.level_6 ?? "";
 }
 
-export function selectExpressivePld(level: number): FrameworkTask["pld"] {
+function selectPld(level: number, mode: FrameworkMode): FrameworkTask["pld"] {
   const clamped = Math.min(6, Math.max(1, Math.round(level)));
+  const modePack = mode === "interpretive"
+    ? plds.interpretive_communication_mode
+    : plds.expressive_communication_mode;
   return {
     level: clamped,
-    framing: plds.expressive_communication_mode?.framing
+    framing: modePack?.framing
       ?? "Toward the end of each proficiency level, when scaffolded appropriately, multilingual learners will...",
-    discourse_organization: pldLine("Discourse - Organization of language", clamped),
-    discourse_cohesion: pldLine("Discourse - Cohesion of language", clamped),
-    discourse_density: pldLine("Discourse - Density of language", clamped),
-    sentence: pldLine("Sentence - Grammatical complexity", clamped),
-    word_phrase: pldLine("Word, Phrase - Precision of language", clamped),
+    discourse_organization: pldLineFromMode(mode, "Discourse - Organization of language", clamped),
+    discourse_cohesion: pldLineFromMode(mode, "Discourse - Cohesion of language", clamped),
+    discourse_density: pldLineFromMode(mode, "Discourse - Density of language", clamped),
+    sentence: pldLineFromMode(mode, "Sentence - Grammatical complexity", clamped),
+    word_phrase: pldLineFromMode(mode, "Word, Phrase - Precision of language", clamped),
   };
 }
 
-function functionsFromCell(cell: KluCell): FrameworkFunction[] {
+export function selectExpressivePld(level: number): FrameworkTask["pld"] {
+  return selectPld(level, "expressive");
+}
+
+export function selectInterpretivePld(level: number): FrameworkTask["pld"] {
+  return selectPld(level, "interpretive");
+}
+
+function expectationsFromCell(cell: KluCell, mode: FrameworkMode): string[] {
+  if (mode === "interpretive") {
+    if (cell.interpretive?.language_expectations?.length) {
+      return cell.interpretive.language_expectations;
+    }
+    return cell.language_expectations ?? [];
+  }
+  if (cell.expressive?.language_expectations?.length) {
+    return cell.expressive.language_expectations;
+  }
+  return cell.language_expectations ?? [];
+}
+
+function functionsFromCell(cell: KluCell, mode: FrameworkMode): FrameworkFunction[] {
+  if (mode === "interpretive") {
+    const bullets = expectationsFromCell(cell, "interpretive");
+    return bullets.slice(0, MAX_FUNCTIONS).map((text) => ({
+      function: text,
+      language_features: [],
+    })).filter((row) => row.function.length > 0);
+  }
   if (Array.isArray(cell.language_functions) && cell.language_functions.length > 0) {
     return cell.language_functions.slice(0, MAX_FUNCTIONS).map((row) => ({
       function: String(row.function ?? "").trim(),
       language_features: (row.language_features ?? []).map((f) => String(f)).slice(0, MAX_FEATURES),
     })).filter((row) => row.function.length > 0);
   }
-  const bullets = cell.language_expectations ?? [];
+  const bullets = expectationsFromCell(cell, "expressive");
   return bullets.slice(0, MAX_FUNCTIONS).map((text) => ({
     function: text,
     language_features: [],
   }));
+}
+
+function referenceCodeFromCell(cell: KluCell, mode: FrameworkMode): string | null {
+  if (mode === "interpretive") {
+    return cell.reference_code_interpretive ?? cell.reference_code ?? null;
+  }
+  return cell.reference_code_expressive ?? cell.reference_code ?? null;
 }
 
 export function selectFrameworkTask(opts: {
@@ -174,11 +234,9 @@ export function selectFrameworkTask(opts: {
     cell = kluCell("1", klu);
   }
   if (!cell) {
-    throw new Error(`No 2020 ELD cell for ${klu}`);
+    throw new Error(`No WIDA 2020 ELD cell for key language use "${klu}" (standard ${standardId})`);
   }
-  const expectations = cell.expressive?.language_expectations?.length
-    ? cell.expressive.language_expectations
-    : (cell.language_expectations ?? []);
+  const expectations = expectationsFromCell(cell, mode);
   const level = Math.min(6, Math.max(1, Math.round(opts.level)));
 
   return {
@@ -189,10 +247,10 @@ export function selectFrameworkTask(opts: {
     },
     key_language_use: klu,
     mode,
-    reference_code: cell.reference_code_expressive ?? cell.reference_code ?? null,
+    reference_code: referenceCodeFromCell(cell, mode),
     language_expectations: expectations.slice(0, 8),
-    language_functions: functionsFromCell(cell),
-    pld: selectExpressivePld(level),
+    language_functions: functionsFromCell(cell, mode),
+    pld: selectPld(level, mode),
   };
 }
 
@@ -209,12 +267,17 @@ export function serializeFrameworkTask(task: FrameworkTask): Record<string, unkn
   };
 }
 
-/** The five PLD lines we sliced from JSON for this integer level — the only level-specific WIDA text. */
-export function formatExpressivePldBlock(pld: FrameworkTask["pld"]): string {
+function formatPldBlock(pld: FrameworkTask["pld"], mode: FrameworkMode): string {
   const column = pld.level >= 6 ? "level_6" : `end_of_level_${pld.level}`;
+  const modeLabel = mode === "interpretive"
+    ? "interpretive (listening/reading/viewing)"
+    : "expressive (speaking/writing)";
+  const action = mode === "interpretive"
+    ? "Write one comprehension task so the student can practice understanding THIS column."
+    : "Write one student prompt so they can practice producing THIS column.";
   return [
     `LEVEL TEXT FROM JSON — wida_eld_proficiency_level_descriptors_6-8.json`,
-    `Mode: expressive (speaking/writing). Column: ${column}. Other level columns are not in this call.`,
+    `Mode: ${modeLabel}. Column: ${column}. Other level columns are not in this call.`,
     `Language expectations and functions are the SAME job at every level. Only these five lines change the English.`,
     pld.framing,
     `organization: ${pld.discourse_organization}`,
@@ -222,8 +285,24 @@ export function formatExpressivePldBlock(pld: FrameworkTask["pld"]): string {
     `density: ${pld.discourse_density}`,
     `sentence: ${pld.sentence}`,
     `word_phrase: ${pld.word_phrase}`,
-    `Write one student prompt so they can practice producing THIS column. Do not write to a different level's column.`,
+    `${action} Do not write to a different level's column.`,
   ].join("\n");
+}
+
+/** The five PLD lines we sliced from JSON for this integer level — the only level-specific WIDA text. */
+export function formatExpressivePldBlock(pld: FrameworkTask["pld"]): string {
+  return formatPldBlock(pld, "expressive");
+}
+
+export function formatInterpretivePldBlock(pld: FrameworkTask["pld"]): string {
+  return formatPldBlock(pld, "interpretive");
+}
+
+/** Compact descriptor from framework functions for client/feedback compat. */
+export function frameworkTaskDescriptor(task: FrameworkTask): string {
+  const fns = task.language_functions.map((f) => f.function).filter(Boolean);
+  if (fns.length > 0) return fns.slice(0, 3).join("; ");
+  return task.language_expectations.slice(0, 2).join("; ");
 }
 
 export { SUBJECT_TO_STANDARD };

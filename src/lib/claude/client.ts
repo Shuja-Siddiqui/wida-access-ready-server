@@ -4,6 +4,8 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
+import { getAiTokenContext } from "../ai-token-context";
+import { recordAiTokenCall } from "../ai-token-usage";
 import { logger } from "../../config/logger";
 import { config } from "../../config/index";
 import { runClaudeJob } from "./queue";
@@ -97,20 +99,37 @@ export function toDisplayTextOrNull(value: unknown): string | null {
   return text || null;
 }
 
+const SENTENCE_END_ABBREV = /\b(?:Mrs?|Ms|Dr|Prof|Sr|Jr|St|vs|etc|i\.e|e\.g)\./gi;
+const ABBREV_DOT = "\u0000";
+
+function protectAbbreviationDots(text: string): string {
+  return text.replace(SENTENCE_END_ABBREV, (match) => match.replace(".", ABBREV_DOT));
+}
+
+function restoreAbbreviationDots(text: string): string {
+  return text.replaceAll(ABBREV_DOT, ".");
+}
+
+function splitSentences(text: string): string[] {
+  const protectedText = protectAbbreviationDots(text);
+  const parts = protectedText.match(/[^.!?]+[.!?]+|[^.!?]+$/g);
+  if (!parts) return text ? [text] : [];
+  return parts.map((part) => restoreAbbreviationDots(part).trim()).filter(Boolean);
+}
+
 /** Keep the first N sentences so L1–2 audio stays short even if the model overwrites. */
 export function limitSentences(text: string, max: number): string {
   const trimmed = text.replace(/\s+/g, " ").trim();
   if (!trimmed) return "";
-  const parts = trimmed.match(/[^.!?]+[.!?]+|[^.!?]+$/g);
-  if (!parts || parts.length <= max) return trimmed;
+  const parts = splitSentences(trimmed);
+  if (parts.length <= max) return trimmed;
   return parts.slice(0, max).join(" ").replace(/\s+/g, " ").trim();
 }
 
 export function sentenceCount(text: string): number {
   const trimmed = text.replace(/\s+/g, " ").trim();
   if (!trimmed) return 0;
-  const parts = trimmed.match(/[^.!?]+[.!?]+|[^.!?]+$/g);
-  return parts?.filter((p) => p.trim()).length ?? 0;
+  return splitSentences(trimmed).length;
 }
 
 // ── Claude API wrapper ────────────────────────────────────────────────────────
@@ -138,6 +157,20 @@ export async function callClaude(
         messages: [{ role: "user", content: userPrompt }],
       }),
     );
+
+    const usage = response.usage;
+    const tokenCtx = getAiTokenContext();
+    if (tokenCtx?.studentId && usage) {
+      recordAiTokenCall({
+        studentId:    tokenCtx.studentId,
+        sessionId:    tokenCtx.sessionId,
+        callKind:     tokenCtx.callKind ?? "other",
+        domain:       tokenCtx.domain,
+        model:        response.model,
+        inputTokens:  usage.input_tokens,
+        outputTokens: usage.output_tokens,
+      });
+    }
 
     const text = response.content[0].type === "text" ? response.content[0].text : "";
 

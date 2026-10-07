@@ -61,8 +61,10 @@ function buildDescriptionFromJob(
   hfPrompt: string,
 ): string {
   const parts: string[] = [];
-  if (snapshot?.academicScenario?.trim()) {
-    parts.push(snapshot.academicScenario.trim());
+  if (snapshot?.topicLabel?.trim()) {
+    parts.push(snapshot.topicLabel.trim());
+  } else if (snapshot?.academicUnit?.trim()) {
+    parts.push(snapshot.academicUnit.trim());
   }
   if (rationale?.trim()) {
     parts.push(rationale.trim());
@@ -91,8 +93,8 @@ function buildAcademicVisionFromJob(
     || "Educational scene";
 
   const descParts: string[] = [];
-  if (snapshot?.academicScenario?.trim()) {
-    descParts.push(snapshot.academicScenario.trim());
+  if (snapshot?.topicLabel?.trim()) {
+    descParts.push(snapshot.topicLabel.trim());
   }
   if (snapshot?.tier3Vocabulary?.length) {
     descParts.push(

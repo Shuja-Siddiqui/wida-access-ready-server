@@ -1,4 +1,4 @@
-import { pgTable, text, uuid, timestamp } from "drizzle-orm/pg-core";
+import { index, pgTable, text, uuid, timestamp } from "drizzle-orm/pg-core";
 
 /**
  * Long-lived refresh tokens issued alongside every session token.
@@ -12,13 +12,19 @@ import { pgTable, text, uuid, timestamp } from "drizzle-orm/pg-core";
  *  - 90-day TTL: much longer than the 30-day session token so users rarely
  *    need to re-enter credentials.
  */
-export const refreshTokensTable = pgTable("refresh_tokens", {
-  id:          uuid("id").primaryKey().defaultRandom(),
-  userId:      uuid("user_id").notNull(),
-  userType:    text("user_type").notNull(),   // 'student' | 'teacher' | 'parent' | ...
-  tokenHash:   text("token_hash").notNull().unique(),
-  expiresAt:   timestamp("expires_at", { withTimezone: true }).notNull(),
-  createdAt:   timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const refreshTokensTable = pgTable(
+  "refresh_tokens",
+  {
+    id:          uuid("id").primaryKey().defaultRandom(),
+    userId:      uuid("user_id").notNull(),
+    userType:    text("user_type").notNull(),   // 'student' | 'teacher' | 'parent' | ...
+    tokenHash:   text("token_hash").notNull().unique(),
+    expiresAt:   timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt:   timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("refresh_tokens_user_id_user_type_idx").on(table.userId, table.userType),
+  ],
+);
 
 export type RefreshToken = typeof refreshTokensTable.$inferSelect;

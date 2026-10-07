@@ -6,18 +6,14 @@
 
 import { callClaude, toDisplayText } from "./client";
 import { rethrowIfClaudeCapacity } from "./queue";
-import { OPTIONAL_LINE_VISUALS_BLOCK, parseVisual } from "./prompts/optional-line-visuals";
+import { parseVisual } from "./prompts/optional-line-visuals";
 import {
-  getWritingPortrayalForPrompt,
   type WritingLibraryCandidate,
   resolveWritingLibrarySelectionWithPolicy,
   serializeWritingLibraryCandidatesForPrompt,
 } from "../content";
 import { buildSystemPrompt } from "./prompts/compose";
-import { CONTENT_KERNEL } from "./prompts/content/kernel";
-import { buildWritingContentSlice } from "./prompts/content/writing";
-import { frameworkDomainSlice, frameworkPromptSlice } from "./standards";
-import { contentBand } from "./prompts/content/router";
+import { buildContentSystemPrompt } from "./prompts/content/system-prompt";
 import {
   buildLevel1PassageFromLibraryMeta,
   buildWritingPassageSentenceTarget,
@@ -26,7 +22,11 @@ import {
 import { feedbackCoachPrompt } from "./prompts/wida-feedback-guide";
 import { stripWritingCopyableModels } from "./writing-coach-guard";
 import {
-  formatExpressivePldBlock,
+  academicPromptFieldsFromContext,
+  type AcademicFrameworkFields,
+} from "../academic/academicFrameworkContext";
+import {
+  frameworkTaskDescriptor,
   serializeFrameworkTask,
   selectExpressivePld,
   type FrameworkTask,
@@ -62,8 +62,8 @@ function buildWritingOutputSchema(params: {
     !hasLibraryCandidates
       ? `  "selected_image_id": null,`
       : libraryImageRequired
-        ? `  "selected_image_id": "<REQUIRED uuid from library_candidates — Level 1 must pick one>",`
-        : `  "selected_image_id": "<uuid from library_candidates OR null if no photo fits this key_use>",`,
+        ? `  "selected_image_id": "<REQUIRED uuid from library_candidates>",`
+        : `  "selected_image_id": null,`,
     !hasLibraryCandidates
       ? `  "passage": null,`
       : libraryImageRequired
@@ -84,21 +84,18 @@ function buildWritingOutputSchema(params: {
       ? `• library_candidates are pre-filtered for academic_subject. Each entry includes id, tags, concept, and description — pick selected_image_id, then compose passage FROM that metadata before writing the prompt.`
       : null,
     libraryImageRequired
-      ? `• Level 1: selected_image_id is REQUIRED when library_candidates exist. Never return null.`
+      ? `• selected_image_id is REQUIRED when library_candidates exist. Never return null.`
       : null,
     hasLibraryCandidates
       ? `• passage must be a connected narrative/informational text about the selected photo (not generic topic text). Hardness follows passage_sentence_target in the JSON payload.`
       : null,
     hasLibraryCandidates
-      ? `• Level 2+: you choose selected_image_id or null, passage, prompt, word_bank, and sentence_frame per content_portrayal and framework — server does not rewrite your output.`
-      : null,
-    hasLibraryCandidates && !libraryImageRequired
-      ? `• When selected_image_id is null: passage null; write from topic and academic_subject only.`
+      ? `• Compose passage FROM the selected photo's tags/concept/description, then write the prompt. Do not describe objects that are not in that photo.`
       : null,
     !hasLibraryCandidates
       ? `• No library images available. Do NOT say look, picture, photo, or "what do you see".`
       : null,
-    `• You choose word_bank, sentence_frame, and visual — match framework.pld and content_portrayal for required_key_use ${params.keyUse}.`,
+    `• You choose word_bank, sentence_frame, and visual — match framework.pld and language_functions for required_key_use ${params.keyUse}.`,
     ...(level >= 2
       ? [`• ALIGN: prompt assesses language_functions for key_use ${params.keyUse}. Follow pld.level ${level}.`]
       : []),
@@ -111,7 +108,8 @@ function buildWritingOutputSchema(params: {
 }
 
 export interface WritingContent {
-  canDoDescriptor: string;
+  /** Short summary of assessed language functions (2020 framework). */
+  taskDescriptor: string;
   taskType: string;
   prompt: string;
   /** Student-facing context narrative when a library image is selected. */
@@ -151,7 +149,7 @@ export function normalizeWritingSentenceFrame(
 }
 
 const FALLBACK_WRITING: WritingContent = {
-  canDoDescriptor: "Explain by comparing and contrasting information, events, or characters",
+  taskDescriptor: "Explain by comparing and contrasting information, events, or characters",
   taskType: "comparison_paragraph",
   prompt: "Explain why learning a new language is important. Give at least one reason with an example.",
   passage: null,
@@ -176,8 +174,9 @@ export async function generateWritingContent(params: {
   academicContentLayer?: string;
   academicSubject: string;
   academicUnit?: string;
-  academicScenario?: string;
+  scenarioExamples?: string[];
   tier3Vocabulary?: string[];
+  academicFramework?: Partial<AcademicFrameworkFields>;
   libraryCandidates?: WritingLibraryCandidate[];
   priorPracticeReport?: PracticeReport | null;
 }): Promise<WritingContent> {
@@ -185,7 +184,7 @@ export async function generateWritingContent(params: {
   const libraryCandidates = params.libraryCandidates ?? [];
   const hasLibraryCandidates = libraryCandidates.length > 0;
   const levelFloor = Math.floor(params.level);
-  const libraryImageRequired = levelFloor === 1 && hasLibraryCandidates;
+  const libraryImageRequired = Math.floor(params.level) <= 2 && hasLibraryCandidates;
 
   const schemaSection = buildWritingOutputSchema({
     level: params.level,
@@ -193,23 +192,11 @@ export async function generateWritingContent(params: {
     hasLibraryCandidates,
     libraryImageRequired,
   });
-  const band = contentBand(params.level);
-  const systemPrompt = buildSystemPrompt(
-    CONTENT_KERNEL,
-    frameworkPromptSlice("2020"),
-    buildWritingContentSlice(hasLibraryCandidates),
-    frameworkDomainSlice("writing", band, "2020", { hasLibraryCandidates }),
-    params.level <= 2 ? OPTIONAL_LINE_VISUALS_BLOCK : "",
-    formatExpressivePldBlock(params.framework.pld),
-    params.academicContentLayer ?? "",
-    schemaSection,
-  );
-
-  const contentPortrayal = getWritingPortrayalForPrompt(
-    params.level,
-    keyUse,
+  const systemPrompt = buildContentSystemPrompt("writing", params.level, schemaSection, {
+    academicContentLayer: params.academicContentLayer,
     hasLibraryCandidates,
-  );
+    includeLineVisuals: params.level <= 2,
+  });
 
   const userPayload: Record<string, unknown> = {
     domain:                  "writing",
@@ -222,30 +209,25 @@ export async function generateWritingContent(params: {
     topic:                   params.topic,
     curriculum_topic:        params.topic,
     framework:               serializeFrameworkTask(params.framework),
-    content_portrayal:       contentPortrayal,
     goal:                    "Create one writing task this student can do so they become able to produce the writing in framework.pld (end of this integer level).",
     complexity_instruction:  params.complexityInstruction,
     required_key_use:        keyUse,
     academic_subject:        params.academicSubject,
     academic_unit:           params.academicUnit ?? null,
-    academic_scenario:       params.academicScenario ?? null,
     tier3_vocabulary:        params.tier3Vocabulary ?? [],
-    scenario_instruction:    params.academicScenario
-      ? "Use academic_scenario for topic context when no library image is selected. Vary details from prior sessions."
-      : null,
+    ...academicPromptFieldsFromContext({
+      unit: params.academicUnit,
+      scenarioExamples: params.scenarioExamples,
+      tier3Vocabulary: params.tier3Vocabulary,
+      ...params.academicFramework,
+    }),
   };
 
   if (hasLibraryCandidates) {
     Object.assign(userPayload, {
-      library_candidates: serializeWritingLibraryCandidatesForPrompt(libraryCandidates),
-      library_image_required: libraryImageRequired,
-      library_image_policy: libraryImageRequired
-        ? "Level 1: you MUST pick selected_image_id from library_candidates. Never return null when candidates exist."
-        : "Level 2–6: pick selected_image_id when a photo fits key_use and framework, otherwise null.",
-      library_candidate_note:
-        "Each library_candidates entry has tags, concept, and description. When an image is selected, write passage as connected context FROM that metadata before composing the prompt.",
-      passage_sentence_target: buildWritingPassageSentenceTarget(params.level, keyUse),
-      picture_use_hint: contentPortrayal?.picture ?? null,
+      library_candidates:       serializeWritingLibraryCandidatesForPrompt(libraryCandidates),
+      library_image_required:   libraryImageRequired,
+      passage_sentence_target:  buildWritingPassageSentenceTarget(params.level, keyUse),
     });
   }
 
@@ -285,7 +267,7 @@ export async function generateWritingContent(params: {
     let passageRaw = result.passage != null && String(result.passage).trim()
       ? displayText(String(result.passage))
       : null;
-    if (!passageRaw && selectedCandidate && levelFloor === 1) {
+    if (!passageRaw && selectedCandidate) {
       passageRaw = buildLevel1PassageFromLibraryMeta({
         tags: selectedCandidate.tags,
         description: selectedCandidate.description,
@@ -293,7 +275,7 @@ export async function generateWritingContent(params: {
       });
       logger.info(
         { imageId: selectedCandidate.id, level: params.level },
-        "writing: Level 1 fallback passage from library metadata",
+        "writing: fallback passage from library metadata",
       );
     }
     const promptRaw = displayText(result.prompt);
@@ -321,8 +303,8 @@ export async function generateWritingContent(params: {
 
     const modelMin = Number(result.min_sentences);
     return {
-      canDoDescriptor: result.task_descriptor ?? result.can_do_descriptor
-        ?? params.framework.language_functions.map((f) => f.function).join("; "),
+      taskDescriptor: result.task_descriptor
+        ?? frameworkTaskDescriptor(params.framework),
       taskType:               result.task_type ?? params.taskType ?? "paragraph",
       prompt:                 promptRaw,
       passage:                passageRaw,
@@ -336,8 +318,7 @@ export async function generateWritingContent(params: {
     logger.error({ err }, "generateWritingContent failed, using fallback");
     return {
       ...FALLBACK_WRITING,
-      canDoDescriptor: params.framework.language_functions.map((f) => f.function).join("; ")
-        || FALLBACK_WRITING.canDoDescriptor,
+      taskDescriptor: frameworkTaskDescriptor(params.framework) || FALLBACK_WRITING.taskDescriptor,
       taskType: params.taskType ?? FALLBACK_WRITING.taskType,
       prompt: FALLBACK_WRITING.prompt,
       passage: null,
@@ -358,7 +339,8 @@ export interface WritingFeedback {
 }
 
 export async function getWritingFeedback(params: {
-  canDoDescriptor: string;
+  framework?: FrameworkTask | null;
+  taskDescriptor?: string;
   prompt: string;
   studentResponse: string;
   level: number;
@@ -379,15 +361,18 @@ export async function getWritingFeedback(params: {
     };
   }
 
+  const taskDescriptor = params.framework
+    ? frameworkTaskDescriptor(params.framework)
+    : (params.taskDescriptor ?? "");
   const userPrompt = JSON.stringify({
-    task_descriptor:        params.canDoDescriptor,
+    framework:              params.framework ? serializeFrameworkTask(params.framework) : null,
+    task_descriptor:        taskDescriptor,
     prompt:                 params.prompt,
     student_response:       params.studentResponse,
     level:                  params.level,
     task_type:              params.taskType,
     min_sentences:          params.minSentences,
     end_of_level_writing:   selectExpressivePld(params.level),
-    key_language_uses:      ["Narrate", "Inform", "Explain", "Argue"],
   });
 
   const systemPrompt = buildSystemPrompt(

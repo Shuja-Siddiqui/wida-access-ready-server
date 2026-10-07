@@ -50,12 +50,16 @@ export async function requireAuthOrInternalJob(
   res: Response,
   next: NextFunction,
 ): Promise<void> {
-  if (isInternalJobRequest(req)) {
-    req.internalJob = true;
-    next();
-    return;
+  try {
+    if (isInternalJobRequest(req)) {
+      req.internalJob = true;
+      next();
+      return;
+    }
+    await requireAuth(req, res, next);
+  } catch (err) {
+    next(err);
   }
-  await requireAuth(req, res, next);
 }
 
 /**

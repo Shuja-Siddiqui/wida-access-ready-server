@@ -14,9 +14,16 @@ import type { AcademicSubjectId } from "../../lib/claude/standards/2020/select";
 
 export interface ImageFactoryAcademicBundle {
   academic_unit: string | null;
-  academic_scenario: string | null;
+  /** One curriculum sample per job — not the full scenario list. */
+  scenario_example: string | null;
   tier3_vocabulary: string[];
   topic_label: string | null;
+  unit_id: string | null;
+  content_framework: string | null;
+  content_standards: string[];
+  content_guidelines: string | null;
+  domain_code: string | null;
+  strand: string | null;
   complexity_instruction: string;
   visual_anchor_tags: string[];
   content_compose_goal: string;
@@ -39,7 +46,7 @@ const CONTENT_COMPOSE_GOAL = `
 This photo is ingested into the writing library (tags, concept, description, academicVision).
 Later, generateWritingContent picks it by academic_subject and topic, builds a passage FROM that metadata,
 then a writing prompt using tier3_vocabulary and framework.pld — numbers and full task wording stay in TEXT, not in the image.
-Your hf_prompt must show the real-world scene for academic_scenario with visible tier3-related objects.
+Invent a fresh photorealistic scene for academic_unit + content_standards with visible tier3-related objects. scenario_example is one tone sample — create a completely different new scene; never copy or paraphrase it.
 `.trim();
 
 /**
@@ -53,41 +60,69 @@ export function buildImageFactoryAcademicBundle(opts: {
   const level = opts.level;
   const academicId: AcademicSubjectId = factorySubjectToAcademicId(opts.subject);
   let unit: string | null = null;
-  let scenario: string | null = null;
+  let scenarioExample: string | null = null;
   let tier3: string[] = [];
   let topicLabel: string | null = null;
+  let unitId: string | null = null;
+  let contentFramework: string | null = null;
+  let contentStandards: string[] = [];
+  let contentGuidelines: string | null = null;
+  let domainCode: string | null = null;
+  let strand: string | null = null;
 
   switch (academicId) {
     case "math": {
       const ctx = buildMathSessionContext(level, null, []);
       unit = ctx.unit;
-      scenario = ctx.scenario;
+      scenarioExample = ctx.scenarioExamples[0] ?? null;
       tier3 = ctx.tier3Vocabulary;
       topicLabel = ctx.topicLabel;
+      unitId = ctx.unitId ?? null;
+      contentFramework = ctx.contentFramework ?? null;
+      contentStandards = ctx.contentStandards ?? [];
+      contentGuidelines = ctx.contentGuidelines ?? null;
+      domainCode = ctx.domainCode ?? null;
       break;
     }
     case "science": {
       const ctx = buildScienceSessionContext(level, null, []);
       unit = ctx.unit;
-      scenario = ctx.scenario;
+      scenarioExample = ctx.scenarioExamples[0] ?? null;
       tier3 = ctx.tier3Vocabulary;
       topicLabel = ctx.topicLabel;
+      unitId = ctx.unitId ?? null;
+      contentFramework = ctx.contentFramework ?? null;
+      contentStandards = ctx.contentStandards ?? [];
+      contentGuidelines = ctx.contentGuidelines ?? null;
+      domainCode = ctx.domainCode ?? null;
+      strand = ctx.strand ?? null;
       break;
     }
     case "social_studies": {
       const ctx = buildSocialStudiesSessionContext(level, null, []);
       unit = ctx.unit;
-      scenario = ctx.scenario;
+      scenarioExample = ctx.scenarioExamples[0] ?? null;
       tier3 = ctx.tier3Vocabulary;
       topicLabel = ctx.topicLabel;
+      unitId = ctx.unitId ?? null;
+      contentFramework = ctx.contentFramework ?? null;
+      contentStandards = ctx.contentStandards ?? [];
+      contentGuidelines = ctx.contentGuidelines ?? null;
+      domainCode = ctx.domainCode ?? null;
+      strand = ctx.strand ?? null;
       break;
     }
     case "ela": {
       const ctx = buildElaSessionContext(level, null, []);
       unit = ctx.unit;
-      scenario = ctx.scenario;
+      scenarioExample = ctx.scenarioExamples[0] ?? null;
       tier3 = ctx.tier3Vocabulary;
       topicLabel = ctx.topicLabel;
+      unitId = ctx.unitId ?? null;
+      contentFramework = ctx.contentFramework ?? null;
+      contentStandards = ctx.contentStandards ?? [];
+      contentGuidelines = ctx.contentGuidelines ?? null;
+      domainCode = ctx.domainCode ?? null;
       break;
     }
     default:
@@ -98,9 +133,15 @@ export function buildImageFactoryAcademicBundle(opts: {
 
   return {
     academic_unit: unit,
-    academic_scenario: scenario,
+    scenario_example: scenarioExample,
     tier3_vocabulary: tier3,
     topic_label: topicLabel,
+    unit_id: unitId,
+    content_framework: contentFramework,
+    content_standards: contentStandards,
+    content_guidelines: contentGuidelines,
+    domain_code: domainCode,
+    strand,
     complexity_instruction: complexityInstruction(level, opts.complexityStep),
     visual_anchor_tags: anchorTags,
     content_compose_goal: CONTENT_COMPOSE_GOAL,
