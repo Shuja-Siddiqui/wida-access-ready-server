@@ -4,6 +4,6 @@
     "outDir": "dist",
     "types": ["node"]
   },
-  "include": ["src/**/*", "db/**/*", "../shared/**/*"],
+  "include": ["src/**/*", "db/**/*"],
   "exclude": ["node_modules", "dist", "**/*.test.ts"]
 }
