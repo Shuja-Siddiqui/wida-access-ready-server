@@ -1,16 +1,13 @@
 /**
  * Image proxy — streams Pixabay CDN images through our server.
  *
- * Pixabay's webformatURL has same-origin referrer protection; browsers
- * requesting the URL directly (with our app domain as Referer) get a 429.
- * Fetching server-side works fine — no Referer restriction applies.
- *
  * GET /api/images/proxy?url=<encoded-pixabay-url>
  */
 
-import { Router, type IRouter } from "express";
+import type { IRouter } from "express";
+import { badRequest, createApiRouter, isAppError, upstreamError } from "../../lib/http";
 
-const router: IRouter = Router();
+const router: IRouter = createApiRouter();
 
 const ALLOWED_HOSTS = ["pixabay.com", "cdn.pixabay.com"];
 
@@ -28,14 +25,12 @@ router.get("/images/proxy", async (req, res) => {
   const raw = req.query.url as string | undefined;
 
   if (!raw || !isAllowedUrl(raw)) {
-    res.status(400).json({ error: "Invalid or missing url parameter" });
-    return;
+    throw badRequest("Invalid or missing url parameter");
   }
 
   try {
     const upstream = await fetch(raw, {
       headers: {
-        // Mimic a browser visiting pixabay.com so the CDN treats it as same-origin
         Referer: "https://pixabay.com/",
         "User-Agent":
           "Mozilla/5.0 (compatible; AccessReadyBot/1.0; +https://accessready.app)",
@@ -43,11 +38,9 @@ router.get("/images/proxy", async (req, res) => {
     });
 
     if (!upstream.ok) {
-      res.status(upstream.status).json({ error: "Upstream image unavailable" });
-      return;
+      throw upstreamError("Upstream image unavailable", { upstreamStatus: upstream.status });
     }
 
-    // Pixabay CDN returns binary/octet-stream; force image/jpeg so browsers render it.
     const rawCT = upstream.headers.get("content-type") ?? "";
     const contentType =
       rawCT.startsWith("image/") ? rawCT : "image/jpeg";
@@ -59,8 +52,9 @@ router.get("/images/proxy", async (req, res) => {
       "Content-Length": String(buffer.length),
     });
     res.send(buffer);
-  } catch {
-    res.status(502).json({ error: "Failed to fetch image" });
+  } catch (err) {
+    if (isAppError(err)) throw err;
+    throw upstreamError("Failed to fetch image");
   }
 });
 

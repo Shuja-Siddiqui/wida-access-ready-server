@@ -6,4 +6,5 @@ export * from "./academicMathEngine";
 export * from "./academicScienceEngine";
 export * from "./academicSocialStudiesEngine";
 export * from "./academicElaEngine";
+export * from "./academicFrameworkContext";
 export * from "./academicSubjectContent";

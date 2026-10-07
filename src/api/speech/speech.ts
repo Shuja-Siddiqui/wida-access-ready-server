@@ -1,10 +1,12 @@
-import { Router, type IRouter, type Request, type Response } from "express";
+import type { IRouter, Request, Response } from "express";
 import express from "express";
+import { createApiRouter } from "../../lib/http/create-api-router";
 import { z } from "zod";
 import { sendError, sendSuccess } from "../../lib/http/api-response";
 import {
   textToSpeech,
   speechToText,
+  issueSpeechAuthorizationToken,
   isAzureSpeechConfigured,
   AzureSpeechNotConfiguredError,
   AzureSpeechRequestError,
@@ -12,7 +14,7 @@ import {
 import { requireAuth } from "../../middlewares/auth";
 import { rateLimitStudentAi } from "../../middlewares/rate-limit";
 
-const router: IRouter = Router();
+const router: IRouter = createApiRouter();
 
 router.use("/speech", requireAuth);
 
@@ -35,6 +37,31 @@ const MAX_AUDIO_BYTES = 15 * 1024 * 1024;
  */
 router.get("/speech/status", (_req: Request, res: Response) => {
   sendSuccess(res, { configured: isAzureSpeechConfigured() });
+});
+
+/**
+ * GET /speech/token
+ *
+ * Issues a short-lived Azure Speech authorization token for the browser SDK.
+ * The subscription key never leaves the server.
+ */
+router.get("/speech/token", rateLimitStudentAi(), async (req: Request, res: Response) => {
+  try {
+    const result = await issueSpeechAuthorizationToken();
+    sendSuccess(res, result);
+  } catch (error) {
+    if (error instanceof AzureSpeechNotConfiguredError) {
+      sendError(res, 503, "Server speech transcription is not configured");
+      return;
+    }
+    if (error instanceof AzureSpeechRequestError) {
+      req.log.error({ err: error }, "Azure speech token request failed");
+      sendError(res, 502, "Speech token request failed");
+      return;
+    }
+    req.log.error({ err: error }, "Unexpected error issuing speech token");
+    sendError(res, 500, "Failed to issue speech token");
+  }
 });
 
 /**

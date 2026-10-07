@@ -16,42 +16,17 @@ import {
   LEVEL_MAX_TOKENS,
 } from "./client";
 import { clampToThreeOptions } from "../choice-options";
-import { OPTIONAL_LINE_VISUALS_BLOCK, parseOptionDiagrams, parseVisual } from "./prompts/optional-line-visuals";
-import { buildSystemPrompt } from "./prompts/compose";
-import { contentGenPrompt } from "./prompts/content";
-import { serializeCanDoForPrompt } from "../content";
+import { parseOptionDiagrams, parseVisual } from "./prompts/optional-line-visuals";
+import { buildContentSystemPrompt } from "./prompts/content/system-prompt";
+import {
+  frameworkTaskDescriptor,
+  serializeFrameworkTask,
+  type FrameworkTask,
+} from "./standards/2020";
 import { dumpContentGenRequest } from "./dump-content-gen";
 import { logger } from "../../config/logger";
 import { mergePriorPractice, type PracticeReport } from "../practice-report";
-
-// ── Per-level schema tables ───────────────────────────────────────────────────
-
-/**
- * Human-readable description and usage rule for each listening question format.
- * These appear in the schema section so Claude knows when to use each type.
- */
-const FORMAT_DESCRIPTIONS: Record<string, { use: string; note: string }> = {
-  multiple_choice: {
-    use: "Any Can Do skill — main idea, detail, inference, vocabulary, comparison, summary, claim/evidence, opposing_view",
-    note: "3 options A–C (1 correct + 2 distractors); correct is 0-based index; explanation max 8 words.",
-  },
-  pair_matching: {
-    use: "Explain — matching spoken terms/concepts to their definitions or examples; Inform — matching speakers to their stated views",
-    note: "3 options A–C presented as labeled pairs; student picks the correctly matched pair.",
-  },
-  sequence_ordering: {
-    use: "Narrate — ordering narrative events as heard; Inform — ordering reported facts; Explain — ordering process steps",
-    note: "3 options A–C each representing a different ordering of events/steps; student picks the correct order.",
-  },
-  agree_disagree: {
-    use: "Argue — evaluating a speaker's claim; identifying stated evidence; distinguishing claim from opinion",
-    note: "3 options A–C (claim evaluation); correct is 0-based index.",
-  },
-  category_sorting: {
-    use: "Inform/Explain — classifying spoken items into categories (e.g. cause vs effect; pros vs cons; step type)",
-    note: "3 options A–C each representing a different grouping; student picks the correct categorization.",
-  },
-};
+import { aiFormatDescriptionsFor } from "../content/formatCapabilities";
 
 /**
  * Valid can_do_skill values that can appear in the `type` field of each question
@@ -74,34 +49,41 @@ const LEVEL_MC_SKILLS: Record<number, string[]> = {
  * Shows only the question format types permitted at this level with correct structural
  * examples and enforcement rules.
  */
-function buildListeningOutputSchema(
+export function buildListeningOutputSchema(
   level: number,
-  permittedFormats: string[],
+  availableFormats: string[],
   questionCount: number,
+  opts?: { libraryCompose?: boolean },
 ): string {
   const mcSkills = LEVEL_MC_SKILLS[level] ?? ["main_idea", "detail", "vocabulary"];
+  const FORMAT_DESCRIPTIONS = aiFormatDescriptionsFor(availableFormats);
 
   const lines: string[] = [
     `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
     `OUTPUT SCHEMA — LEVEL ${level}`,
-    `Permitted question formats this session: ${permittedFormats.join(" | ")}`,
-    `You MUST produce exactly ${questionCount} questions using ONLY the formats listed above.`,
+    `Available question formats (UI-capable): ${availableFormats.join(" | ")}`,
+    `Choose type(s) from this list that best assess framework.language_functions. Produce exactly ${questionCount} questions.`,
     `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
     ``,
     `{`,
-    `  "can_do_descriptor": "<WIDA action + chosen can_do item>",`,
+    `  "task_descriptor": "<echo 2–3 language_functions this session assesses>",`,
+    ...(opts?.libraryCompose
+      ? [
+          `  "selected_image_id": "<REQUIRED uuid from library_candidates — pick BEFORE writing audio_script>",`,
+        ]
+      : []),
     `  "audio_script": "<spoken passage — plain English, no stage directions or SSML>",`,
     `  "topic": "<echo input topic>",`,
     `  "context": "<one sentence: who speaks and to whom — e.g. 'A science teacher explains to students'>",`,
-    `  "format": "${permittedFormats[0]}",`,
-    `  /* Echo the primary format used — the first format in permitted_formats */`,
+    `  "format": "<primary format you chose for this session>",`,
+    `  /* Echo the main question type used — must appear in available_question_formats */`,
     `  "questions": [`,
     ``,
   ];
 
   const blocks: string[] = [];
 
-  if (permittedFormats.includes("multiple_choice")) {
+  if (availableFormats.includes("multiple_choice")) {
     const d = FORMAT_DESCRIPTIONS.multiple_choice;
     blocks.push(
 `    /* ── multiple_choice ── */
@@ -121,7 +103,7 @@ function buildListeningOutputSchema(
     );
   }
 
-  if (permittedFormats.includes("pair_matching")) {
+  if (availableFormats.includes("pair_matching")) {
     const d = FORMAT_DESCRIPTIONS.pair_matching;
     blocks.push(
 `    /* ── pair_matching ── */
@@ -142,7 +124,7 @@ function buildListeningOutputSchema(
     );
   }
 
-  if (permittedFormats.includes("sequence_ordering")) {
+  if (availableFormats.includes("sequence_ordering")) {
     const d = FORMAT_DESCRIPTIONS.sequence_ordering;
     blocks.push(
 `    /* ── sequence_ordering ── */
@@ -164,7 +146,7 @@ function buildListeningOutputSchema(
     );
   }
 
-  if (permittedFormats.includes("agree_disagree")) {
+  if (availableFormats.includes("agree_disagree")) {
     const d = FORMAT_DESCRIPTIONS.agree_disagree;
     blocks.push(
 `    /* ── agree_disagree ── */
@@ -185,7 +167,7 @@ function buildListeningOutputSchema(
     );
   }
 
-  if (permittedFormats.includes("category_sorting")) {
+  if (availableFormats.includes("category_sorting")) {
     const d = FORMAT_DESCRIPTIONS.category_sorting;
     blocks.push(
 `    /* ── category_sorting ── */
@@ -212,15 +194,17 @@ function buildListeningOutputSchema(
   lines.push(`}`);
   lines.push(``);
   lines.push(`SCHEMA ENFORCEMENT RULES`);
-  lines.push(`• Return every key in this OUTPUT SCHEMA. Never omit a field. Use null only where this schema shows null.`);
-  lines.push(`• Only these question formats are valid: ${permittedFormats.join(", ")}.`);
-  lines.push(`• Produce exactly ${questionCount} questions.`);
-  lines.push(`• The "type" field in each question MUST match one of the permitted formats.`);
+  lines.push(`• Return every key above. Produce exactly ${questionCount} questions.`);
+  lines.push(`• Each question "type" must be one of: ${availableFormats.join(", ")}.`);
   lines.push(`• "correct" is always a 0-based integer index into the "options" array.`);
   lines.push(`• Every selected-response item has exactly 3 options (1 correct + 2 distractors).`);
   lines.push(`• "explanation" is max 8 words — a brief factual reason, not a full sentence.`);
   lines.push(`• "audio_script" must be plain spoken English — no stage directions, SSML, or image references.`);
   lines.push(`• Do NOT include image_tags, imageUrls, or target_label in any field.`);
+  if (opts?.libraryCompose) {
+    lines.push(`• selected_image_id is REQUIRED when library_candidates exist — audio_script MUST match that photo's concept/tags.`);
+    lines.push(`• Never write audio_script about a different topic than the selected photo shows.`);
+  }
 
   return lines.join("\n");
 }
@@ -228,6 +212,11 @@ function buildListeningOutputSchema(
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface ListeningContent {
+  taskDescriptor?: string;
+  canDoDescriptor?: string;
+  framework?: FrameworkTask;
+  /** Set when L1–2 compose picks a library photo — sessions.ts resolves illustrationUrl from this. */
+  selectedLibraryImageId?: string | null;
   audioScript: string;
   topic: string;
   context: string;
@@ -303,6 +292,30 @@ export const FALLBACK_LISTENING: ListeningContent = {
   ],
 };
 
+export interface Listening2020SystemPromptOptions {
+  academicContentLayer?: string;
+  extraBlocks?: string[];
+  hasLibraryImage?: boolean;
+  hasLibraryCandidates?: boolean;
+  schemaSection?: string;
+  includeLineVisuals?: boolean;
+}
+
+/** Assembled via buildContentSystemPrompt — PLD lives in user JSON framework only. */
+export function buildListening2020SystemPrompt(
+  level: number,
+  opts: Listening2020SystemPromptOptions = {},
+): string {
+  const clamped = Math.min(Math.max(level, 1), 6);
+  return buildContentSystemPrompt("listening", clamped, opts.schemaSection ?? "", {
+    academicContentLayer: opts.academicContentLayer,
+    extraBlocks:          opts.extraBlocks,
+    hasLibraryImage:      opts.hasLibraryImage ?? opts.hasLibraryCandidates,
+    hasLibraryCandidates: opts.hasLibraryCandidates,
+    includeLineVisuals:   opts.includeLineVisuals,
+  });
+}
+
 // ── Generator ─────────────────────────────────────────────────────────────────
 
 export async function generateListeningContent(params: {
@@ -312,7 +325,7 @@ export async function generateListeningContent(params: {
   complexityInstruction: string;
   oralFormat: string;
   permittedFormats: string[];
-  canDo: { keyUse: string; action: string; items: string[] };
+  framework: FrameworkTask;
   topic: string;
   isRetry?: boolean;
   lastSessionScore?: number | null;
@@ -327,20 +340,19 @@ export async function generateListeningContent(params: {
 
   // Build a level-specific output schema and combine with the static base prompt
   const schemaSection = buildListeningOutputSchema(clampedLevel, params.permittedFormats, questionCount);
-  const systemPrompt  = buildSystemPrompt(
-    contentGenPrompt("listening", clampedLevel),
-    OPTIONAL_LINE_VISUALS_BLOCK,
-    schemaSection,
-  );
+  const systemPrompt = buildListening2020SystemPrompt(clampedLevel, { schemaSection });
 
   const userPrompt = JSON.stringify(mergePriorPractice({
+    domain:                  "listening",
     current_score:           params.fractionalLevel,
     integer_level:           params.level,
     step_within_level:       params.stepWithinLevel,
     complexity_instruction:  params.complexityInstruction,
-    can_do: serializeCanDoForPrompt(params.canDo, { level: params.level, domain: "LISTENING" }),
+    framework:               serializeFrameworkTask(params.framework),
+    goal:                    "Create one listening task so the student can practice understanding language at framework.pld (end of this integer level).",
+    required_key_use:      params.framework.key_language_use,
     oral_format:              params.oralFormat,
-    permitted_formats:        params.permittedFormats,
+    available_question_formats: params.permittedFormats,
     topic:                    params.topic,
     is_retry:                 params.isRetry ?? false,
     last_session_score:       params.lastSessionScore ?? null,
@@ -388,7 +400,13 @@ export async function generateListeningContent(params: {
       };
     });
 
+    const taskDescriptor = (result as { task_descriptor?: string; can_do_descriptor?: string }).task_descriptor
+      ?? (result as { can_do_descriptor?: string }).can_do_descriptor
+      ?? frameworkTaskDescriptor(params.framework);
     return {
+      taskDescriptor,
+      canDoDescriptor: taskDescriptor,
+      framework:       params.framework,
       audioScript: toDisplayText(result.audio_script),
       topic:       result.topic,
       context:     result.context,

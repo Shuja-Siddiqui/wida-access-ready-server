@@ -1,4 +1,5 @@
-import { Router, type IRouter } from "express";
+import type { IRouter } from "express";
+import { createApiRouter } from "../../lib/http/create-api-router";
 import crypto from "node:crypto";
 import { and, eq, count, gt, isNull } from "drizzle-orm";
 import { z } from "zod/v4";
@@ -20,7 +21,7 @@ import {
 import { sendHtmlEmail } from "../../lib/mail/mailer";
 import { educatorInvitationEmail } from "../../lib/mail/email-templates";
 
-const router: IRouter = Router();
+const router: IRouter = createApiRouter();
 
 router.use("/districts", requireAuth, requireOrgStaff);
 

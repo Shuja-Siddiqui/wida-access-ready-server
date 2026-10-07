@@ -1,13 +1,19 @@
 {
   "subject": "science",
+  "framework": "Next Generation Science Standards",
+  "frameworkRef": "https://www.nextgenscience.org/",
   "gradeBand": "6-8",
-  "description": "Grade 6-8 science units — organized by strand. Each unit includes listening scenario seeds (a teacher or scientist narrating a concept or phenomenon) and Tier-3 vocabulary scaled to WIDA levels 3-6.",
+  "description": "NGSS middle school science — Life (MS-LS), Physical (MS-PS), Earth & Space (MS-ESS), and Engineering (MS-ETS) domains. Each unit maps to performance expectations, disciplinary core ideas, and crosscutting concepts. Scenario seeds support three-dimensional instruction.",
   "units": [
     {
       "id": "ls_cells",
       "strand": "Life Science",
       "unit": "Cells",
       "topics": "Cell structure, function, and processes",
+      "ngssDomain": "MS-LS1",
+      "standards": ["MS-LS1-1", "MS-LS1-2", "MS-LS1-6", "MS-LS1-7"],
+      "practices": ["developing and using models", "constructing explanations"],
+      "crosscuttingConcepts": ["structure and function", "energy and matter"],
       "tier3ByLevel": {
         "3": ["cell", "membrane", "nucleus", "oxygen", "energy"],
         "4": ["cell membrane", "nucleus", "organelle", "photosynthesis", "respiration"],
@@ -23,10 +29,37 @@
       ]
     },
     {
+      "id": "ls_human_body",
+      "strand": "Life Science",
+      "unit": "Human Body Systems",
+      "topics": "Body systems, information processing, and homeostasis",
+      "ngssDomain": "MS-LS1",
+      "standards": ["MS-LS1-3", "MS-LS1-8"],
+      "practices": ["developing and using models", "constructing explanations"],
+      "crosscuttingConcepts": ["structure and function", "systems and system models"],
+      "tier3ByLevel": {
+        "3": ["body", "brain", "heart", "lung", "muscle"],
+        "4": ["organ", "system", "nervous system", "digestive system", "circulatory system"],
+        "5": ["organ system", "homeostasis", "stimulus", "response", "nerve cell"],
+        "6": ["homeostasis", "stimulus", "response", "feedback loop", "sensory receptor", "interacting systems"]
+      },
+      "scenarios": [
+        "A biology teacher explains how the digestive system breaks down food so the body can absorb nutrients.",
+        "A teacher describes how the nervous system sends signals from your eyes to your brain when you see something surprising.",
+        "A health teacher explains how the circulatory system carries oxygen from the lungs to muscles during exercise.",
+        "A scientist describes how the body maintains a stable internal temperature even when the weather changes.",
+        "A teacher explains how multiple body systems work together when a person runs a race."
+      ]
+    },
+    {
       "id": "ls_genetics",
       "strand": "Life Science",
       "unit": "Genetics",
       "topics": "DNA, heredity, traits, and reproduction",
+      "ngssDomain": "MS-LS3",
+      "standards": ["MS-LS3-1", "MS-LS3-2"],
+      "practices": ["developing and using models", "constructing explanations"],
+      "crosscuttingConcepts": ["structure and function", "cause and effect"],
       "tier3ByLevel": {
         "3": ["trait", "parent", "inherit", "gene", "DNA"],
         "4": ["trait", "heredity", "gene", "chromosome", "inherit", "dominant"],
@@ -46,6 +79,10 @@
       "strand": "Life Science",
       "unit": "Ecosystems",
       "topics": "Food webs, populations, and matter cycling",
+      "ngssDomain": "MS-LS2",
+      "standards": ["MS-LS2-1", "MS-LS2-2", "MS-LS2-3", "MS-LS2-4"],
+      "practices": ["developing and using models", "analyzing and interpreting data"],
+      "crosscuttingConcepts": ["energy and matter", "stability and change"],
       "tier3ByLevel": {
         "3": ["food chain", "producer", "consumer", "prey", "predator"],
         "4": ["food web", "producer", "consumer", "decomposer", "population", "habitat"],
@@ -65,6 +102,10 @@
       "strand": "Life Science",
       "unit": "Evolution",
       "topics": "Natural selection and the fossil record",
+      "ngssDomain": "MS-LS4",
+      "standards": ["MS-LS4-1", "MS-LS4-2", "MS-LS4-4", "MS-LS4-6"],
+      "practices": ["analyzing and interpreting data", "constructing explanations"],
+      "crosscuttingConcepts": ["patterns", "cause and effect"],
       "tier3ByLevel": {
         "3": ["fossil", "survive", "adapt", "environment", "species"],
         "4": ["fossil", "adaptation", "natural selection", "survive", "variation", "species"],
@@ -84,6 +125,10 @@
       "strand": "Physical Science",
       "unit": "Matter",
       "topics": "Atoms, molecules, states of matter, and the periodic table",
+      "ngssDomain": "MS-PS1",
+      "standards": ["MS-PS1-1", "MS-PS1-3", "MS-PS1-4"],
+      "practices": ["developing and using models", "planning and carrying out investigations"],
+      "crosscuttingConcepts": ["structure and function", "scale, proportion, and quantity"],
       "tier3ByLevel": {
         "3": ["atom", "solid", "liquid", "gas", "element"],
         "4": ["atom", "molecule", "element", "compound", "solid", "liquid", "gas", "periodic table"],
@@ -99,10 +144,37 @@
       ]
     },
     {
+      "id": "ps_chemical_reactions",
+      "strand": "Physical Science",
+      "unit": "Chemical Reactions",
+      "topics": "Conservation of mass, reaction types, and energy changes",
+      "ngssDomain": "MS-PS1",
+      "standards": ["MS-PS1-2", "MS-PS1-5", "MS-PS1-6"],
+      "practices": ["planning and carrying out investigations", "constructing explanations"],
+      "crosscuttingConcepts": ["energy and matter", "cause and effect"],
+      "tier3ByLevel": {
+        "3": ["react", "mix", "change", "heat", "gas"],
+        "4": ["chemical reaction", "reactant", "product", "conservation", "evidence"],
+        "5": ["chemical reaction", "reactant", "product", "conservation of mass", "endothermic", "exothermic"],
+        "6": ["chemical reaction", "reactant", "product", "conservation of mass", "endothermic", "exothermic", "coefficient", "balanced equation"]
+      },
+      "scenarios": [
+        "A chemistry teacher explains why the total mass stays the same when vinegar and baking soda react in a closed container.",
+        "A teacher describes the evidence that burning wood is a chemical reaction rather than just a physical change.",
+        "A science teacher explains how rust forming on iron is a slow chemical reaction between iron and oxygen.",
+        "A teacher describes how a cold pack gets cold because the chemical reaction inside absorbs heat from the surroundings.",
+        "A lab instructor explains how to tell whether a chemical reaction occurred by looking for gas bubbles, color change, or temperature change."
+      ]
+    },
+    {
       "id": "ps_energy",
       "strand": "Physical Science",
       "unit": "Energy",
       "topics": "Kinetic and potential energy, heat, light, and sound",
+      "ngssDomain": "MS-PS3",
+      "standards": ["MS-PS3-1", "MS-PS3-2", "MS-PS3-3", "MS-PS3-4", "MS-PS3-5"],
+      "practices": ["developing and using models", "planning and carrying out investigations"],
+      "crosscuttingConcepts": ["energy and matter", "systems and system models"],
       "tier3ByLevel": {
         "3": ["energy", "heat", "light", "sound", "move"],
         "4": ["kinetic energy", "potential energy", "heat", "light", "transfer", "temperature"],
@@ -122,6 +194,10 @@
       "strand": "Physical Science",
       "unit": "Forces and Motion",
       "topics": "Gravity, magnetism, and Newton's laws",
+      "ngssDomain": "MS-PS2",
+      "standards": ["MS-PS2-1", "MS-PS2-2", "MS-PS2-3", "MS-PS2-4", "MS-PS2-5"],
+      "practices": ["planning and carrying out investigations", "using mathematics and computational thinking"],
+      "crosscuttingConcepts": ["cause and effect", "stability and change"],
       "tier3ByLevel": {
         "3": ["force", "push", "pull", "gravity", "speed"],
         "4": ["force", "gravity", "friction", "acceleration", "Newton's law", "mass"],
@@ -141,6 +217,10 @@
       "strand": "Physical Science",
       "unit": "Waves",
       "topics": "Wave properties, light waves, and sound transmission",
+      "ngssDomain": "MS-PS4",
+      "standards": ["MS-PS4-1", "MS-PS4-2", "MS-PS4-3"],
+      "practices": ["developing and using models", "using mathematics and computational thinking"],
+      "crosscuttingConcepts": ["patterns", "structure and function"],
       "tier3ByLevel": {
         "3": ["wave", "sound", "light", "travel", "vibrate"],
         "4": ["wave", "wavelength", "frequency", "amplitude", "sound wave", "light wave"],
@@ -160,6 +240,10 @@
       "strand": "Earth and Space Science",
       "unit": "Earth's Systems",
       "topics": "Plate tectonics, the rock cycle, and the water cycle",
+      "ngssDomain": "MS-ESS2",
+      "standards": ["MS-ESS2-1", "MS-ESS2-2", "MS-ESS2-4"],
+      "practices": ["developing and using models", "constructing explanations"],
+      "crosscuttingConcepts": ["systems and system models", "stability and change"],
       "tier3ByLevel": {
         "3": ["rock", "volcano", "earthquake", "erosion", "cycle"],
         "4": ["tectonic plate", "volcano", "earthquake", "erosion", "rock cycle", "water cycle"],
@@ -175,10 +259,37 @@
       ]
     },
     {
+      "id": "ess_geologic_time",
+      "strand": "Earth and Space Science",
+      "unit": "Geologic Time and Earth's History",
+      "topics": "Rock layers, fossil record, and Earth's age",
+      "ngssDomain": "MS-ESS1",
+      "standards": ["MS-ESS1-4"],
+      "practices": ["analyzing and interpreting data", "constructing explanations"],
+      "crosscuttingConcepts": ["patterns", "scale, proportion, and quantity"],
+      "tier3ByLevel": {
+        "3": ["old", "layer", "fossil", "rock", "long ago"],
+        "4": ["geologic time", "rock layer", "fossil record", "relative age", "extinction"],
+        "5": ["geologic time scale", "stratum", "fossil record", "relative dating", "mass extinction"],
+        "6": ["geologic time scale", "stratum", "fossil record", "relative dating", "mass extinction", "Paleozoic", "Mesozoic", "Cenozoic"]
+      },
+      "scenarios": [
+        "A geologist explains how scientists use layers of rock to figure out which fossils are older and which are younger.",
+        "A teacher describes how the fossil record shows that dinosaurs lived during the Mesozoic era before going extinct.",
+        "A museum guide explains why finding a trilobite fossil in a rock layer tells scientists that layer formed in an ancient ocean.",
+        "A teacher describes how scientists estimate Earth's age using evidence from rocks and radioactive dating.",
+        "A scientist explains what a mass extinction event is and how one changed life on Earth millions of years ago."
+      ]
+    },
+    {
       "id": "ess_weather",
       "strand": "Earth and Space Science",
       "unit": "Weather and Climate",
       "topics": "Atmosphere, climate change, and ocean currents",
+      "ngssDomain": "MS-ESS2",
+      "standards": ["MS-ESS2-5", "MS-ESS2-6", "MS-ESS3-5"],
+      "practices": ["analyzing and interpreting data", "constructing explanations"],
+      "crosscuttingConcepts": ["cause and effect", "stability and change"],
       "tier3ByLevel": {
         "3": ["weather", "temperature", "rain", "wind", "climate"],
         "4": ["atmosphere", "climate", "greenhouse gas", "ocean current", "precipitation"],
@@ -198,6 +309,10 @@
       "strand": "Earth and Space Science",
       "unit": "Space Systems",
       "topics": "The solar system, gravity in space, and moon phases",
+      "ngssDomain": "MS-ESS1",
+      "standards": ["MS-ESS1-1", "MS-ESS1-2", "MS-ESS1-3"],
+      "practices": ["developing and using models", "using mathematics and computational thinking"],
+      "crosscuttingConcepts": ["patterns", "scale, proportion, and quantity"],
       "tier3ByLevel": {
         "3": ["planet", "moon", "orbit", "sun", "gravity"],
         "4": ["planet", "orbit", "gravity", "moon phase", "solar system", "axis"],
@@ -210,6 +325,29 @@
         "A space scientist explains why a day on Mercury lasts longer than a year on Mercury due to its slow rotation and fast orbit.",
         "A teacher explains what causes a solar eclipse and why it is safe to look at one only with special glasses.",
         "A teacher describes the difference between inner rocky planets and outer gas giant planets in our solar system."
+      ]
+    },
+    {
+      "id": "ets_engineering",
+      "strand": "Engineering Design",
+      "unit": "Engineering Design Process",
+      "topics": "Defining problems, designing solutions, testing, and optimizing",
+      "ngssDomain": "MS-ETS1",
+      "standards": ["MS-ETS1-1", "MS-ETS1-2", "MS-ETS1-3", "MS-ETS1-4"],
+      "practices": ["asking questions and defining problems", "designing solutions", "optimizing"],
+      "crosscuttingConcepts": ["systems and system models", "influence of engineering on society"],
+      "tier3ByLevel": {
+        "3": ["design", "build", "test", "problem", "improve"],
+        "4": ["criteria", "constraint", "prototype", "solution", "evaluate"],
+        "5": ["engineering design", "criteria", "constraint", "prototype", "iteration", "trade-off"],
+        "6": ["engineering design", "criteria", "constraint", "prototype", "iteration", "trade-off", "optimize", "systematic testing"]
+      },
+      "scenarios": [
+        "An engineering teacher explains how students defined the problem of keeping food cold on a field trip and brainstormed possible cooler designs.",
+        "A teacher describes how a team tested two bridge designs made of straws to see which could hold more weight before breaking.",
+        "An engineer explains how a company improved a water filter by changing one part after each round of testing.",
+        "A teacher walks through how engineers balance cost, safety, and effectiveness when choosing materials for a school playground shade structure.",
+        "A science teacher describes how students used the engineering design process to create a device that reduces erosion on a hillside."
       ]
     }
   ]

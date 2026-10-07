@@ -7,14 +7,8 @@ export const DOMAINS = ["listening", "speaking", "reading", "writing"] as const;
 export type Domain = typeof DOMAINS[number];
 
 /**
- * Curriculum tier — which instructional track a session belongs to.
- *   general  → everyday language / standard listening, speaking, reading
- *   academic → content-area WIDA language (listening + writing)
- *
- * Tier is stored as a separate column in sessions and student_levels so that
- * (domain="listening", tier="general") and (domain="listening", tier="academic")
- * track independent level trajectories without conflating the two into a
- * composite domain string like "listening_academic".
+ * Curriculum tier — WIDA SF (academic) content for all domains.
+ * Legacy DB rows may still have tier="general"; new sessions always use "academic".
  */
 export const TIERS = ["general", "academic"] as const;
 export type Tier = typeof TIERS[number];

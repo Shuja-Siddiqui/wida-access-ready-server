@@ -34,6 +34,36 @@ export function isAzureSpeechConfigured(): boolean {
   return Boolean(config.azureSpeech.key && config.azureSpeech.region);
 }
 
+/** Short-lived token for browser Speech SDK (key never sent to client). */
+export async function issueSpeechAuthorizationToken(): Promise<{
+  token: string;
+  region: string;
+  expiresIn: number;
+}> {
+  const { key, region } = assertConfigured();
+  const url = `https://${region}.api.cognitive.microsoft.com/sts/v1.0/issueToken`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Ocp-Apim-Subscription-Key": key,
+      "Content-Length": "0",
+    },
+  });
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    logger.error({ status: response.status, body }, "Azure speech token request failed");
+    throw new AzureSpeechRequestError(
+      `Azure speech token failed with status ${response.status}`,
+      response.status,
+    );
+  }
+  const token = (await response.text()).trim();
+  if (!token) {
+    throw new AzureSpeechRequestError("Azure speech token was empty", 502);
+  }
+  return { token, region, expiresIn: 600 };
+}
+
 // Passage = male narrator (Guy). Feedback/coaching = female teacher (Jenny).
 export const PASSAGE_VOICE = "en-US-GuyNeural";
 export const FEEDBACK_VOICE = "en-US-JennyNeural";

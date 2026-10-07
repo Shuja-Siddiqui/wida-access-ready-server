@@ -1,4 +1,5 @@
-import { Router, type IRouter } from "express";
+import type { IRouter } from "express";
+import { createApiRouter } from "../../lib/http/create-api-router";
 import { eq, count, countDistinct, sql, and, or } from "drizzle-orm";
 import { z } from "zod/v4";
 import { db, schoolsTable, districtsTable, profilesTable, usersTable, studentsTable } from "../../../db";
@@ -11,7 +12,7 @@ import {
   sendAccessDenied,
 } from "../../lib/auth/org-access";
 
-const router: IRouter = Router();
+const router: IRouter = createApiRouter();
 
 router.use("/schools", requireAuth, requireOrgStaff);
 

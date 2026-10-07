@@ -10,19 +10,14 @@ import { studentsTable } from "./students";
 // during practice sessions.
 //
 // domain: the skill being practiced  — listening | speaking | reading | writing
-// tier:   the curriculum track       — general | academic
-//
-// Example rows for a student:
-//   (listening, general)  → everyday listening level
-//   (listening, academic) → academic listening level
-//   (speaking,  general)  → speaking level
+// tier:   WIDA SF track — "academic" (legacy rows may still say "general")
 export const studentLevelsTable = pgTable(
   "student_levels",
   {
     id: uuid("id").primaryKey().defaultRandom(),
     studentId: uuid("student_id").notNull().references(() => studentsTable.id),
     domain: text("domain").notNull(), // listening | speaking | reading | writing
-    tier: text("tier").notNull().default("general"), // 'general' | 'academic'
+    tier: text("tier").notNull().default("academic"), // 'academic' (legacy rows may still say 'general')
     currentLevel: decimal("current_level", { precision: 5, scale: 2 }).notNull().default("1.00"),
     exitThreshold: decimal("exit_threshold", { precision: 5, scale: 2 }).notNull().default("4.70"),
     atExit: boolean("at_exit").notNull().default(false),

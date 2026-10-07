@@ -1,4 +1,5 @@
-import { Router, type IRouter, type Request, type Response } from "express";
+import type { IRouter, Request, Response } from "express";
+import { createApiRouter } from "../../lib/http/create-api-router";
 import { eq, desc, count } from "drizzle-orm";
 import { db } from "../../../db";
 import { mediaAssetsTable } from "../../../db/schema";
@@ -7,7 +8,7 @@ import { sendError, sendSuccess } from "../../lib/http/api-response";
 import { ObjectStorageService } from "../../lib/images/objectStorage";
 import { z } from "zod/v4";
 
-const router: IRouter = Router();
+const router: IRouter = createApiRouter();
 const storageService = new ObjectStorageService();
 
 // ---------------------------------------------------------------------------

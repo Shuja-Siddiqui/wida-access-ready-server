@@ -3,7 +3,9 @@
  * Inject after LISTENING_CORE_BLOCK when subject = "science".
  */
 
-export const SCIENCE_SUBJECT_BLOCK = `━━ SUBJECT: Science (Grade 6–8 — Life, Physical, Earth & Space Science) ━━
+export const SCIENCE_SUBJECT_BLOCK = `━━ SUBJECT: Science (NGSS MS-LS, MS-PS, MS-ESS, MS-ETS) ━━
+
+Align to content_framework "NGSS", performance expectations in content_standards, and science_practices / crosscutting_concepts when present.
 
 PASSAGE FORMAT — Teacher or Scientist Narration
 A teacher or scientist narrates a phenomenon, process, or discovery to the class. Must:
@@ -14,11 +16,7 @@ A teacher or scientist narrates a phenomenon, process, or discovery to the class
 • Define technical terms inline: "mitosis, which is the process where one cell splits into two…"
 • is_retry: use a different analogy, species, or example; same science_unit and concept
 
-PERMITTED FORMATS (use all four — vary them)
-  multiple_choice    → 3 options (1 correct + 2 distractors); wrong options are realistic misreadings of the passage
-  sequence_ordering  → 3–4 steps of a described process (rock cycle, cell division, etc.)
-  pair_matching      → 3–4 pairs; match terms to definitions or causes to effects as stated
-  agree_disagree     → a scientific claim; student decides if the passage supports or contradicts it
+Choose question types from available_question_formats — pick what best assesses framework.language_functions for this science narration.
 
 WHAT QUESTIONS MUST TEST (scientific language comprehension — never memorized facts)
   ✓ "According to the teacher, why do tectonic plates move?" — what the narration explains

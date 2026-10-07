@@ -1,0 +1,36 @@
+{
+  "source": "WIDA English Language Development Standards Framework, 2020 Edition, Table 3-11: Distribution of Key Language Uses in Grades 6-8",
+  "note": "most_prominent / prominent / present. Academic sessions pick a subject where this Key Language Use is most_prominent or prominent — not present-only.",
+  "standards": {
+    "social_instructional": {
+      "Narrate": "most_prominent",
+      "Inform": "most_prominent",
+      "Explain": "most_prominent",
+      "Argue": "most_prominent"
+    },
+    "ela": {
+      "Narrate": "most_prominent",
+      "Inform": "most_prominent",
+      "Explain": "prominent",
+      "Argue": "most_prominent"
+    },
+    "math": {
+      "Narrate": "present",
+      "Inform": "prominent",
+      "Explain": "most_prominent",
+      "Argue": "most_prominent"
+    },
+    "science": {
+      "Narrate": "present",
+      "Inform": "prominent",
+      "Explain": "most_prominent",
+      "Argue": "most_prominent"
+    },
+    "social_studies": {
+      "Narrate": "prominent",
+      "Inform": "present",
+      "Explain": "most_prominent",
+      "Argue": "most_prominent"
+    }
+  }
+}

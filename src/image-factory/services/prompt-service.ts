@@ -45,7 +45,7 @@ export interface GenerateImagePromptResult {
   rationale: string;
   previousComplexityStep: number;
   academicUnit: string | null;
-  academicScenario: string | null;
+  scenarioExample: string | null;
   tier3Vocabulary: string[];
   topicLabel: string | null;
 }
@@ -101,7 +101,7 @@ export async function buildAndPersistImagePrompt(
       keyLanguageUse: promptPayload.key_language_use,
       eldStandard: (promptPayload.framework as { eld_standard?: { id?: string; name?: string } }).eld_standard,
       academicUnit: promptPayload.academic_unit,
-      academicScenario: promptPayload.academic_scenario?.slice(0, 120),
+      hasScenarioExample: Boolean(promptPayload.scenario_example),
       tier3Count: promptPayload.tier3_vocabulary.length,
     },
     "image-factory: claude prompt context (2020 framework + academic session)",
@@ -112,9 +112,15 @@ export async function buildAndPersistImagePrompt(
 
   const contextSnapshot = {
     academicUnit: promptPayload.academic_unit,
-    academicScenario: promptPayload.academic_scenario,
+    scenarioExample: promptPayload.scenario_example,
     tier3Vocabulary: promptPayload.tier3_vocabulary,
     topicLabel: promptPayload.topic_label,
+    unitId: promptPayload.unit_id,
+    contentFramework: promptPayload.content_framework,
+    contentStandards: promptPayload.content_standards,
+    contentGuidelines: promptPayload.content_guidelines,
+    domainCode: promptPayload.domain_code,
+    strand: promptPayload.strand,
   };
 
   const [job] = await db
@@ -146,7 +152,7 @@ export async function buildAndPersistImagePrompt(
     rationale: data.rationale.trim(),
     previousComplexityStep,
     academicUnit: promptPayload.academic_unit,
-    academicScenario: promptPayload.academic_scenario,
+    scenarioExample: promptPayload.scenario_example,
     tier3Vocabulary: promptPayload.tier3_vocabulary,
     topicLabel: promptPayload.topic_label,
   };

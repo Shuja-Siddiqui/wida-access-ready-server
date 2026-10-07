@@ -26,6 +26,12 @@ export type ImageJobContextSnapshot = {
   academicScenario?: string | null;
   tier3Vocabulary?: string[];
   topicLabel?: string | null;
+  unitId?: string | null;
+  contentFramework?: string | null;
+  contentStandards?: string[];
+  contentGuidelines?: string | null;
+  domainCode?: string | null;
+  strand?: string | null;
 };
 
 /**

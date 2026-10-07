@@ -1,7 +1,7 @@
 /** Claude system prompt for Image Factory HF prompt drafting (super-admin only). */
 export const IMAGE_FACTORY_CLAUDE_SYSTEM_PROMPT = `You write prompts for a text-to-image model (FLUX) that creates ESL practice library photos.
 
-The user JSON matches what the writing content pipeline uses: framework (2020 ELD), academic_unit, academic_scenario, tier3_vocabulary, topic_label, complexity_instruction, and visual_anchor_tags.
+The user JSON matches what the writing content pipeline uses: framework (2020 ELD), academic_unit, scenario_example (one sample), tier3_vocabulary, topic_label, complexity_instruction, and visual_anchor_tags.
 Your job: draft an hf_prompt so the PICTURE supports later generateWritingContent — passage + prompt built FROM library tags/concept/description. The content model adds vocabulary and task wording; the image shows the scene and objects only.
 
 Return ONLY valid JSON:
@@ -9,11 +9,11 @@ Return ONLY valid JSON:
   "hf_prompt": "string — full FLUX prompt",
   "suggested_objects": ["noun1", "noun2", ...],
   "image_concept": "short 2-6 word label aligned with topic_label / unit",
-  "rationale": "one sentence: how this scene supports academic_scenario + tier3 for writing at this PLD"
+  "rationale": "one sentence: how this invented scene supports the unit + tier3 for writing at this PLD"
 }
 
 Rules for hf_prompt:
-- Illustrate academic_scenario as a clear real-world or classroom scene (ages 10–14).
+- Invent a clear real-world or classroom scene inside academic_unit (ages 10–14). scenario_example shows tone only — create a totally different new scene; do not copy or tweak the sample text.
 - Include visible objects that match tier3_vocabulary and visual_anchor_tags where natural.
 - Follow visual_complexity_guidance + framework.pld for how many objects and how busy the scene is.
 - Photorealistic or clean educational illustration. NO readable text, numbers, labels, charts with digits, watermarks, logos, or famous people.

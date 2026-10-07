@@ -35,9 +35,15 @@ export interface ImageFactoryPromptUserPayload {
   writing_task_type: string;
   framework: Record<string, unknown>;
   academic_unit: string | null;
-  academic_scenario: string | null;
+  scenario_example: string | null;
   tier3_vocabulary: string[];
   topic_label: string | null;
+  unit_id: string | null;
+  content_framework: string | null;
+  content_standards: string[];
+  content_guidelines: string | null;
+  domain_code: string | null;
+  strand: string | null;
   complexity_instruction: string | null;
   visual_anchor_tags: string[];
   content_compose_goal: string;
@@ -70,7 +76,7 @@ export function buildImageFactoryPromptUserPayload(opts: {
   const generalNotes = generalPool
     ? [
         "GENERAL SF POOL: This image is shared across ALL key language uses for this Standard Framework.",
-        "Show a neutral academic scene (unit + scenario + tier3 objects). Do NOT bias toward one rhetorical mode (e.g. debate-only for Argue, story arc for Narrate).",
+        "Show a neutral academic scene (unit + tier3 objects). Do NOT bias toward one rhetorical mode (e.g. debate-only for Argue, story arc for Narrate).",
         "framework.key_language_use is for PLD visual-complexity only — the library row is NOT tagged to one KLU.",
       ]
     : [];
@@ -91,9 +97,15 @@ export function buildImageFactoryPromptUserPayload(opts: {
     writing_task_type: writingTaskTypeForImagePool(keyLanguageUse, opts.level),
     framework: serializeFrameworkTask(framework),
     academic_unit: academic?.academic_unit ?? null,
-    academic_scenario: academic?.academic_scenario ?? null,
+    scenario_example: academic?.scenario_example ?? null,
     tier3_vocabulary: academic?.tier3_vocabulary ?? [],
     topic_label: academic?.topic_label ?? null,
+    unit_id: academic?.unit_id ?? null,
+    content_framework: academic?.content_framework ?? null,
+    content_standards: academic?.content_standards ?? [],
+    content_guidelines: academic?.content_guidelines ?? null,
+    domain_code: academic?.domain_code ?? null,
+    strand: academic?.strand ?? null,
     complexity_instruction: academic?.complexity_instruction ?? null,
     visual_anchor_tags: academic?.visual_anchor_tags ?? [],
     content_compose_goal: generalPool
@@ -105,9 +117,11 @@ export function buildImageFactoryPromptUserPayload(opts: {
       )),
     notes: [
       "framework = WIDA 2020 ELD (eld_standard, key_language_use, language_functions, pld) — same layer as generateWritingContent.",
-      "academic_unit, academic_scenario, tier3_vocabulary, and topic_label come from the academic curriculum engine for pool_subject + elp_level.",
-      "Use academic_scenario + tier3_vocabulary to choose WHAT to show; use framework.pld + complexity_instruction for how rich the scene is.",
-      "hf_prompt: photorealistic scene for academic_scenario. NO letters, numbers, labels, or formulas in the image.",
+      "academic_unit, scenario_example (one sample), tier3_vocabulary, topic_label, content_framework, and content_standards come from the CCSS/NGSS/C3 curriculum for pool_subject + elp_level.",
+      "scenario_example shows tone only — invent a totally different new scene; do not copy or paraphrase the sample.",
+      "Honor content_guidelines and content_standards when choosing scene objects — the image must support later writing in this unit.",
+      "Use academic_unit + tier3_vocabulary + content_standards to choose WHAT to show; use framework.pld + complexity_instruction for how rich the scene is.",
+      "hf_prompt: photorealistic invented scene for this unit. NO letters, numbers, labels, or formulas in the image.",
       "suggested_objects: concrete nouns from the scene; overlap tier3_vocabulary and visual_anchor_tags when possible (for library search + DINO).",
       "image_concept: 2–6 words matching topic_label / unit theme so writingLibraryCandidates can retrieve this row.",
       "Do not illustrate the exact word-problem numbers — illustrate the setting and objects so the content model can add math/science language in text.",

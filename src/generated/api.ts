@@ -690,7 +690,7 @@ export const StartSessionParams = zod.object({
 
 export const StartSessionBody = zod.object({
   domain: zod.enum(["listening", "speaking", "reading", "writing"]),
-  tier: zod.enum(["general", "academic"]).default("general"),
+  tier: zod.enum(["general", "academic"]).default("academic"),
   sessionType: zod.enum(["single", "all_four"]),
 });
 

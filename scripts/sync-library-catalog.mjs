@@ -185,9 +185,41 @@ export async function syncLibraryCatalogFromLiveToDev() {
   }
 }
 
+/** dev (LOCAL_DATABASE_URL / DATABASE_URL) → RDS (POSTGRES_*). No-op when same host. */
+export async function syncLibraryCatalogFromDevToLive() {
+  const dev = getDevDatabaseConfig();
+  const rds = loadRdsConfigFromEnv();
+  if (!dev || !rds) {
+    console.log("Skip library sync — dev and RDS must both be configured with different hosts.");
+    return null;
+  }
+
+  const source = createClient(dev);
+  const target = createClient(rds);
+  await source.connect();
+  await target.connect();
+
+  try {
+    return await syncLibraryCatalog({
+      source,
+      target,
+      sourceLabel: `dev (${dev.host ?? "postgres"})`,
+      targetLabel: `RDS (${rds.host})`,
+    });
+  } finally {
+    await source.end();
+    await target.end();
+  }
+}
+
 const isMain =
   process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
 
 if (isMain) {
-  await syncLibraryCatalogFromLiveToDev();
+  const toLive = process.argv.includes("--to-live");
+  if (toLive) {
+    await syncLibraryCatalogFromDevToLive();
+  } else {
+    await syncLibraryCatalogFromLiveToDev();
+  }
 }

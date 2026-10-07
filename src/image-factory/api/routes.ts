@@ -2,7 +2,8 @@
  * Image Factory HTTP routes — super-admin or internal cron job key.
  */
 
-import { Router, type IRouter } from "express";
+import type { IRouter } from "express";
+import { createApiRouter } from "../../lib/http/create-api-router";
 import { z } from "zod/v4";
 import type { Request } from "express";
 import { sendError, sendSuccess } from "../../lib/http/api-response";
@@ -28,7 +29,7 @@ import {
   ingestGeneratedFactoryImage,
 } from "../services/ingest-service";
 
-const router: IRouter = Router();
+const router: IRouter = createApiRouter();
 
 router.use(requireSuperAdminOrInternalJob);
 router.use((req, _res, next) => {

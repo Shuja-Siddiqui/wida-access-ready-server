@@ -26,9 +26,9 @@ export const libraryTable = pgTable("library", {
   detectionResults: jsonb("detection_results").$type<Record<string, unknown>>(),
   /**
    * Intended usage contexts for this image. Controls which session types can use it.
-   * Values: "general" | "academic:math" | "academic:science" | "academic:social_studies" | "academic:ela"
-   * An image can belong to multiple contexts (e.g. a library photo → ["general","academic:ela"]).
-   * Empty array = uncategorised; treated as general for backward compat in image queries.
+   * Values: "academic:math" | "academic:science" | "academic:social_studies" | "academic:ela"
+   * An image can belong to multiple SF contexts (e.g. ["academic:science","academic:ela"]).
+   * Empty array = uncategorised; excluded from SF session image queries until tagged.
    */
   contexts:         text("contexts").array().notNull().default([]),
   /** The user who uploaded this image (super_admin, district_admin, principal). Null = anonymous. */

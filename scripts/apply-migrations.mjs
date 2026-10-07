@@ -324,6 +324,39 @@ async function applySqlMigrations(client) {
     console.log("  Skip 0017 (image_generation_pools missing)");
   }
 
+  const userSessionLastActiveExists = async () => {
+    const { rows } = await client.query(`
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'user_sessions' AND column_name = 'last_active_at'
+      LIMIT 1
+    `);
+    return rows.length > 0;
+  };
+
+  if (await tableExists(client, "user_sessions") && !(await userSessionLastActiveExists())) {
+    await applyFile(client, "0018_user_session_context.sql", { continueOnMissing: true });
+  } else if (await userSessionLastActiveExists()) {
+    console.log("  Skip 0018 (user_sessions.last_active_at already exists)");
+  } else {
+    console.log("  Skip 0018 (user_sessions table missing)");
+  }
+
+  const aiTokenCallsExists = async () => tableExists(client, "ai_token_calls");
+  const sessionAiTokensExists = async () => {
+    const { rows } = await client.query(`
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'sessions' AND column_name = 'ai_total_tokens'
+      LIMIT 1
+    `);
+    return rows.length > 0;
+  };
+
+  if (!(await aiTokenCallsExists()) || !(await sessionAiTokensExists())) {
+    await applyFile(client, "0019_ai_token_tracking.sql", { continueOnMissing: true });
+  } else {
+    console.log("  Skip 0019 (ai_token_calls already exists)");
+  }
+
   console.log("  After:", {
     themes: await tableExists(client, "themes"),
     content_categories: await tableExists(client, "content_categories"),
@@ -334,6 +367,9 @@ async function applySqlMigrations(client) {
     image_generation_jobs: await tableExists(client, "image_generation_jobs"),
     image_job_context_snapshot: await jobContextSnapshotExists(),
     library_ingest_source: await libraryIngestSourceExists(),
+    user_session_last_active: await userSessionLastActiveExists(),
+    ai_token_calls: await aiTokenCallsExists(),
+    session_ai_total_tokens: await sessionAiTokensExists(),
   });
 }
 

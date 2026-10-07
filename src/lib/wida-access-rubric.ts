@@ -3,6 +3,7 @@
  * src/data/wida_scoring_rubrics_data.json — not the homemade practice scales.
  */
 import rubricData from "../data/wida_scoring_rubrics_data.json";
+import { interpretiveScoringBlockForPrompt } from "./interpretive-scoring";
 
 export type SpeakingCategory =
   | "Exemplary"
@@ -267,12 +268,15 @@ export function serializeWritingRubricForPrompt(): string {
 }
 
 export function accessRubricBlockForDomain(domain: string): {
-  kind: "speaking" | "writing" | "none";
+  kind: "speaking" | "writing" | "interpretive" | "none";
   text: string;
 } {
   const d = domain.replace(/_academic$/i, "").toLowerCase();
   if (d === "speaking") return { kind: "speaking", text: serializeSpeakingRubricForPrompt() };
   if (d === "writing") return { kind: "writing", text: serializeWritingRubricForPrompt() };
+  if (d === "listening" || d === "reading") {
+    return { kind: "interpretive", text: interpretiveScoringBlockForPrompt() };
+  }
   return { kind: "none", text: "" };
 }
 
@@ -281,6 +285,7 @@ export function rubricPromptAudit(promptText: string) {
   return {
     speakingRubricInPrompt: promptText.includes("ACCESS SPEAKING RUBRIC"),
     writingRubricInPrompt: promptText.includes("ACCESS WRITING RUBRIC"),
+    interpretiveRubricInPrompt: promptText.includes("INTERPRETIVE COMPREHENSION RUBRIC"),
   };
 }
 

@@ -9,8 +9,9 @@ export const WRITING_2020_WITH_LIBRARY = `
 WRITING — APPLY THE SIX FRAMEWORK PARTS (library photo may be used)
 This call is writing (expressive). The student WRITES.
 Job from language_expectations + language_functions. English hardness from framework.pld only.
-Level 1: when library_candidates exist, selected_image_id is REQUIRED — always use a library photo.
-Level 2–6: you may set selected_image_id or null. When set, write passage + prompt from photo metadata; when null, write from topic only.
+Levels 1–2: when library_candidates exist, selected_image_id is REQUIRED — always use a library photo for this Standard Framework subject.
+Write passage + prompt from that photo's metadata; do not describe a scene that is not in the selected photo.
+When library_candidates is empty, write from topic only (no look/picture language).
 `.trim();
 
 /** @deprecated */
