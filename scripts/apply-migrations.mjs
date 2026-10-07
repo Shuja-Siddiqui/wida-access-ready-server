@@ -357,6 +357,23 @@ async function applySqlMigrations(client) {
     console.log("  Skip 0019 (ai_token_calls already exists)");
   }
 
+  const aiTokenUserIdExists = async () => {
+    const { rows } = await client.query(`
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'ai_token_calls' AND column_name = 'user_id'
+      LIMIT 1
+    `);
+    return rows.length > 0;
+  };
+
+  if (await aiTokenCallsExists() && !(await aiTokenUserIdExists())) {
+    await applyFile(client, "0020_ai_token_admin_calls.sql", { continueOnMissing: true });
+  } else if (await aiTokenUserIdExists()) {
+    console.log("  Skip 0020 (ai_token_calls.user_id already exists)");
+  } else {
+    console.log("  Skip 0020 (ai_token_calls table missing)");
+  }
+
   console.log("  After:", {
     themes: await tableExists(client, "themes"),
     content_categories: await tableExists(client, "content_categories"),
@@ -370,6 +387,7 @@ async function applySqlMigrations(client) {
     user_session_last_active: await userSessionLastActiveExists(),
     ai_token_calls: await aiTokenCallsExists(),
     session_ai_total_tokens: await sessionAiTokensExists(),
+    ai_token_calls_user_id: await aiTokenUserIdExists(),
   });
 }
 
