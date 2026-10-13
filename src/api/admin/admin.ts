@@ -25,13 +25,18 @@ import {
   RATE_LIMIT_BOUNDS,
 } from "../../lib/rate-limit/settings";
 import adminLibraryCatalogRouter from "./library-catalog";
+import adminAiUsageRouter from "./ai-usage";
+import { imageFactoryRouter } from "../../image-factory";
 
 const storage = new ObjectStorageService();
 
 const router: IRouter = Router();
 
+router.use(imageFactoryRouter);
+
 router.use("/admin", requireAuth, requireSuperAdmin);
 router.use(adminLibraryCatalogRouter);
+router.use(adminAiUsageRouter);
 
 // ── GET /admin/stats ─────────────────────────────────────────────────────────
 router.get("/admin/stats", async (_req, res): Promise<void> => {

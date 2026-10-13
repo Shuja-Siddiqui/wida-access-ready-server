@@ -278,12 +278,116 @@ async function applySqlMigrations(client) {
     console.log("  Skip 0013 (student_practice_suggestions already exists)");
   }
 
+  if (!(await tableExists(client, "image_generation_pools"))) {
+    await applyFile(client, "0014_image_generation.sql");
+  } else {
+    console.log("  Skip 0014 (image_generation_pools already exists)");
+  }
+
+  const jobContextSnapshotExists = async () => {
+    const { rows } = await client.query(`
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'image_generation_jobs' AND column_name = 'context_snapshot'
+      LIMIT 1
+    `);
+    return rows.length > 0;
+  };
+
+  if (await tableExists(client, "image_generation_jobs") && !(await jobContextSnapshotExists())) {
+    await applyFile(client, "0015_image_job_context_snapshot.sql");
+  } else if (await jobContextSnapshotExists()) {
+    console.log("  Skip 0015 (image_generation_jobs.context_snapshot already exists)");
+  } else {
+    console.log("  Skip 0015 (image_generation_jobs table missing)");
+  }
+
+  const libraryIngestSourceExists = async () => {
+    const { rows } = await client.query(`
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'library' AND column_name = 'ingest_source'
+      LIMIT 1
+    `);
+    return rows.length > 0;
+  };
+
+  if (await tableExists(client, "library") && !(await libraryIngestSourceExists())) {
+    await applyFile(client, "0016_library_ingest_source.sql");
+  } else if (await libraryIngestSourceExists()) {
+    console.log("  Skip 0016 (library.ingest_source already exists)");
+  } else {
+    console.log("  Skip 0016 (library table missing)");
+  }
+
+  if (await tableExists(client, "image_generation_pools")) {
+    await applyFile(client, "0017_image_factory_drop_general_subject.sql", { continueOnMissing: true });
+  } else {
+    console.log("  Skip 0017 (image_generation_pools missing)");
+  }
+
+  const userSessionLastActiveExists = async () => {
+    const { rows } = await client.query(`
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'user_sessions' AND column_name = 'last_active_at'
+      LIMIT 1
+    `);
+    return rows.length > 0;
+  };
+
+  if (await tableExists(client, "user_sessions") && !(await userSessionLastActiveExists())) {
+    await applyFile(client, "0018_user_session_context.sql", { continueOnMissing: true });
+  } else if (await userSessionLastActiveExists()) {
+    console.log("  Skip 0018 (user_sessions.last_active_at already exists)");
+  } else {
+    console.log("  Skip 0018 (user_sessions table missing)");
+  }
+
+  const aiTokenCallsExists = async () => tableExists(client, "ai_token_calls");
+  const sessionAiTokensExists = async () => {
+    const { rows } = await client.query(`
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'sessions' AND column_name = 'ai_total_tokens'
+      LIMIT 1
+    `);
+    return rows.length > 0;
+  };
+
+  if (!(await aiTokenCallsExists()) || !(await sessionAiTokensExists())) {
+    await applyFile(client, "0019_ai_token_tracking.sql", { continueOnMissing: true });
+  } else {
+    console.log("  Skip 0019 (ai_token_calls already exists)");
+  }
+
+  const aiTokenUserIdExists = async () => {
+    const { rows } = await client.query(`
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'ai_token_calls' AND column_name = 'user_id'
+      LIMIT 1
+    `);
+    return rows.length > 0;
+  };
+
+  if (await aiTokenCallsExists() && !(await aiTokenUserIdExists())) {
+    await applyFile(client, "0020_ai_token_admin_calls.sql", { continueOnMissing: true });
+  } else if (await aiTokenUserIdExists()) {
+    console.log("  Skip 0020 (ai_token_calls.user_id already exists)");
+  } else {
+    console.log("  Skip 0020 (ai_token_calls table missing)");
+  }
+
   console.log("  After:", {
     themes: await tableExists(client, "themes"),
     content_categories: await tableExists(client, "content_categories"),
     student_levels_unique: await indexExists(client, "student_levels_student_id_domain_tier_unique"),
     library_use_count: await libraryUseCountExists(),
     student_practice_suggestions: await tableExists(client, "student_practice_suggestions"),
+    image_generation_pools: await tableExists(client, "image_generation_pools"),
+    image_generation_jobs: await tableExists(client, "image_generation_jobs"),
+    image_job_context_snapshot: await jobContextSnapshotExists(),
+    library_ingest_source: await libraryIngestSourceExists(),
+    user_session_last_active: await userSessionLastActiveExists(),
+    ai_token_calls: await aiTokenCallsExists(),
+    session_ai_total_tokens: await sessionAiTokensExists(),
+    ai_token_calls_user_id: await aiTokenUserIdExists(),
   });
 }
 

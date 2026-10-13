@@ -27,6 +27,7 @@ export * from "./billing_config";
 export * from "./rate_limit_settings";
 export * from "./rate_limit_buckets";
 export * from "./ai_usage_daily";
+export * from "./ai_token_calls";
 
 // District seat allocations — tracks how many seats a district admin assigns to each school
 export * from "./district_seat_allocations";
@@ -44,3 +45,6 @@ export * from "./library";
 export * from "./content_categories";
 export * from "./topics";
 export * from "./library_topics";
+
+// Image Factory — HF generation pools + job audit trail
+export * from "./image_generation";

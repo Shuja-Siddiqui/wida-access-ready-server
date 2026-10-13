@@ -4,6 +4,8 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
+import { getAiTokenContext } from "../ai-token-context";
+import { recordAiTokenCall } from "../ai-token-usage";
 import { logger } from "../../config/logger";
 import { config } from "../../config/index";
 import { runClaudeJob } from "./queue";
@@ -138,6 +140,22 @@ export async function callClaude(
         messages: [{ role: "user", content: userPrompt }],
       }),
     );
+
+    const usage = response.usage;
+    const tokenCtx = getAiTokenContext();
+    if ((tokenCtx?.studentId || tokenCtx?.userId) && usage) {
+      recordAiTokenCall({
+        studentId:    tokenCtx.studentId,
+        userId:       tokenCtx.userId,
+        imageJobId:   tokenCtx.imageJobId,
+        sessionId:    tokenCtx.sessionId,
+        callKind:     tokenCtx.callKind ?? "other",
+        domain:       tokenCtx.domain,
+        model:        response.model,
+        inputTokens:  usage.input_tokens,
+        outputTokens: usage.output_tokens,
+      });
+    }
 
     const text = response.content[0].type === "text" ? response.content[0].text : "";
 
