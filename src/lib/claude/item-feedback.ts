@@ -148,6 +148,18 @@ function writingModelFallback(params: ItemFeedbackInput): string {
   return "Add one sentence that finishes what the prompt asked.";
 }
 
+/** Raw JSON maps from the client should not appear in student-facing coaching. */
+function looksLikeSerializedAnswer(text: string): boolean {
+  const t = text.trim();
+  if (!t.startsWith("{") && !t.startsWith("[")) return false;
+  try {
+    JSON.parse(t);
+    return /^\[\d|^\{\s*"\d/.test(t.replace(/\s/g, ""));
+  } catch {
+    return false;
+  }
+}
+
 function stripWritingPassAssignments(text: string): string {
   return text
     .replace(/\s*you can write:[\s\S]*/i, "")
@@ -330,6 +342,13 @@ function itemSystemPrompt(params: ItemFeedbackInput): string {
 }
 
 export async function generateItemFeedback(params: ItemFeedbackInput): Promise<ItemFeedback> {
+  if (
+    params.format === "selected_response"
+    && looksLikeSerializedAnswer(params.studentAnswer ?? "")
+  ) {
+    return fallback(params, Boolean(params.correct));
+  }
+
   const speakingRules =
     params.format === "speaking"
       ? applySpeakingHardRules({
