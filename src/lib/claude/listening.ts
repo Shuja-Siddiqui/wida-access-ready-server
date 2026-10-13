@@ -260,6 +260,28 @@ export interface ListeningContent {
   }>;
 }
 
+/** Text listening sessions cannot render image-library tap types without DINO metadata. */
+function coerceImageTapQuestionForTextListening(
+  q: ListeningContent["questions"][number],
+): ListeningContent["questions"][number] {
+  const type = q.type;
+  if (type === "image_object_tap" || type === "image_explain_mc") {
+    if (Array.isArray(q.options) && q.options.length >= 2) {
+      return { ...q, type: "multiple_choice" };
+    }
+  }
+  if (type === "image_yes_no") {
+    const yesNo = (q as { correctAnswer?: string }).correctAnswer ?? q.answer;
+    if (yesNo === "agree" || yesNo === "disagree") {
+      return { ...q, type: "agree_disagree", answer: yesNo as "agree" | "disagree" };
+    }
+    if (Array.isArray(q.options) && q.options.length >= 2) {
+      return { ...q, type: "multiple_choice" };
+    }
+  }
+  return q;
+}
+
 // ── Fallback ──────────────────────────────────────────────────────────────────
 
 export const FALLBACK_LISTENING: ListeningContent = {
@@ -393,7 +415,7 @@ export async function generateListeningContent(params: {
       topic:       result.topic,
       context:     result.context,
       visual:      parseVisual((result as { visual?: unknown }).visual),
-      questions,
+      questions: questions.map(coerceImageTapQuestionForTextListening),
     };
   } catch (err) {
     logger.error({ err }, "generateListeningContent failed, using fallback");

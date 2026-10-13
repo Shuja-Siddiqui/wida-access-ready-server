@@ -747,6 +747,7 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
                   // Send deduplicated detections — one box per area, no overlaps
                   detectionResults: { detections: cleanDetections, model: (imageRow.detectionResults as any)?.model ?? "grounding-dino" },
                   questions:        safeQuestions,
+                  useTapMode:       true,
                 },
               },
               mode,
@@ -790,6 +791,10 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
     const topicCategoryMatch = listeningCtx.selectedTopic.match(/^\[([^\]]+)\]/);
     const topicCategory = topicCategoryMatch?.[1] ?? listeningCtx.selectedTopic;
 
+    // Text listening fallback at L0–2 must not emit image_object_tap (no DINO boxes in this path).
+    const textListeningFormats =
+      Math.floor(currentLevel) <= 2 ? (["multiple_choice"] as const) : listeningCtx.permittedFormats;
+
     const [listeningContentResult, illustrationResult] = await Promise.allSettled([
       generateListeningContent({
         level:                  listeningCtx.elpLevel,
@@ -797,7 +802,7 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
         stepWithinLevel:        listeningCtx.stepWithinLevel,
         complexityInstruction:  listeningCtx.complexityInstruction,
         oralFormat:             listeningCtx.oralFormat,
-        permittedFormats:       listeningCtx.permittedFormats,
+        permittedFormats:       [...textListeningFormats],
         canDo:                  listeningCtx.canDo,
         topic:                  listeningCtx.selectedTopic,
         isRetry:                persistedTopic !== null,
@@ -1076,7 +1081,8 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
                   model:      (acImage.detectionResults as any)?.model ?? "grounding-dino",
                 },
                 questions: safeQuestions,
-                mode,
+                tapMode: "text_choice",
+                useTapMode: true,
               },
             },
             mode,
