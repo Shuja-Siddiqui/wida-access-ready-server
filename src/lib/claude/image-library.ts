@@ -5,15 +5,14 @@
  *   - 2 object-tap comprehension questions
  */
 
-import { callClaude, toDisplayText } from "./client";
+import { callClaude, toDisplayText, limitSentences } from "./client";
 import { logger } from "../../config/logger";
 import { contentGenPrompt } from "./prompts/content";
+import { buildSystemPrompt } from "./prompts/compose";
 import { clampToThreeOptions } from "../choice-options";
-import { serializeFrameworkTask, type FrameworkTask } from "./standards/2020";
+import { serializeCanDoForPrompt } from "../content";
 import { dumpContentGenRequest } from "./dump-content-gen";
 import { mergePriorPractice, type PracticeReport } from "../practice-report";
-import { buildWritingPassageSentenceTarget } from "./prompts/content/writing-image-passage";
-import { listeningL12AvailableFormats } from "../content/formatCapabilities";
 
 /** Prefer Claude's own stem. Do not invent student-facing question text. */
 export function resolvePictureListeningQuestion(
@@ -79,7 +78,7 @@ export async function generateImagePassageContent(params: {
   fractionalLevel: number; // e.g. 1.4
   stepWithinLevel: number; // 0 Entry → 4 Advanced
   complexityInstruction: string;
-  framework: FrameworkTask;
+  canDo: { keyUse: string; action: string; items: string[] };
   topic: string;
   lastSessionScore?: number | null;
   priorPracticeReport?: PracticeReport | null;
@@ -91,7 +90,7 @@ export async function generateImagePassageContent(params: {
     fractionalLevel,
     stepWithinLevel,
     complexityInstruction,
-    framework,
+    canDo,
     topic,
     lastSessionScore,
     priorPracticeReport,
@@ -107,28 +106,40 @@ export async function generateImagePassageContent(params: {
     2: "4–5 short sentences (~55–90 words). One idea each. Still short — this is not a full paragraph.",
   };
   const base = BASE_SENTENCE_TARGETS[level] ?? BASE_SENTENCE_TARGETS[2];
-  const ku = framework.key_language_use;
+  const ku = canDo.keyUse;
 
-  const passageSentenceTarget = `${base} ${buildWritingPassageSentenceTarget(level, ku)} Choose question types from available_question_formats using framework.language_functions. Tap targets must be exact image_tags named in the audio.`;
+  let passageSentenceTarget = `${base} Every question target object must be named by its exact label in the passage.`;
+  if (level <= 1 && ku === "Explain") {
+    passageSentenceTarget = `${base} Name 1 target by its exact label AND its function (e.g. "People sit on chairs."). The question asks the FUNCTION — never repeat the object label in the question text.`;
+  } else if (level >= 2 && ku === "Narrate") {
+    passageSentenceTarget = `${base} Name 3 image_tags in time order (first, then, last) as a short story. Q1 is the first tag; Q2 is the last tag.`;
+  } else if (level >= 2 && ku === "Inform") {
+    passageSentenceTarget = `${base} Name 3 image_tags in order as a fact process (first, then, last), not a character plot. Q1 first tag; Q2 last tag.`;
+  } else if (level >= 2 && ku === "Explain") {
+    passageSentenceTarget = `${base} Name 2 image_tags and compare or classify them (size, job, group) or state cause/effect. The question asks which object matches — do not only say "Find the [tag]."`;
+  } else if (level >= 2 && ku === "Argue") {
+    passageSentenceTarget = `${base} Use 2 real image_tags as evidence (amount or what is there). Q1 true claim (agree). Q2 false claim (disagree).`;
+  } else if (ku === "Explain") {
+    passageSentenceTarget = `${base} Each target object must be named by its exact label AND its function must be stated (e.g. "People sit on chairs." / "Students write with pencils."). The question will ask about the FUNCTION — never repeat the object label in the question text.`;
+  }
 
   const prompt = JSON.stringify(mergePriorPractice({
-    required_key_use: ku,
+    required_key_use: canDo.keyUse,
     integer_level: level,
     current_score: fractionalLevel,
     step_within_level: stepWithinLevel,
     level_label: canDoDescriptor,
-    framework: serializeFrameworkTask(framework),
+    can_do: serializeCanDoForPrompt(canDo, { level, domain: "LISTENING" }),
     complexity_instruction: complexityInstruction,
     passage_sentence_target: passageSentenceTarget,
     topic,
     last_session_score: lastSessionScore ?? null,
     question_count: 2,
-    available_question_formats: listeningL12AvailableFormats(),
     image_description: imageDescription,
     image_tags: imageTags,
   }, priorPracticeReport));
 
-  const systemPrompt = contentGenPrompt("listening", Math.max(1, Math.min(level, 2)));
+  const systemPrompt = buildSystemPrompt(contentGenPrompt("listening", Math.max(1, Math.min(level, 2))));
   dumpContentGenRequest("listening-image", systemPrompt, prompt);
   try {
     const result = (await callClaude(
@@ -139,10 +150,10 @@ export async function generateImagePassageContent(params: {
     const questions = (result.questions as Array<Record<string, unknown>>) ?? [];
 
     const rawPassage = result.audio_script ?? result.passage;
-    const passage = toDisplayText(rawPassage);
+    const passage = limitSentences(toDisplayText(rawPassage), 6);
 
     logger.info(
-      { keyUse: ku, passage: passage.slice(0, 120), questionCount: questions.length },
+      { keyUse: canDo.keyUse, passage: passage.slice(0, 120), questionCount: questions.length },
       "generateImagePassageContent: raw result",
     );
 
@@ -203,7 +214,7 @@ export async function generateImagePassageContent(params: {
       questions: mapped,
     };
   } catch (err) {
-    logger.error({ err, keyUse: ku }, "generateImagePassageContent failed");
+    logger.error({ err, keyUse: canDo.keyUse }, "generateImagePassageContent failed");
     throw err;
   }
 }

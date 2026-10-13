@@ -1,14 +1,6 @@
 import { pgTable, uuid, text, integer, jsonb, timestamp } from "drizzle-orm/pg-core";
 import { usersTable } from "./users";
 
-/** How the row entered the library (admin UI vs Image Factory). */
-export const LIBRARY_INGEST_SOURCES = ["admin_upload", "image_factory"] as const;
-export type LibraryIngestSource = typeof LIBRARY_INGEST_SOURCES[number];
-
-/** HF / FLUX backend when ingest_source is image_factory. */
-export const LIBRARY_GENERATION_BACKENDS = ["hf-inference", "flux-sidecar"] as const;
-export type LibraryGenerationBackend = typeof LIBRARY_GENERATION_BACKENDS[number];
-
 export const libraryTable = pgTable("library", {
   id:               uuid("id").primaryKey().defaultRandom(),
   s3Key:            text("s3_key").notNull(),
@@ -26,9 +18,9 @@ export const libraryTable = pgTable("library", {
   detectionResults: jsonb("detection_results").$type<Record<string, unknown>>(),
   /**
    * Intended usage contexts for this image. Controls which session types can use it.
-   * Values: "academic:math" | "academic:science" | "academic:social_studies" | "academic:ela"
-   * An image can belong to multiple SF contexts (e.g. ["academic:science","academic:ela"]).
-   * Empty array = uncategorised; excluded from SF session image queries until tagged.
+   * Values: "general" | "academic:math" | "academic:science" | "academic:social_studies" | "academic:ela"
+   * An image can belong to multiple contexts (e.g. a library photo → ["general","academic:ela"]).
+   * Empty array = uncategorised; treated as general for backward compat in image queries.
    */
   contexts:         text("contexts").array().notNull().default([]),
   /** The user who uploaded this image (super_admin, district_admin, principal). Null = anonymous. */
@@ -50,10 +42,6 @@ export const libraryTable = pgTable("library", {
   academicVision:   jsonb("academic_vision").$type<Record<string, AcademicVisionResult>>().notNull().default({}),
   /** Times this image was selected for a writing session (least-used picked on recycle). */
   useCount:         integer("use_count").notNull().default(0),
-  /** admin_upload = manual library upload; image_factory = HF/FLUX factory ingest. */
-  ingestSource:     text("ingest_source").notNull().default("admin_upload").$type<LibraryIngestSource>(),
-  /** Set for image_factory rows: hf-inference | flux-sidecar. */
-  generationBackend: text("generation_backend").$type<LibraryGenerationBackend | null>(),
 });
 
 /** Shape of one subject's vision analysis result. Stored in academicVision keyed by subject. */

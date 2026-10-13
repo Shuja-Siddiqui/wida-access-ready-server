@@ -1,45 +1,20 @@
 /**
  * Reset all practice sessions, levels, XP, streaks, and related progress.
- *
- * Usage:
- *   node scripts/reset-practice-progress.mjs          # local / DATABASE_URL
- *   node scripts/reset-practice-progress.mjs --live   # AWS RDS (POSTGRES_*)
+ * Usage: node scripts/reset-practice-progress.mjs
  */
+import pg from "pg";
 import dotenv from "dotenv";
-import { createClient, loadRdsConfigFromEnv } from "./apply-migrations.mjs";
 
 dotenv.config();
 
-const useLive = process.argv.includes("--live");
-
-function createTargetClient() {
-  if (useLive) {
-    const rds = loadRdsConfigFromEnv();
-    if (!rds?.host || !rds?.password) {
-      console.error("RDS not configured. Set POSTGRES_HOST and POSTGRES_PASSWORD in api-server/.env");
-      process.exit(1);
-    }
-    return {
-      client: createClient(rds),
-      label: `RDS (${rds.host})`,
-    };
-  }
-
-  const url = process.env.LOCAL_DATABASE_URL || process.env.DATABASE_URL;
-  if (!url) {
-    console.error("Set LOCAL_DATABASE_URL or DATABASE_URL in api-server/.env");
-    process.exit(1);
-  }
-
-  return {
-    client: createClient({ connectionString: url }),
-    label: "local",
-  };
+const url = process.env.LOCAL_DATABASE_URL || process.env.DATABASE_URL;
+if (!url) {
+  console.error("Set LOCAL_DATABASE_URL or DATABASE_URL in api-server/.env");
+  process.exit(1);
 }
 
-const { client, label } = createTargetClient();
+const client = new pg.Client({ connectionString: url });
 await client.connect();
-console.log(`Connected to ${label}.`);
 
 async function count(table) {
   try {
@@ -100,7 +75,7 @@ try {
   };
 
   console.log("Practice progress reset complete.");
-  console.log(JSON.stringify({ target: label, before, updated: { studentLevels: levels.rowCount, students: students.rowCount }, after }, null, 2));
+  console.log(JSON.stringify({ before, updated: { studentLevels: levels.rowCount, students: students.rowCount }, after }, null, 2));
 } catch (err) {
   await client.query("ROLLBACK");
   console.error("Reset failed:", err.message);

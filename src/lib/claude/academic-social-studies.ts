@@ -15,27 +15,27 @@ import {
   academicSessionScale,
 } from "./client";
 import {
+  buildSystemPrompt,
+  OPTIONAL_LINE_VISUALS_BLOCK,
   SOCIAL_STUDIES_SUBJECT_BLOCK,
+  SOCIAL_STUDIES_OUTPUT_SCHEMA,
+  contentGenPrompt,
 } from "./prompts";
-import { LIBRARY_IMAGE_LISTENING_EXTRA } from "./prompts/content/writing-image-passage";
-import {
-  buildAcademicListeningLibraryCurriculum,
-  buildAcademicListeningLibraryPromptFields,
-  finalizeAcademicListeningLibraryResult,
-} from "./academicListeningLibrary";
-import type { WritingLibraryCandidate } from "../content/writingLibraryCandidates";
 import { parseOptionDiagrams, parseVisual } from "./prompts/optional-line-visuals";
-import { buildListening2020SystemPrompt, buildListeningOutputSchema, type ListeningContent } from "./listening";
-import { listeningAvailableFormats } from "../content/formatCapabilities";
-import { frameworkTaskDescriptor, serializeFrameworkTask, type FrameworkTask } from "./standards/2020";
+import type { ListeningContent } from "./listening";
+import { serializeCanDoForPrompt } from "../content";
 import { clampToThreeOptions } from "../choice-options";
 import { logger } from "../../config/logger";
 import { dumpContentGenRequest } from "./dump-content-gen";
 import { mergePriorPractice, type PracticeReport } from "../practice-report";
-import {
-  academicPromptFieldsFromContext,
-  type AcademicFrameworkFields,
-} from "../academic/academicFrameworkContext";
+
+const SYSTEM_PROMPT = buildSystemPrompt(
+  contentGenPrompt("listening", 3),
+  "Academic social studies listening: test historical and civic language — not memorized facts.",
+  OPTIONAL_LINE_VISUALS_BLOCK,
+  SOCIAL_STUDIES_SUBJECT_BLOCK,
+  SOCIAL_STUDIES_OUTPUT_SCHEMA,
+);
 
 // ── Fallback ──────────────────────────────────────────────────────────────────
 
@@ -93,85 +93,40 @@ export async function generateAcademicSocialStudiesListeningContent(params: {
   complexityInstruction: string;
   oralFormat: string;
   permittedFormats: string[];
-  framework: FrameworkTask;
+  canDo: { keyUse: string; action: string; items: string[] };
   ssUnit: string;
   ssStrand: string;
-  scenarioExamples: string[];
+  ssScenario: string;
   tier3Vocabulary: string[];
   topic: string;
   isRetry?: boolean;
   lastSessionScore?: number | null;
-  libraryCandidates?: WritingLibraryCandidate[];
+  hasLibraryImage?: boolean;
   priorPracticeReport?: PracticeReport | null;
-  frameworkContext?: Partial<AcademicFrameworkFields>;
 }): Promise<ListeningContent> {
   const { questionCount, passageSentenceTarget, maxTokens } = academicSessionScale(params.level);
-  const availableFormats = params.permittedFormats.length > 0
-    ? params.permittedFormats
-    : listeningAvailableFormats(params.level);
-  const libraryCandidates = params.libraryCandidates ?? [];
-  const curriculum = buildAcademicListeningLibraryCurriculum({
-    unit:             params.ssUnit,
-    topic:            params.topic,
-    tier3Vocabulary:  params.tier3Vocabulary,
-    scenarioExamples: params.scenarioExamples,
-  });
-  const { prepared, fields: libraryPromptFields } = buildAcademicListeningLibraryPromptFields({
-    libraryCandidates,
-    level:           params.level,
-    keyUse:          params.framework.key_language_use,
-    academicSubject: "social_studies",
-    domainNote:      LIBRARY_IMAGE_LISTENING_EXTRA,
-    curriculum,
-    passageSentenceTarget,
-    frameworkContext: params.frameworkContext,
-    unitField: {
-      unit:             params.ssUnit,
-      scenarioExamples: params.scenarioExamples,
-      tier3Vocabulary:  params.tier3Vocabulary,
-    },
-  });
-  const hasLibraryCandidates = prepared.candidates.length > 0;
-  const schemaSection = buildListeningOutputSchema(
-    params.level,
-    availableFormats,
-    questionCount,
-    { libraryCompose: hasLibraryCandidates },
-  );
-
-  const systemPrompt = buildListening2020SystemPrompt(params.level, {
-    academicContentLayer: SOCIAL_STUDIES_SUBJECT_BLOCK,
-    extraBlocks: [
-      "Academic social studies listening: test historical and civic language — not memorized facts.",
-    ],
-    hasLibraryCandidates,
-    schemaSection,
-  });
 
   const prompt = JSON.stringify(mergePriorPractice({
-    domain:                 "listening",
     integer_level:          params.level,
     step_within_level:      params.stepWithinLevel,
     complexity_instruction: params.complexityInstruction,
-    framework:              serializeFrameworkTask(params.framework),
-    goal:                   "Create one social studies listening task so the student can practice understanding language at framework.pld.",
-    required_key_use:       params.framework.key_language_use,
+    can_do: serializeCanDoForPrompt(params.canDo, { level: params.level, domain: "LISTENING" }),
     oral_format:             params.oralFormat,
     ss_unit:                 params.ssUnit,
     ss_strand:               params.ssStrand,
+    ss_scenario:             params.ssScenario,
     tier3_vocabulary:        params.tier3Vocabulary,
     topic:                   params.topic,
     is_retry:                params.isRetry ?? false,
     last_session_score:      params.lastSessionScore ?? null,
     question_count:          questionCount,
-    available_question_formats: availableFormats,
-    ...libraryPromptFields,
+    passage_sentence_target: passageSentenceTarget,
+    has_library_image:       params.hasLibraryImage ?? false,
   }, params.priorPracticeReport));
 
-  dumpContentGenRequest("academic-social-studies", systemPrompt, prompt);
+  dumpContentGenRequest("academic-social-studies", SYSTEM_PROMPT, prompt);
   try {
-    const result = (await callClaude(systemPrompt, prompt, maxTokens)) as {
-      selected_image_id?: string | null;
+    const result = (await callClaude(SYSTEM_PROMPT, prompt, maxTokens)) as {
       audio_script: string;
       topic: string;
       context: string;
@@ -185,26 +140,8 @@ export async function generateAcademicSocialStudiesListeningContent(params: {
       }>;
     };
 
-    const taskDescriptor = frameworkTaskDescriptor(params.framework);
-    const rawSelectedId = typeof result.selected_image_id === "string"
-      ? result.selected_image_id.trim()
-      : null;
-    const finalized = finalizeAcademicListeningLibraryResult({
-      rawSelectedId,
-      audioScript:   toDisplayText(result.audio_script),
-      prepared,
-      allCandidates: libraryCandidates,
-      curriculum,
-      level:         params.level,
-      keyUse:        params.framework.key_language_use,
-      logLabel:      "academic-social-studies",
-    });
     return {
-      taskDescriptor,
-      canDoDescriptor: taskDescriptor,
-      framework:       params.framework,
-      selectedLibraryImageId: finalized.selectedLibraryImageId,
-      audioScript: finalized.audioScript,
+      audioScript: toDisplayText(result.audio_script),
       topic:       result.topic ?? params.topic,
       context:     result.context ?? "Teacher narrating a historical event or social studies concept to the class",
       visual:      parseVisual((result as { visual?: unknown }).visual),

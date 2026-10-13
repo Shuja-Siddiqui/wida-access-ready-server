@@ -1,0 +1,246 @@
+{
+  "domain": "speaking",
+  "description": "Curriculum topic bank for speaking content generation, aligned with WIDA ELP levels 1–6. Topics increase in cognitive and linguistic complexity as students progress. Each level provides task contexts that elicit appropriate oral production for the proficiency band.",
+  "levels": [
+    {
+      "elpLevel": 1,
+      "proficiencyLabel": "Entering",
+      "complexityNote": "Grade 6–8 one-word or two-word oral responses. Students name, label, or answer yes/no with visual support. Tasks involve pointing, gesturing, or producing single nouns and action verbs.",
+      "discourseTypes": ["naming task", "yes/no response", "one-word labeling", "pointing with verbal label"],
+      "scaffoldLevel": "full — sentence frames required, e.g. 'This is a ___.' or 'I see a ___.'",
+      "recommendedTaskTypes": ["descriptive"],
+      "topicCategories": [
+        {
+          "category": "School & Community",
+          "topics": [
+            "name objects in a classroom or school",
+            "identify community helpers and what they do",
+            "name types of transportation and where they go",
+            "describe what students do at different times of the school day",
+            "name foods from different food groups"
+          ]
+        },
+        {
+          "category": "Science",
+          "topics": [
+            "name parts of a plant using a diagram",
+            "identify types of weather and describe the current weather",
+            "name animals and where they live",
+            "identify types of landforms on a map",
+            "name tools used in a science lab"
+          ]
+        },
+        {
+          "category": "Math & Data",
+          "topics": [
+            "name geometric shapes in everyday objects",
+            "describe how many of something using numbers",
+            "identify coins and name their values",
+            "describe a simple bar or picture graph",
+            "name measurement tools and what they measure"
+          ]
+        }
+      ]
+    },
+    {
+      "elpLevel": 2,
+      "proficiencyLabel": "Emerging",
+      "complexityNote": "Grade 6–8 speaking tasks in 2–3 sentences. Students describe, sequence, or state a simple cause and effect with visual support. Tasks use familiar academic vocabulary with sentence starters.",
+      "discourseTypes": ["short description", "two-step sequence", "simple cause-effect statement", "comparing two items"],
+      "scaffoldLevel": "strong — sentence frames with vocabulary prompts, e.g. 'First… Then… Because…'",
+      "recommendedTaskTypes": ["descriptive", "explanatory"],
+      "topicCategories": [
+        {
+          "category": "Earth & Life Science",
+          "topics": [
+            "describe the steps of the water cycle in order",
+            "explain what causes a natural disaster like a flood or earthquake",
+            "compare two animals and how they adapt to their environment",
+            "describe a food chain from producer to consumer",
+            "explain why plants need sunlight and water"
+          ]
+        },
+        {
+          "category": "Social Studies",
+          "topics": [
+            "describe why people immigrate to a new country",
+            "explain the steps of how a bill becomes a law",
+            "compare two world regions: climate and main resources",
+            "describe the role of the three branches of government",
+            "explain what happened during a key historical event"
+          ]
+        },
+        {
+          "category": "Personal & Academic",
+          "topics": [
+            "describe your school schedule and what you learn",
+            "explain a step-by-step math procedure you learned",
+            "describe a book or story you read and what happened",
+            "explain what you do to prepare for a test",
+            "compare two subjects in school you like or dislike"
+          ]
+        }
+      ]
+    },
+    {
+      "elpLevel": 3,
+      "proficiencyLabel": "Developing",
+      "complexityNote": "Grade 6–8 speaking tasks in 3–5 sentences with transitions. Students explain processes, relate events with time markers, or evaluate simple ideas. Familiar Tier-2 vocabulary with moderate scaffolding.",
+      "discourseTypes": ["process explanation", "event sequence with transitions", "simple argument or opinion", "short narrative"],
+      "scaffoldLevel": "moderate — sentence starters and key vocabulary list provided",
+      "recommendedTaskTypes": ["descriptive", "explanatory", "narrative"],
+      "topicCategories": [
+        {
+          "category": "Science",
+          "topics": [
+            "explain how photosynthesis works step by step",
+            "describe the rock cycle and how rocks transform over time",
+            "explain the cause and effect of pollution on an ecosystem",
+            "describe how the human immune system fights infection",
+            "explain simple machines and how they reduce effort"
+          ]
+        },
+        {
+          "category": "History & Social Studies",
+          "topics": [
+            "explain the causes of the American Revolution",
+            "describe a key event in the civil rights movement and its impact",
+            "explain the purpose of checks and balances in government",
+            "describe how westward expansion affected Native American communities",
+            "explain why ancient civilizations built monuments and what they reveal"
+          ]
+        },
+        {
+          "category": "Language Arts",
+          "topics": [
+            "retell a short story and explain its theme",
+            "describe a character's motivation and how it affects the plot",
+            "explain the difference between fact and opinion in a text",
+            "describe how an author uses figurative language to create meaning",
+            "explain how text features help readers understand an article"
+          ]
+        }
+      ]
+    },
+    {
+      "elpLevel": 4,
+      "proficiencyLabel": "Expanding",
+      "complexityNote": "Grade 6–8 one developed paragraph of oral speech. Students compare, summarize, and express opinions with evidence. Tier-2 academic vocabulary; hedging language and connectors used appropriately.",
+      "discourseTypes": ["developed comparison", "summary with supporting details", "opinion with evidence", "oral explanation of process or concept"],
+      "scaffoldLevel": "light — key vocabulary list only; no sentence frames",
+      "recommendedTaskTypes": ["explanatory", "argumentative", "narrative"],
+      "topicCategories": [
+        {
+          "category": "Science & Technology",
+          "topics": [
+            "compare renewable and non-renewable energy sources: advantages and disadvantages",
+            "explain how genetic inheritance works and give an example",
+            "describe the impact of the Industrial Revolution on the environment",
+            "summarize what scientists know about climate change and its effects",
+            "explain how social media affects teen mental health with evidence"
+          ]
+        },
+        {
+          "category": "History & Government",
+          "topics": [
+            "compare two significant historical figures and their contributions",
+            "summarize the causes and effects of World War I",
+            "explain how the civil rights movement changed U.S. laws",
+            "describe the strengths and weaknesses of democracy as a system",
+            "summarize the arguments for and against a current policy issue"
+          ]
+        },
+        {
+          "category": "Literature & Language Arts",
+          "topics": [
+            "compare two characters from different stories who face similar challenges",
+            "explain how an author's background influences their writing",
+            "summarize the argument of a persuasive essay and evaluate its evidence",
+            "describe how the setting of a novel affects its characters",
+            "explain how irony or symbolism creates meaning in a story"
+          ]
+        }
+      ]
+    },
+    {
+      "elpLevel": 5,
+      "proficiencyLabel": "Bridging",
+      "complexityNote": "Grade 6–8 extended organized oral response. Students present research, defend positions with specific evidence, or demonstrate step-by-step explanations. Academic vocabulary; complex sentence variety.",
+      "discourseTypes": ["research-based oral report", "debate-style argument", "step-by-step demonstration with evidence", "critical analysis"],
+      "scaffoldLevel": "minimal — organizational prompt only (e.g. 'Include an introduction, two points, and a conclusion')",
+      "recommendedTaskTypes": ["argumentative", "explanatory"],
+      "topicCategories": [
+        {
+          "category": "Science & Society",
+          "topics": [
+            "defend whether human activity is the primary driver of climate change using data",
+            "evaluate the benefits and risks of CRISPR gene editing in medicine",
+            "argue for or against expanding space exploration funding",
+            "explain the societal implications of artificial intelligence in the workforce",
+            "present evidence for or against mandatory vaccination policies"
+          ]
+        },
+        {
+          "category": "History & Civics",
+          "topics": [
+            "analyze the long-term effects of colonialism on a specific region",
+            "argue whether the U.S. should have entered World War I when it did",
+            "evaluate the effectiveness of the United Nations in preventing conflict",
+            "compare two immigration policies and argue which better serves national interests",
+            "explain how economic inequality has changed since the Industrial Revolution"
+          ]
+        },
+        {
+          "category": "Literature & Critical Thinking",
+          "topics": [
+            "present a critical analysis of an author's use of symbolism",
+            "argue whether a literary character's choices were morally justified",
+            "compare two dystopian novels and explain what they reveal about society",
+            "evaluate the rhetorical effectiveness of a historical speech",
+            "explain how postcolonial literature challenges traditional narratives"
+          ]
+        }
+      ]
+    },
+    {
+      "elpLevel": 6,
+      "proficiencyLabel": "Reaching",
+      "complexityNote": "Grade 6–8 sophisticated oral discourse. Students synthesize ideas from multiple sources, navigate counterarguments, and adapt register to audience. Nuanced vocabulary; idiomatic and complex sentence variety.",
+      "discourseTypes": ["multimedia-supported oral presentation", "Socratic-style argumentation", "analytical oral synthesis", "academic panel discussion"],
+      "scaffoldLevel": "none — student chooses organizational structure",
+      "recommendedTaskTypes": ["argumentative", "explanatory"],
+      "topicCategories": [
+        {
+          "category": "Advanced Science & Ethics",
+          "topics": [
+            "synthesize evidence to evaluate the ethical limits of biotechnology",
+            "argue a nuanced position on geoengineering as a climate solution",
+            "evaluate competing scientific models and explain which has stronger evidence",
+            "present an oral analysis of how neuroscience should inform education policy",
+            "synthesize multiple sources to defend or challenge a scientific consensus"
+          ]
+        },
+        {
+          "category": "Advanced History & Politics",
+          "topics": [
+            "synthesize primary and secondary sources to argue a historical revisionist position",
+            "evaluate how nationalism shapes modern geopolitical conflicts",
+            "present a comparative analysis of constitutional democracies",
+            "analyze the long-term legacy of the Cold War on current international relations",
+            "argue whether international courts have been effective in delivering justice"
+          ]
+        },
+        {
+          "category": "Advanced Literature",
+          "topics": [
+            "synthesize multiple critical perspectives on a canonical literary work",
+            "argue how a specific novel reflects or subverts its historical context",
+            "compare rhetorical strategies across two historical speeches",
+            "analyze how narrative structure creates ideological effects in fiction",
+            "evaluate competing interpretations of an ambiguous literary text"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,5 +1,4 @@
-import type { IRouter, Request, Response } from "express";
-import { createApiRouter } from "../../lib/http/create-api-router";
+import { Router, type IRouter, type Request, type Response } from "express";
 import { eq, desc, count } from "drizzle-orm";
 import { db } from "../../../db";
 import { mediaAssetsTable } from "../../../db/schema";
@@ -8,7 +7,7 @@ import { sendError, sendSuccess } from "../../lib/http/api-response";
 import { ObjectStorageService } from "../../lib/images/objectStorage";
 import { z } from "zod/v4";
 
-const router: IRouter = createApiRouter();
+const router: IRouter = Router();
 const storageService = new ObjectStorageService();
 
 // ---------------------------------------------------------------------------
@@ -112,11 +111,6 @@ router.get("/media/:id", requireAuth, async (req: Request, res: Response) => {
       return;
     }
 
-    if (asset.uploadedBy !== req.auth!.userId && req.auth!.role !== "super_admin") {
-      sendError(res, 403, "Forbidden");
-      return;
-    }
-
     const presignedUrl = await storageService.getPresignedGetUrl(asset.s3Key);
 
     sendSuccess(res, { ...asset, presignedUrl });
@@ -134,26 +128,9 @@ router.get("/media/:id", requireAuth, async (req: Request, res: Response) => {
 
 router.delete("/media/:id", requireAuth, async (req: Request, res: Response) => {
   try {
-    const id = String(req.params.id);
-    const [asset] = await db
-      .select()
-      .from(mediaAssetsTable)
-      .where(eq(mediaAssetsTable.id, id))
-      .limit(1);
-
-    if (!asset) {
-      sendError(res, 404, "Media asset not found");
-      return;
-    }
-
-    if (asset.uploadedBy !== req.auth!.userId && req.auth!.role !== "super_admin") {
-      sendError(res, 403, "Forbidden");
-      return;
-    }
-
     const [deleted] = await db
       .delete(mediaAssetsTable)
-      .where(eq(mediaAssetsTable.id, id))
+      .where(eq(mediaAssetsTable.id, String(req.params.id)))
       .returning();
 
     if (!deleted) {

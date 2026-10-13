@@ -1,5 +1,4 @@
-import type { IRouter, Request } from "express";
-import { createApiRouter } from "../../lib/http/create-api-router";
+import { Router, type IRouter, type Request } from "express";
 import { eq, and, or, sql, count, desc } from "drizzle-orm";
 import crypto from "node:crypto";
 import { z } from "zod/v4";
@@ -60,16 +59,17 @@ import { requireAuth, requireStudentAccess } from "../../middlewares/auth";
 import { resolveStudentAccess } from "../../lib/billing/subscription";
 import { getStudentAiUsage } from "../../lib/rate-limit/usage";
 
-const router: IRouter = createApiRouter();
+const router: IRouter = Router();
 
 router.use("/students", requireAuth);
 
 // All (domain, tier) pairs for which student_levels rows must exist.
 // To add a new domain or tier in the future, append a pair here — nothing else needs to change.
 const DOMAIN_TIER_PAIRS: Array<{ domain: Domain; tier: Tier }> = [
+  { domain: "listening", tier: "general"  },
   { domain: "listening", tier: "academic" },
-  { domain: "speaking",  tier: "academic" },
-  { domain: "reading",   tier: "academic" },
+  { domain: "speaking",  tier: "general"  },
+  { domain: "reading",   tier: "general"  },
   { domain: "writing",   tier: "academic" },
 ];
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -176,10 +176,11 @@ async function applyGuardianScores(
           consecutiveFailCount: "0",
           updatedAt: new Date(),
         })
+        // Guardian scores: general tier for L/S/R; writing is academic WIDA only.
         .where(and(
           eq(studentLevelsTable.studentId, studentId),
           eq(studentLevelsTable.domain, domain),
-          eq(studentLevelsTable.tier, "academic"),
+          eq(studentLevelsTable.tier, domain === "writing" ? "academic" : "general"),
         ));
     }
   }
@@ -963,24 +964,6 @@ router.get("/students/:studentId/ai-usage", requireStudentAccess("studentId"), a
   sendSuccess(res, usage);
 });
 
-type ProgressDomainRow = {
-  domain: string;
-  tier: Tier;
-  currentLevel: number;
-  exitThreshold: number;
-  gap: number;
-  normalizedLevel: number;
-  levelLabel: string;
-  atExit: boolean;
-  growthRate: ReturnType<typeof calculateGrowthRate>;
-  exitProjection: { domain: string; projectedDate: string | null; weeksToExit: number | null; status: string };
-  sessionHistory: Array<{ date: string; level: number; score: number }>;
-  lastSessionScore: number | null;
-  lastPracticed: string | null;
-  scaleMin: number;
-  scaleMax: number;
-};
-
 async function buildProgress(studentId: string, assessment: Assessment) {
   const config = getAssessmentConfig(assessment);
 
@@ -994,7 +977,9 @@ async function buildProgress(studentId: string, assessment: Assessment) {
   ]);
 
   const domainData = DOMAIN_TIER_PAIRS.map(({ domain, tier }) => {
-    const domainKey = domain;
+    // UI key: "listening_academic" for academic listening; writing stays "writing" (academic-only).
+    const domainKey =
+      tier === "academic" && domain === "listening" ? `${domain}_academic` : domain;
     const levelRow = levels.find((l) => l.domain === domain && l.tier === tier);
     const currentLevel = levelRow ? parseFloat(levelRow.currentLevel) : config.scale.min;
     const exitThreshold = getExitThreshold(assessment, domain);
@@ -1023,7 +1008,7 @@ async function buildProgress(studentId: string, assessment: Assessment) {
     const lastSession = domainSessions[domainSessions.length - 1];
 
     return {
-      domain: domainKey,
+      domain: domainKey, // UI key — "listening_academic" or plain domain name
       tier,              // raw tier for reference
       currentLevel,
       exitThreshold,
@@ -1038,16 +1023,10 @@ async function buildProgress(studentId: string, assessment: Assessment) {
       lastPracticed: lastSession?.createdAt?.toISOString() ?? null,
       scaleMin: config.scale.min,
       scaleMax: config.scale.max,
-    } satisfies ProgressDomainRow;
+    };
   });
 
-  const domainOrder = ["listening", "speaking", "reading", "writing"] as const;
-  const consolidatedDomains = [...domainData].sort(
-    (a, b) => domainOrder.indexOf(a.domain as typeof domainOrder[number])
-      - domainOrder.indexOf(b.domain as typeof domainOrder[number]),
-  );
-
-  const nonExitProjections = consolidatedDomains
+  const nonExitProjections = domainData
     .filter((d) => !d.atExit && d.exitProjection.projectedDate)
     .map((d) => new Date(d.exitProjection.projectedDate!).getTime());
 
@@ -1061,7 +1040,7 @@ async function buildProgress(studentId: string, assessment: Assessment) {
     assessment,
     scaleMin: config.scale.min,
     scaleMax: config.scale.max,
-    domains: consolidatedDomains.map((d) => ({
+    domains: domainData.map((d) => ({
       domain: d.domain,
       currentLevel: d.currentLevel,
       exitThreshold: d.exitThreshold,
@@ -1075,7 +1054,7 @@ async function buildProgress(studentId: string, assessment: Assessment) {
       scaleMin: d.scaleMin,
       scaleMax: d.scaleMax,
     })),
-    growthRates: consolidatedDomains.map((d) => ({
+    growthRates: domainData.map((d) => ({
       domain: d.domain,
       perSession: d.growthRate.perSession,
       weekly: d.growthRate.weekly,
@@ -1083,7 +1062,7 @@ async function buildProgress(studentId: string, assessment: Assessment) {
       isStalled: d.growthRate.isStalled,
       stalledSessionCount: d.growthRate.stalledSessionCount,
     })),
-    exitProjections: consolidatedDomains.map((d) => d.exitProjection),
+    exitProjections: domainData.map((d) => d.exitProjection),
     overallProjectedDate,
   };
 }
@@ -1229,6 +1208,58 @@ router.get("/students/:studentId/suggestions", requireStudentAccess("studentId")
       updatedAt: row.updatedAt?.toISOString() ?? new Date().toISOString(),
     })),
   });
+});
+
+// ─── Demo level jump (dev/demo only) ─────────────────────────────────────────
+// Lets the logged-in student (or their teacher) instantly jump their own
+// listening level to any value — purely for demonstration purposes.
+router.post("/students/:studentId/demo-jump", requireStudentAccess("studentId"), async (req, res): Promise<void> => {
+  const studentId = req.params.studentId as string;
+  const { domain = "listening", level } = req.body as { domain?: string; level: number };
+
+  if (typeof level !== "number" || level < 0 || level > 10) {
+    sendError(res, 400, "level must be a number between 0 and 10");
+    return;
+  }
+
+  const [student] = await db
+    .select()
+    .from(studentsTable)
+    .where(eq(studentsTable.id, studentId))
+    .limit(1);
+
+  if (!student) {
+    sendError(res, 404, "Student not found");
+    return;
+  }
+
+  // Ensure the level row exists first
+  const assessment = student.stateAssessment as Assessment;
+  await ensureStudentLevels(student.id, assessment);
+
+  const domainStr  = typeof domain === "string" ? domain : "listening";
+  const tierStr    =
+    domainStr === "listening_academic" || domainStr === "writing" ? "academic" : "general";
+  const coreDomain = domainStr === "listening_academic" ? "listening" : domainStr;
+
+  const [levelRow] = await db
+    .select()
+    .from(studentLevelsTable)
+    .where(and(
+      eq(studentLevelsTable.studentId, studentId),
+      eq(studentLevelsTable.domain, coreDomain),
+      eq(studentLevelsTable.tier, tierStr),
+    ))
+    .limit(1);
+
+  if (levelRow) {
+    await db
+      .update(studentLevelsTable)
+      .set({ currentLevel: level.toString(), atExit: false, consecutivePassCount: "0", consecutiveFailCount: "0", updatedAt: new Date() })
+      .where(eq(studentLevelsTable.id, levelRow.id));
+  }
+
+  sendSuccess(res, { studentId, domain: domainStr, level });
 });
 
 export { buildProgress };

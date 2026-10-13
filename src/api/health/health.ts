@@ -1,9 +1,8 @@
-import type { IRouter } from "express";
-import { createApiRouter } from "../../lib/http/create-api-router";
+import { Router, type IRouter } from "express";
 import { HealthCheckResponse } from "../../generated";
 import { sendSuccess } from "../../lib/http/api-response";
 
-const router: IRouter = createApiRouter();
+const router: IRouter = Router();
 
 router.get("/healthz", (_req, res) => {
   const data = HealthCheckResponse.parse({ status: "ok" });

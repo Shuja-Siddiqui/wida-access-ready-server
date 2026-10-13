@@ -1,0 +1,290 @@
+{
+  "domain": "reading",
+  "description": "Curriculum topic bank for reading content generation, aligned with WIDA ELP levels 1–6. Topics increase in cognitive and linguistic complexity as students progress. Each level maps to a proficiency band and provides topic categories, specific topics, text types, and vocabulary tiers appropriate for that level.",
+  "levels": [
+    {
+      "elpLevel": 1,
+      "proficiencyLabel": "Entering",
+      "complexityNote": "Grade 6–8 content in illustrated text (1–3 labeled pictures with captions) or simple charts and environmental print. Single nouns and action verbs, highly repetitive patterns. Students identify or match information from short visual-supported text.",
+      "textTypes": ["illustrated text with captions", "labeled diagrams", "environmental print", "simple charts"],
+      "recommendedQuestionTypes": ["main_idea", "detail"],
+      "topicCategories": [
+        {
+          "category": "Life Science",
+          "topics": [
+            "parts of a plant: roots, stem, leaves, flower, seed",
+            "animal body parts: eyes, ears, fins, wings, claws",
+            "food groups: fruits, vegetables, grains, proteins, dairy",
+            "types of animals: mammals, birds, fish, reptiles, insects",
+            "human body: bones, muscles, heart, lungs, brain"
+          ]
+        },
+        {
+          "category": "Earth Science",
+          "topics": [
+            "types of weather: sunny, rainy, cloudy, snowy, windy",
+            "landforms: mountain, valley, river, ocean, desert",
+            "seasons: spring, summer, fall, winter",
+            "sky objects: sun, moon, stars, clouds",
+            "natural resources: water, air, soil, rocks, plants"
+          ]
+        },
+        {
+          "category": "Social Studies",
+          "topics": [
+            "school community roles: teacher, principal, librarian, nurse, coach",
+            "types of maps: world map, country map, city map, classroom map",
+            "transportation: car, bus, train, airplane, boat",
+            "community helpers: police, firefighter, doctor, farmer, mail carrier",
+            "national symbols: flag, eagle, Statue of Liberty, White House"
+          ]
+        },
+        {
+          "category": "Math & Data",
+          "topics": [
+            "geometric shapes: circle, square, triangle, rectangle, hexagon",
+            "measurement tools: ruler, scale, thermometer, measuring cup, clock",
+            "money: penny, nickel, dime, quarter, dollar",
+            "simple graphs: bar graph, picture graph, tally chart",
+            "number line: counting, ordering, comparing numbers"
+          ]
+        }
+      ]
+    },
+    {
+      "elpLevel": 2,
+      "proficiencyLabel": "Emerging",
+      "complexityNote": "Grade 6–8 content in simple 2–4 sentence texts with illustrations or graphic organizers. Familiar academic phrases, simple present and past tense, Tier-1 and basic Tier-2 vocabulary. Students locate main ideas and sequence events from short passages.",
+      "textTypes": ["short illustrated paragraphs", "simple sequence texts", "labeled graphic organizers", "basic cause-effect passages"],
+      "recommendedQuestionTypes": ["main_idea", "detail", "sequence_ordering"],
+      "topicCategories": [
+        {
+          "category": "Earth & Environmental Science",
+          "topics": [
+            "the water cycle: evaporation, condensation, precipitation, collection",
+            "weather patterns: temperature, precipitation, wind speed",
+            "natural disasters: earthquakes, volcanoes, and floods — what causes them",
+            "renewable vs. non-renewable energy: solar, wind, coal, oil",
+            "environmental vs. genetic factors in plant traits"
+          ]
+        },
+        {
+          "category": "Life Science",
+          "topics": [
+            "food chains: producers, consumers, and decomposers",
+            "plant adaptations to different environments: desert, rainforest, arctic",
+            "animal life cycles: egg, larva, pupa, adult",
+            "the digestive system: how food moves through the body",
+            "inherited vs. learned traits in animals"
+          ]
+        },
+        {
+          "category": "Social Studies",
+          "topics": [
+            "timeline of a U.S. historical event: sequence of causes and effects",
+            "immigration: reasons people move and the steps involved",
+            "how a bill becomes a law: the basic sequence of steps",
+            "comparing two world regions: climate, population, main resources",
+            "roles of local, state, and federal government"
+          ]
+        },
+        {
+          "category": "Language Arts",
+          "topics": [
+            "story settings: identifying time, place, and context from a passage",
+            "cause and effect in a short story",
+            "character problem and solution in a narrative",
+            "comparing two characters based on their actions",
+            "point of view: first-person vs. third-person narration"
+          ]
+        }
+      ]
+    },
+    {
+      "elpLevel": 3,
+      "proficiencyLabel": "Developing",
+      "complexityNote": "Grade 6–8 leveled text in short paragraphs (4–6 sentences). Subject-area vocabulary with context clues. Students identify main ideas and details, make simple inferences, and recognize basic text structure.",
+      "textTypes": ["short informational paragraphs", "brief narrative passages", "simple persuasive statements", "process descriptions"],
+      "recommendedQuestionTypes": ["main_idea", "detail", "inference", "vocab_in_context"],
+      "topicCategories": [
+        {
+          "category": "Physical Science",
+          "topics": [
+            "states of matter: solid, liquid, gas, and how they change",
+            "force and motion: how push and pull affect objects",
+            "simple machines: lever, pulley, inclined plane, wheel and axle",
+            "light and shadow: reflection, refraction, and transparent vs. opaque",
+            "magnetism: poles, attraction, repulsion, and everyday uses"
+          ]
+        },
+        {
+          "category": "Life & Earth Science",
+          "topics": [
+            "ecosystems: how living and non-living things interact",
+            "photosynthesis: how plants make food from sunlight",
+            "rock cycle: igneous, sedimentary, metamorphic — how rocks form and change",
+            "ocean zones: intertidal, neritic, open ocean, deep sea",
+            "human impact on the environment: pollution, deforestation, conservation"
+          ]
+        },
+        {
+          "category": "Social Studies & History",
+          "topics": [
+            "the American Revolution: causes, key events, outcomes",
+            "three branches of U.S. government: powers and checks and balances",
+            "geography of the Americas: mountains, rivers, climate zones",
+            "ancient civilizations: Egypt, Greece, or Rome — achievements and daily life",
+            "the Civil War: causes, major battles, and Reconstruction"
+          ]
+        },
+        {
+          "category": "Language Arts",
+          "topics": [
+            "identifying theme in a short story using text evidence",
+            "comparing narrative and informational text on the same topic",
+            "author's purpose: to inform, persuade, or entertain",
+            "figurative language: simile, metaphor, and personification in context",
+            "text features: headings, captions, bold words, diagrams"
+          ]
+        }
+      ]
+    },
+    {
+      "elpLevel": 4,
+      "proficiencyLabel": "Expanding",
+      "complexityNote": "Grade 6–8 multi-paragraph text (2–3 paragraphs) with moderate Tier-2 academic vocabulary. Students identify relationships between main ideas and details, draw inferences, and analyze text structure.",
+      "textTypes": ["multi-paragraph informational text", "narrative with multiple characters", "persuasive paragraphs", "cause-effect essays"],
+      "recommendedQuestionTypes": ["main_idea", "detail", "inference", "vocab_in_context", "text_structure"],
+      "topicCategories": [
+        {
+          "category": "Science",
+          "topics": [
+            "the immune system: how the body defends against pathogens",
+            "plate tectonics: continental drift, earthquakes, and volcanic activity",
+            "genetic inheritance: dominant and recessive traits",
+            "chemical vs. physical changes: properties and examples",
+            "the nitrogen cycle: how nitrogen moves through ecosystems"
+          ]
+        },
+        {
+          "category": "Social Studies",
+          "topics": [
+            "westward expansion: Manifest Destiny, the Oregon Trail, conflicts with Native Americans",
+            "the Industrial Revolution: inventions, urbanization, and working conditions",
+            "World War I: causes, major powers, and consequences",
+            "the civil rights movement: key figures, events, and legislation",
+            "economic systems: capitalism, socialism — comparing structures"
+          ]
+        },
+        {
+          "category": "Language Arts",
+          "topics": [
+            "analyzing a character's motivation using text evidence",
+            "comparing theme across two short literary passages",
+            "evaluating an author's argument: claims, evidence, and reasoning",
+            "comparing primary and secondary sources on the same event",
+            "irony and symbolism in grade-level fiction"
+          ]
+        },
+        {
+          "category": "Health & Social Issues",
+          "topics": [
+            "mental health awareness: recognizing stress and coping strategies",
+            "media literacy: identifying bias and evaluating sources",
+            "nutrition science: macronutrients, micronutrients, and healthy choices",
+            "cyberbullying: causes, effects, and prevention strategies",
+            "climate change: evidence, causes, and proposed solutions"
+          ]
+        }
+      ]
+    },
+    {
+      "elpLevel": 5,
+      "proficiencyLabel": "Bridging",
+      "complexityNote": "Grade 6–8 extended text (3–5 paragraphs) from multiple perspectives or sources. Higher-register academic vocabulary, complex sentence structures. Students sequence main ideas, evaluate evidence, and compare across texts.",
+      "textTypes": ["extended informational essays", "comparative analysis passages", "persuasive texts with counterarguments", "multi-source excerpts"],
+      "recommendedQuestionTypes": ["main_idea", "inference", "text_structure", "vocab_in_context"],
+      "topicCategories": [
+        {
+          "category": "Science & Technology",
+          "topics": [
+            "CRISPR gene editing: how it works, benefits, and ethical debates",
+            "artificial intelligence: current applications and societal implications",
+            "renewable energy transition: solar, wind, and grid challenges",
+            "space exploration: Mars missions — rationale, risks, and costs",
+            "antibiotic resistance: causes, global impact, and solutions"
+          ]
+        },
+        {
+          "category": "History & Social Science",
+          "topics": [
+            "comparing causes and effects of World War I and World War II",
+            "the Cold War: ideological conflict, proxy wars, and the arms race",
+            "globalization: economic benefits and cultural consequences",
+            "democracy vs. authoritarianism: comparing governance systems",
+            "the Harlem Renaissance: art, literature, and the Great Migration"
+          ]
+        },
+        {
+          "category": "Language Arts & Media",
+          "topics": [
+            "comparing an author's perspective across two essays on the same issue",
+            "evaluating the reliability of digital news sources",
+            "dystopian fiction: how authors use setting to critique society",
+            "structural choices in expository writing: argument vs. explanation",
+            "rhetorical appeals: ethos, pathos, logos in persuasive texts"
+          ]
+        },
+        {
+          "category": "Economics & Civics",
+          "topics": [
+            "supply and demand: how markets determine prices",
+            "immigration policy: debates around enforcement and reform",
+            "the role of the Supreme Court in shaping civil rights",
+            "economic inequality: causes, data, and policy responses",
+            "entrepreneurship and innovation: case studies of young entrepreneurs"
+          ]
+        }
+      ]
+    },
+    {
+      "elpLevel": 6,
+      "proficiencyLabel": "Reaching",
+      "complexityNote": "Complex grade-level text (4+ paragraphs) with nuanced academic vocabulary, diverse text types including charts, tables, and multimedia sources. Students evaluate central ideas, identify bias, distinguish fact from speculation, and synthesize across sources.",
+      "textTypes": ["complex multi-paragraph essays", "comparative and analytical texts", "primary sources with annotations", "texts integrating data and argument"],
+      "recommendedQuestionTypes": ["main_idea", "inference", "text_structure", "vocab_in_context"],
+      "topicCategories": [
+        {
+          "category": "Advanced Science",
+          "topics": [
+            "climate modeling: how scientists predict future warming and its limitations",
+            "neuroscience of learning: how memory consolidation works",
+            "evolution and natural selection: evidence across time scales",
+            "biotechnology and ethics: GMOs, cloning, and genetic privacy",
+            "quantum computing: principles and potential real-world disruptions"
+          ]
+        },
+        {
+          "category": "Advanced Social Studies",
+          "topics": [
+            "colonialism's long-term economic effects on developing nations",
+            "the United Nations: structure, successes, and limitations",
+            "comparative constitutional systems: U.S., UK, and parliamentary democracies",
+            "genocide and international justice: Nuremberg to the ICC",
+            "identity and nationalism: how nations define citizenship and belonging"
+          ]
+        },
+        {
+          "category": "Advanced Language Arts",
+          "topics": [
+            "Shakespeare's use of language to reflect Elizabethan society",
+            "postcolonial literature: themes of identity and resistance",
+            "how narrative perspective shapes reader sympathy in a novel",
+            "evaluating conflicting critical interpretations of a poem",
+            "the evolution of argument structure in American political speeches"
+          ]
+        }
+      ]
+    }
+  ]
+}

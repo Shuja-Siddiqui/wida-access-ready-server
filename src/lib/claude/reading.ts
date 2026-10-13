@@ -7,21 +7,14 @@
 
 import { callClaude, toDisplayText } from "./client";
 import { clampToFourOptions } from "../choice-options";
-import { buildLibraryImageSceneUserFields } from "./prompts/academic-image-anchor";
-import { LIBRARY_IMAGE_READING_EXTRA } from "./prompts/content/writing-image-passage";
-import { buildContentSystemPrompt } from "./prompts/content/system-prompt";
-import {
-  frameworkTaskDescriptor,
-  serializeFrameworkTask,
-  type FrameworkTask,
-} from "./standards/2020";
+import { OPTIONAL_LINE_VISUALS_BLOCK } from "./prompts/optional-line-visuals";
+import { buildSystemPrompt } from "./prompts/compose";
+import { contentGenPrompt } from "./prompts/content";
+import type { CanDoEntry } from "../content";
+import { serializeCanDoForPrompt } from "../content";
 import { dumpContentGenRequest } from "./dump-content-gen";
 import { logger } from "../../config/logger";
 import { mergePriorPractice, type PracticeReport } from "../practice-report";
-import {
-  academicPromptFieldsFromContext,
-  type AcademicFrameworkFields,
-} from "../academic/academicFrameworkContext";
 
 // ── Per-level schema tables ───────────────────────────────────────────────────
 
@@ -85,7 +78,7 @@ const CLASSIFY_CATEGORIES: Record<string, string[]> = {
  * Shows only the question types permitted at this level, with valid enum values
  * and concrete structural examples.
  */
-function buildReadingOutputSchema(level: number, availableFormats: string[], questionCount: number): string {
+function buildReadingOutputSchema(level: number, permittedFormats: string[], questionCount: number): string {
   const mcSkills    = READING_MC_SKILLS[level]      ?? ["main_idea", "detail", "vocabulary"];
   const seqSkills   = READING_SEQ_SKILLS[level]     ?? ["sequence"];
   const matchSkills = READING_MATCH_SKILLS[level]   ?? ["cause_effect"];
@@ -96,12 +89,13 @@ function buildReadingOutputSchema(level: number, availableFormats: string[], que
   const lines: string[] = [
     `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
     `OUTPUT SCHEMA — LEVEL ${level}`,
-    `Available question types (UI-capable): ${availableFormats.join(" | ")}`,
-    `Choose type(s) from this list that best assess framework.language_functions. Produce exactly ${questionCount} questions.`,
+    `Permitted question types this session: ${permittedFormats.join(" | ")}`,
+    `You MUST produce exactly ${questionCount} questions using ONLY the types listed above.`,
+    `When 2+ types are permitted, distribute them — do not use the same type for every question.`,
     `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
     ``,
     `{`,
-    `  "task_descriptor": "<echo 2–3 language_functions this session assesses>",`,
+    `  "can_do_descriptor": "<WIDA action + chosen can_do item>",`,
     `  "passage": "<reading passage — plain text only; match text_format exactly>",`,
     `  "topic": "<passage topic>",`,
     `  "questions": [`,
@@ -110,7 +104,7 @@ function buildReadingOutputSchema(level: number, availableFormats: string[], que
 
   const blocks: string[] = [];
 
-  if (availableFormats.includes("multiple_choice")) {
+  if (permittedFormats.includes("multiple_choice")) {
     blocks.push(
 `    /* ── multiple_choice ── */
     {
@@ -132,7 +126,7 @@ function buildReadingOutputSchema(level: number, availableFormats: string[], que
     );
   }
 
-  if (availableFormats.includes("sequence_order")) {
+  if (permittedFormats.includes("sequence_order")) {
     blocks.push(
 `    /* ── sequence_order ── */
     /* Use for: Narrate=story order; Inform=fact/report order; Explain=process steps */
@@ -153,7 +147,7 @@ function buildReadingOutputSchema(level: number, availableFormats: string[], que
     );
   }
 
-  if (availableFormats.includes("match_columns")) {
+  if (permittedFormats.includes("match_columns")) {
     blocks.push(
 `    /* ── match_columns ── */
     /* Use for: ${matchSkills.includes("word_match") ? "L1=matching words to pictures/objects" : ""}${matchSkills.includes("cause_effect") ? "Explain=cause-effect matching" : ""} */
@@ -173,7 +167,7 @@ function buildReadingOutputSchema(level: number, availableFormats: string[], que
     );
   }
 
-  if (availableFormats.includes("classify")) {
+  if (permittedFormats.includes("classify")) {
     blocks.push(
 `    /* ── classify ── */
     /* Use for: Argue CanDo at Level ${level} — ${classifySkills.join(" or ")} */
@@ -207,9 +201,9 @@ function buildReadingOutputSchema(level: number, availableFormats: string[], que
   lines.push(`}`);
   lines.push(``);
   lines.push(`SCHEMA ENFORCEMENT RULES`);
-  lines.push(`• Return every key above. Use null only where shown.`);
-  lines.push(`• Each question "type" must be one of: ${availableFormats.join(", ")}.`);
-  lines.push(`• multiple_choice: exactly 4 options (1 correct + 3 distractors).`);
+  lines.push(`• Return every key in this OUTPUT SCHEMA. Never omit a field. Use null only where this schema shows null.`);
+  lines.push(`• Only these types are valid this session: ${permittedFormats.join(", ")}.`);
+  lines.push(`• multiple_choice: exactly 4 options (1 correct + 3 distractors) — real WIDA ACCESS Reading format at grades 6-8.`);
   lines.push(`• "explanation" field ONLY on multiple_choice — omit it on all other types.`);
   lines.push(`• correct_order: correct_order[i] = the 0-based destination position of items[i].`);
   lines.push(`• correct_pairs: every pair [left_idx, right_idx]; cover every left item exactly once.`);
@@ -275,8 +269,6 @@ export type ReadingQuestion =
 
 export interface ReadingContent {
   canDoDescriptor: string;
-  taskDescriptor: string;
-  framework: FrameworkTask;
   passage: string;
   topic: string;
   visual?: string;
@@ -286,29 +278,8 @@ export interface ReadingContent {
 
 // ── Fallback ──────────────────────────────────────────────────────────────────
 
-const FALLBACK_FRAMEWORK = {
-  edition: "2020" as const,
-  eld_standard: { id: "4" as const, name: "Language for Science" },
-  key_language_use: "Inform" as const,
-  mode: "interpretive" as const,
-  reference_code: null,
-  language_expectations: ["Identify main ideas in informational text"],
-  language_functions: [{ function: "Identify main ideas in informational text", language_features: [] }],
-  pld: {
-    level: 3,
-    framing: "",
-    discourse_organization: "",
-    discourse_cohesion: "",
-    discourse_density: "",
-    sentence: "",
-    word_phrase: "",
-  },
-};
-
 export const FALLBACK_READING: ReadingContent = {
-  canDoDescriptor: "Identify main ideas in informational text",
-  taskDescriptor: "Identify main ideas in informational text",
-  framework: FALLBACK_FRAMEWORK,
+  canDoDescriptor: "Process recounts by identifying settings or time frames in informational text",
   passage:
     "The water cycle is an important process. Water evaporates from oceans and lakes. It rises into the atmosphere as water vapor. Then it cools and forms clouds. Finally, it falls back to earth as rain or snow. This cycle repeats continuously and supports all life on Earth.",
   topic: "The Water Cycle",
@@ -361,7 +332,7 @@ export async function generateReadingContent(params: {
   complexityInstruction: string;
   textFormat: string;
   permittedFormats: string[];
-  framework: FrameworkTask;
+  canDo: CanDoEntry;
   topic: string;
   gradeBand: string;
   homeLanguage?: string;
@@ -375,21 +346,17 @@ export async function generateReadingContent(params: {
   imageDescription?: string;
   imageConcept?: string;
   priorPracticeReport?: PracticeReport | null;
-  academicUnit?: string;
-  scenarioExamples?: string[];
-  tier3Vocabulary?: string[];
-  academicFramework?: Partial<AcademicFrameworkFields>;
 }): Promise<ReadingContent> {
   // Build a level-specific output schema and combine with the static base prompt
   const questionCount = params.questionCount ?? (params.level <= 1 ? 2 : params.level <= 3 ? 3 : 5);
   const schemaSection = buildReadingOutputSchema(params.level, params.permittedFormats, questionCount);
-  const hasLibraryImage = params.hasLibraryImage ?? false;
-  const systemPrompt = buildContentSystemPrompt("reading", params.level, schemaSection, {
-    academicContentLayer: params.academicContentLayer,
-    hasLibraryImage,
-  });
+  const systemPrompt  = buildSystemPrompt(
+    contentGenPrompt("reading", params.level),
+    OPTIONAL_LINE_VISUALS_BLOCK,
+    params.academicContentLayer ?? "",
+    schemaSection,
+  );
 
-  const keyUse = params.framework.key_language_use;
   const userPrompt = JSON.stringify(mergePriorPractice({
     domain:                 "reading",
     assessment:             params.assessment,
@@ -400,38 +367,24 @@ export async function generateReadingContent(params: {
     home_language:          params.homeLanguage || null,
     mode:                   params.mode,
     topic:                  params.topic,
-    framework:              serializeFrameworkTask(params.framework),
-    goal:                   "Create one reading passage + questions so the student can practice understanding language at framework.pld (end of this integer level).",
+    can_do:                 serializeCanDoForPrompt(params.canDo, { level: params.level, domain: "READING" }),
     complexity_instruction: params.complexityInstruction,
     text_format:            params.textFormat,
-    available_question_formats: params.permittedFormats,
+    permitted_formats:      params.permittedFormats,
     question_count:         questionCount,
     passage_word_max:       params.passageWordMax ?? (params.level <= 1 ? 40 : 90),
-    required_key_use:       keyUse,
-    ...buildLibraryImageSceneUserFields({
-      level:           params.level,
-      keyUse,
-      hasLibraryImage,
-      imageDescription: params.imageDescription ?? undefined,
-      imageTags:       params.imageTags,
-      imageConcept:    params.imageConcept,
-      academicSubject: params.academicSubject,
-      libraryImageNote: LIBRARY_IMAGE_READING_EXTRA,
-    }),
+    required_key_use:       params.canDo.keyUse,
+    has_library_image:      params.hasLibraryImage ?? false,
+    image_tags:             params.imageTags ?? [],
+    image_description:      params.imageDescription ?? null,
+    image_concept:          params.imageConcept ?? null,
     ...(params.academicSubject ? { academic_subject: params.academicSubject } : {}),
-    ...academicPromptFieldsFromContext({
-      unit: params.academicUnit,
-      scenarioExamples: params.scenarioExamples,
-      tier3Vocabulary: params.tier3Vocabulary,
-      ...params.academicFramework,
-    }),
   }, params.priorPracticeReport));
 
   dumpContentGenRequest("reading", systemPrompt, userPrompt);
   try {
     const result = (await callClaude(systemPrompt, userPrompt, 2000)) as {
-      task_descriptor?: string;
-      can_do_descriptor?: string;
+      can_do_descriptor: string;
       passage: string;
       topic: string;
       visual?: string;
@@ -510,12 +463,8 @@ export async function generateReadingContent(params: {
       }
     });
 
-    const taskDescriptor = result.task_descriptor ?? result.can_do_descriptor
-      ?? frameworkTaskDescriptor(params.framework);
     return {
-      canDoDescriptor: taskDescriptor,
-      taskDescriptor,
-      framework:       params.framework,
+      canDoDescriptor: result.can_do_descriptor ?? "",
       passage:         toDisplayText(result.passage),
       visual:          typeof result.visual === "string" ? result.visual : undefined,
       topic:           result.topic,

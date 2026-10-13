@@ -1,0 +1,246 @@
+{
+  "domain": "writing",
+  "description": "Curriculum topic bank for writing content generation, aligned with WIDA ELP levels 1–6. Topics increase in cognitive and linguistic complexity as students progress. Each level provides writing genres and task contexts appropriate for the proficiency band.",
+  "levels": [
+    {
+      "elpLevel": 1,
+      "proficiencyLabel": "Entering",
+      "complexityNote": "Grade 6–8 writing tasks involving labeling, completing sentence frames, or producing 2–3 word phrases. Students reproduce words and phrases with visual support. Sentence frames are required.",
+      "writingGenres": ["labeling activity", "sentence frame completion", "word bank writing"],
+      "sentenceFrameRequired": true,
+      "minSentences": 2,
+      "topicCategories": [
+        {
+          "category": "Science & Nature",
+          "topics": [
+            "label parts of a plant or animal cell",
+            "complete sentences about weather using a word bank",
+            "write phrases to describe objects in an ecosystem",
+            "complete a sentence frame about a landform",
+            "label a diagram of the solar system"
+          ]
+        },
+        {
+          "category": "Social Studies",
+          "topics": [
+            "complete sentences naming community helpers and their jobs",
+            "label a map with country or continent names",
+            "write names of government branches and one thing each does",
+            "complete sentences about a historical figure using a word bank",
+            "label transportation types with where they travel"
+          ]
+        },
+        {
+          "category": "Personal Experience",
+          "topics": [
+            "complete a sentence about a favorite food and why",
+            "label pictures of a school day schedule",
+            "complete a sentence about a family member using a word bank",
+            "write words to describe your home community",
+            "complete a sentence about something you learned in school"
+          ]
+        }
+      ]
+    },
+    {
+      "elpLevel": 2,
+      "proficiencyLabel": "Emerging",
+      "complexityNote": "Grade 6–8 writing tasks producing 2–4 simple sentences. Students connect ideas using basic connectors (and, because, then) with word banks and sentence frames. Some Tier-2 vocabulary introduced.",
+      "writingGenres": ["simple informational paragraph", "short personal narrative", "basic comparison"],
+      "sentenceFrameRequired": true,
+      "minSentences": 3,
+      "topicCategories": [
+        {
+          "category": "Earth & Life Science",
+          "topics": [
+            "describe two steps of the water cycle in sentences",
+            "write about the cause of a natural disaster",
+            "compare two animals using a sentence frame",
+            "write about what happens in a food chain",
+            "describe how a plant adapts to its environment"
+          ]
+        },
+        {
+          "category": "Social Studies",
+          "topics": [
+            "write about why people immigrate using a sentence frame",
+            "describe two steps of how a bill becomes a law",
+            "compare two regions of the United States",
+            "write about a historical event using a timeline",
+            "describe the job of one branch of government"
+          ]
+        },
+        {
+          "category": "Personal Narrative",
+          "topics": [
+            "write about what you did before and after school yesterday",
+            "describe a meal or food from your home culture",
+            "write about a challenge you faced and how you solved it",
+            "describe a place in your community",
+            "write about something you learned to do for the first time"
+          ]
+        }
+      ]
+    },
+    {
+      "elpLevel": 3,
+      "proficiencyLabel": "Developing",
+      "complexityNote": "Grade 6–8 writing tasks producing one short paragraph (4–6 sentences) with a main idea and supporting details. Students use transition words and some Tier-2 academic vocabulary. Sentence frame provided as optional support.",
+      "writingGenres": ["informational paragraph", "short narrative", "simple opinion paragraph"],
+      "sentenceFrameRequired": false,
+      "minSentences": 4,
+      "topicCategories": [
+        {
+          "category": "Science",
+          "topics": [
+            "explain how photosynthesis works in a paragraph",
+            "describe the cause and effect of pollution on an ecosystem",
+            "explain the steps of the rock cycle",
+            "write about how the immune system fights infection",
+            "describe a simple machine and how it helps people"
+          ]
+        },
+        {
+          "category": "Social Studies",
+          "topics": [
+            "write about the causes of the American Revolution",
+            "explain what the civil rights movement accomplished",
+            "describe how checks and balances prevent abuses of power",
+            "write about the impact of westward expansion on Native Americans",
+            "explain why ancient civilizations are still important to study"
+          ]
+        },
+        {
+          "category": "Opinion & Language Arts",
+          "topics": [
+            "write your opinion on whether school uniforms should be required",
+            "explain why a character's decision in a story was right or wrong",
+            "describe the theme of a story and support it with text evidence",
+            "write about how figurative language helps readers understand a text",
+            "explain why reading for fun is important"
+          ]
+        }
+      ]
+    },
+    {
+      "elpLevel": 4,
+      "proficiencyLabel": "Expanding",
+      "complexityNote": "Grade 6–8 writing tasks producing 2 organized paragraphs (7–10 sentences, 100–150 words). Students write reports, opinion essays, or comparative pieces with topic sentences and supporting evidence. Moderate Tier-2 vocabulary; no sentence frame.",
+      "writingGenres": ["informational report", "opinion essay", "comparative essay", "persuasive letter"],
+      "sentenceFrameRequired": false,
+      "minSentences": 6,
+      "topicCategories": [
+        {
+          "category": "Science & Environment",
+          "topics": [
+            "argue whether renewable energy should replace fossil fuels",
+            "explain the causes and effects of climate change using evidence",
+            "compare the pros and cons of genetic engineering in agriculture",
+            "write a report on how the immune system and vaccines work together",
+            "explain why biodiversity is essential to ecosystem health"
+          ]
+        },
+        {
+          "category": "History & Government",
+          "topics": [
+            "explain the causes and consequences of World War I",
+            "compare two historical leaders and evaluate their impact",
+            "argue whether the U.S. government has done enough to protect civil rights",
+            "write about the economic effects of the Industrial Revolution",
+            "explain how immigration has shaped American culture and economy"
+          ]
+        },
+        {
+          "category": "Language Arts & Media",
+          "topics": [
+            "compare two characters from different texts facing a similar conflict",
+            "argue whether social media has a positive or negative effect on teens",
+            "evaluate an author's argument: are the claims well-supported?",
+            "write about how a story's setting shapes its characters and themes",
+            "compare two news sources reporting on the same event"
+          ]
+        }
+      ]
+    },
+    {
+      "elpLevel": 5,
+      "proficiencyLabel": "Bridging",
+      "complexityNote": "Grade 6–8 writing tasks producing 3–4 paragraphs (150–250 words) with introduction, body, and conclusion. Students write research-based essays, persuasive pieces with counterarguments, and analytical comparisons. High Tier-2 and some Tier-3 vocabulary.",
+      "writingGenres": ["research essay", "persuasive essay with counterargument", "analytical comparison", "informational report from multiple sources"],
+      "sentenceFrameRequired": false,
+      "minSentences": 8,
+      "topicCategories": [
+        {
+          "category": "Science & Technology",
+          "topics": [
+            "present a researched argument on whether AI poses more benefits or risks",
+            "write a persuasive essay on expanding space exploration funding",
+            "analyze the evidence for and against mandatory vaccination policies",
+            "write a research report on the societal effects of social media algorithms",
+            "argue whether nuclear energy should be part of a clean energy strategy"
+          ]
+        },
+        {
+          "category": "History & Civics",
+          "topics": [
+            "analyze the long-term effects of colonialism on economic development",
+            "write a persuasive essay on whether the U.S. should reform immigration laws",
+            "compare democracy and authoritarianism using historical examples",
+            "argue whether economic inequality is a greater threat than political polarization",
+            "analyze how the Cold War continues to shape current geopolitics"
+          ]
+        },
+        {
+          "category": "Literature & Critical Analysis",
+          "topics": [
+            "analyze how a novel's narrative structure creates thematic meaning",
+            "compare the rhetorical strategies of two historical speeches",
+            "write a literary analysis of how symbolism develops theme in a text",
+            "argue whether dystopian fiction is effective social commentary",
+            "evaluate how postcolonial literature reframes historical narratives"
+          ]
+        }
+      ]
+    },
+    {
+      "elpLevel": 6,
+      "proficiencyLabel": "Reaching",
+      "complexityNote": "Grade 6–8 complex writing tasks producing 4–6 paragraphs (250–400+ words). Students write thesis-driven analytical essays, synthesize multiple sources, introduce counterarguments, and write with nuanced vocabulary and varied sentence structures.",
+      "writingGenres": ["thesis-driven analytical essay", "synthesis essay from multiple sources", "extended research report", "comparative argument"],
+      "sentenceFrameRequired": false,
+      "minSentences": 12,
+      "topicCategories": [
+        {
+          "category": "Advanced Science & Ethics",
+          "topics": [
+            "write a thesis-driven essay evaluating the ethical limits of biotechnology",
+            "synthesize sources to argue a position on geoengineering as a climate solution",
+            "analyze how neuroscience research should inform classroom teaching practices",
+            "evaluate competing scientific models and argue which has stronger evidence",
+            "write an analytical essay on the societal costs of antibiotic resistance"
+          ]
+        },
+        {
+          "category": "Advanced History & Political Science",
+          "topics": [
+            "synthesize primary and secondary sources to argue a revisionist historical claim",
+            "write a comparative analysis of two constitutional systems",
+            "evaluate the long-term legacy of the Cold War on current international order",
+            "analyze whether the United Nations has succeeded in its founding mission",
+            "write an argument about whether economic development justifies political repression"
+          ]
+        },
+        {
+          "category": "Advanced Literature",
+          "topics": [
+            "write a thesis-driven analysis of how narrative perspective creates bias in a novel",
+            "synthesize multiple critical perspectives to argue an interpretation of a poem",
+            "analyze how a canonical text reflects and critiques its historical moment",
+            "compare the ideological assumptions embedded in two literary genres",
+            "evaluate competing scholarly arguments about a literary work's cultural significance"
+          ]
+        }
+      ]
+    }
+  ]
+}

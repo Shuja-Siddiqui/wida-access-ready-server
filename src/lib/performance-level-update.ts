@@ -4,10 +4,6 @@
  */
 
 import type { LevelUpdateResult } from "./adaptive-engine";
-import {
-  isInterpretiveDomain,
-  levelFromInterpretiveScore,
-} from "./interpretive-scoring";
 import { writingScoreMeetsTask } from "./wida-access-rubric";
 
 const CONSECUTIVE_FAILS_BEFORE_DROP = 2;
@@ -139,8 +135,6 @@ export function calculatePerformanceLevelUpdate(params: {
   scorePct: number;
   recommendedLevel?: number | null;
   rubricScore?: number | null;
-  interpretiveScore?: number | null;
-  interpretiveMeetsTask?: boolean;
   meetsTask?: boolean;
   minSentences?: number;
   consecutiveFail?: number;
@@ -153,19 +147,9 @@ export function calculatePerformanceLevelUpdate(params: {
     scorePct,
     consecutiveFail = 0,
   } = params;
+  const meetsTask = params.meetsTask ?? scorePct >= 70;
   const rubricScore = params.rubricScore ?? null;
-  const interpretiveScore = params.interpretiveScore ?? null;
   const minSentences = params.minSentences ?? 1;
-  const interpretive = isInterpretiveDomain(domain);
-  const meetsTask = domain === "writing"
-    ? (params.meetsTask ?? (
-        rubricScore != null
-          ? writingScoreMeetsTask(rubricScore, Math.floor(currentLevel), minSentences)
-          : false
-      ))
-    : interpretive
-      ? (params.interpretiveMeetsTask ?? params.meetsTask ?? scorePct >= 70)
-      : (params.meetsTask ?? scorePct >= 70);
 
   let proposed = parseRecommendedLevel(params.recommendedLevel);
 
@@ -176,14 +160,6 @@ export function calculatePerformanceLevelUpdate(params: {
         rubricScore ?? (meetsTask ? 3 : 1),
         meetsTask,
         minSentences,
-      );
-    } else if (interpretive && interpretiveScore != null) {
-      proposed = levelFromInterpretiveScore(
-        currentLevel,
-        interpretiveScore,
-        meetsTask,
-        exitThreshold,
-        minLevel,
       );
     } else {
       proposed = levelFromScorePct(currentLevel, scorePct, exitThreshold, minLevel);
@@ -199,9 +175,7 @@ export function calculatePerformanceLevelUpdate(params: {
 
   const isWeak = domain === "writing"
     ? !meetsTask || (rubricScore ?? 0) <= 1
-    : interpretive
-      ? !meetsTask || (interpretiveScore ?? 0) <= 1
-      : scorePct < 50;
+    : scorePct < 50;
 
   let newConsecutiveFail = 0;
   let newConsecutivePass = 0;
