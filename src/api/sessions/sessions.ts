@@ -110,6 +110,104 @@ import { buildPracticeReport, parsePracticeReport } from "../../lib/practice-rep
 
 const storage = new ObjectStorageService();
 
+const GENERAL_LIBRARY_CONTEXT = sql`(${libraryTable.contexts} = '{}' OR ${libraryTable.contexts} && ARRAY['general']::text[])`;
+
+type LibraryIllustration = {
+  url: string;
+  tags: string[];
+  description: string | null;
+  libraryImageId: string | null;
+};
+
+/** Presigned URL for a topic-related general library photo, or any general image as fallback. */
+async function resolveGeneralListeningIllustration(
+  topicCategory: string,
+): Promise<LibraryIllustration | null> {
+  const presign = async (s3Key: string) =>
+    storage.getPresignedGetUrl(s3Key, 3600).catch(() => null);
+
+  if (topicCategory.trim()) {
+    const [matched] = await db
+      .select({
+        id: libraryTable.id,
+        s3Key: libraryTable.s3Key,
+        tags: libraryTable.tags,
+        description: libraryTable.description,
+      })
+      .from(libraryTable)
+      .innerJoin(libraryTopicsTable, eq(libraryTopicsTable.libraryId, libraryTable.id))
+      .innerJoin(topicsTable, eq(topicsTable.id, libraryTopicsTable.topicId))
+      .where(and(
+        sql`(
+          LOWER(${topicsTable.name}) LIKE LOWER(${"%" + topicCategory + "%"})
+          OR LOWER(${topicCategory}) LIKE LOWER(${"%" + topicsTable.name + "%"})
+        )`,
+        GENERAL_LIBRARY_CONTEXT,
+      ))
+      .orderBy(sql`RANDOM()`)
+      .limit(1);
+
+    if (matched?.s3Key) {
+      const url = await presign(matched.s3Key as string);
+      if (url) {
+        return {
+          url,
+          tags: Array.isArray(matched.tags) ? (matched.tags as string[]) : [],
+          description: (matched.description as string | null) ?? null,
+          libraryImageId: matched.id ?? null,
+        };
+      }
+    }
+  }
+
+  const [fallback] = await db
+    .select({
+      id: libraryTable.id,
+      s3Key: libraryTable.s3Key,
+      tags: libraryTable.tags,
+      description: libraryTable.description,
+    })
+    .from(libraryTable)
+    .where(GENERAL_LIBRARY_CONTEXT)
+    .orderBy(sql`RANDOM()`)
+    .limit(1);
+
+  if (!fallback?.s3Key) return null;
+  const url = await presign(fallback.s3Key as string);
+  if (!url) return null;
+  return {
+    url,
+    tags: Array.isArray(fallback.tags) ? (fallback.tags as string[]) : [],
+    description: (fallback.description as string | null) ?? null,
+    libraryImageId: fallback.id ?? null,
+  };
+}
+
+/** Last-resort illustration when subject anchor tag search finds nothing. */
+async function resolveRandomLibraryIllustration(): Promise<LibraryIllustration | null> {
+  const [row] = await db
+    .select({
+      id: libraryTable.id,
+      s3Key: libraryTable.s3Key,
+      tags: libraryTable.tags,
+      description: libraryTable.description,
+    })
+    .from(libraryTable)
+    .where(isNotNull(libraryTable.s3Key))
+    .orderBy(sql`RANDOM()`)
+    .limit(1);
+
+  if (!row?.s3Key) return null;
+  const url = await storage.getPresignedGetUrl(row.s3Key as string, 3600).catch(() => null);
+  if (!url) return null;
+  return {
+    url,
+    tags: Array.isArray(row.tags) ? (row.tags as string[]) : [],
+    description: (row.description as string | null) ?? null,
+    libraryImageId: row.id ?? null,
+  };
+}
+
 function sendClaudeBusy(
   req: { log: { warn: (obj: object, msg: string) => void } },
   res: Parameters<typeof sendError>[0],
@@ -809,34 +907,14 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
         lastSessionScore:       lastScore,
         priorPracticeReport,
       }),
-      // Pick a random general library image whose topic category matches
-      (async () => {
-        const [imgRow] = await db
-          .select({ s3Key: libraryTable.s3Key, mediumKey: libraryTable.mediumKey })
-          .from(libraryTable)
-          .innerJoin(libraryTopicsTable, eq(libraryTopicsTable.libraryId, libraryTable.id))
-          .innerJoin(topicsTable, eq(topicsTable.id, libraryTopicsTable.topicId))
-          .where(and(
-            sql`(
-              LOWER(${topicsTable.name}) LIKE LOWER(${"%" + topicCategory + "%"})
-              OR LOWER(${topicCategory}) LIKE LOWER(${"%" + topicsTable.name + "%"})
-            )`,
-            sql`(${libraryTable.contexts} = '{}' OR ${libraryTable.contexts} && ARRAY['general']::text[])`,
-          ))
-          .orderBy(sql`RANDOM()`)
-          .limit(1);
-        if (!imgRow) return null;
-        // Always original — DINO boxes were computed on the original image
-        const imageKey = imgRow.s3Key as string;
-        return storage.getPresignedGetUrl(imageKey, 3600).catch(() => null);
-      })(),
+      resolveGeneralListeningIllustration(topicCategory),
     ]);
 
     const listeningContent = listeningContentResult.status === "fulfilled"
       ? listeningContentResult.value
       : (req.log.error({ err: listeningContentResult.reason }, "Listening content generation failed, using fallback"), FALLBACK_LISTENING);
 
-    const illustrationUrl = illustrationResult.status === "fulfilled"
+    const illustration = illustrationResult.status === "fulfilled"
       ? illustrationResult.value
       : (req.log.warn({ err: illustrationResult.reason }, "Illustration lookup failed"), null);
 
@@ -845,7 +923,19 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
       domain,
       levelStart: currentLevel,
       keyUse: listeningCtx.canDo.keyUse,
-      content: { type: "listening", data: { ...(listeningContent as unknown as Record<string, unknown> ?? {}), illustrationUrl, keyUse: listeningCtx.canDo.keyUse } },
+      content: {
+        type: "listening",
+        data: {
+          ...(listeningContent as unknown as Record<string, unknown> ?? {}),
+          illustrationUrl: illustration?.url ?? null,
+          imageTags: illustration?.tags,
+          imageDescription: illustration?.description ?? undefined,
+          keyUse: listeningCtx.canDo.keyUse,
+        },
+      },
+      anchorImage: illustration?.url
+        ? { url: illustration.url, tags: illustration.tags }
+        : null,
       mode,
       exitThreshold,
     });
@@ -1206,6 +1296,21 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
       const imageKey = anchorImage.s3Key;
       anchorImageUrl = await storage.getPresignedGetUrl(imageKey, 3600).catch(() => null);
     }
+    if (!anchorImageUrl) {
+      const fallbackIllustration = await resolveRandomLibraryIllustration();
+      if (fallbackIllustration) {
+        anchorImageUrl = fallbackIllustration.url;
+        if (!anchorImage) {
+          anchorImage = {
+            id:          fallbackIllustration.libraryImageId ?? "",
+            description: fallbackIllustration.description,
+            tags:        fallbackIllustration.tags,
+            s3Key:       "",
+            mediumKey:   null,
+          };
+        }
+      }
+    }
 
     let academicContent: unknown = null;
     try {
@@ -1324,7 +1429,12 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
       content:      {
         type: "listening",
         data: academicContent && typeof academicContent === "object"
-          ? { ...academicContent as object, illustrationUrl: anchorImageUrl }
+          ? {
+              ...academicContent as object,
+              illustrationUrl: anchorImageUrl,
+              imageTags: anchorImage?.tags,
+              imageDescription: anchorImage?.description ?? undefined,
+            }
           : academicContent,
       },
       // Anchor image included when a topic-relevant library image was found.
