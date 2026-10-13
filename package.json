@@ -23,7 +23,9 @@
     "db:sync": "npm run db:push && npm run db:push:aws",
     "db:generate": "drizzle-kit generate --config=db/drizzle.config.ts",
     "db:studio": "drizzle-kit studio --config=db/drizzle.config.ts",
-    "image-factory:once": "node --env-file=.env scripts/image-factory-once.mjs"
+    "image-factory:once": "node --env-file=.env scripts/image-factory-once.mjs",
+    "audit:content:battery": "node scripts/run-content-audit-battery.mjs",
+    "audit:listening:alignment": "node scripts/run-listening-alignment-audit.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.88.0",

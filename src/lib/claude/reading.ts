@@ -7,6 +7,7 @@
 
 import { callClaude, toDisplayText } from "./client";
 import { clampToFourOptions } from "../choice-options";
+import { sanitizeReadingClassifyQuestion } from "../content/session-content-schema.js";
 import { buildLibraryImageSceneUserFields } from "./prompts/academic-image-anchor";
 import { LIBRARY_IMAGE_READING_EXTRA } from "./prompts/content/writing-image-passage";
 import { buildContentSystemPrompt } from "./prompts/content/system-prompt";
@@ -59,23 +60,21 @@ const READING_MATCH_SKILLS: Record<number, string[]> = {
 };
 
 /**
- * Valid can_do_skill values for classify questions per level.
- * Derived from Argue CanDo at each level:
- *   L1 → true/false;  L2 → fact/opinion;  L4 → pros/cons;  L6 → fact/judgment/speculation
+ * Valid can_do_skill values for classify questions per level (WIDA reading — no True/False).
+ * Derived from Argue CanDo: fact/opinion, pros/cons, fact vs judgment, etc.
  */
 const READING_CLASSIFY_SKILLS: Record<number, string[]> = {
-  1: ["true_false"],
-  2: ["true_false", "fact_opinion"],
+  2: ["fact_opinion"],
   4: ["fact_opinion", "pros_cons"],
   6: ["fact_judgment_speculation", "pros_cons"],
 };
 
 /** Example category labels for each classify skill type */
 const CLASSIFY_CATEGORIES: Record<string, string[]> = {
-  true_false:                  ["True", "False"],
   fact_opinion:                ["Fact", "Opinion"],
   pros_cons:                   ["Pro", "Con"],
   fact_judgment_speculation:   ["Fact", "Reasoned Judgment", "Speculation"],
+  stated_in_text:              ["Stated in the text", "Not in the text"],
 };
 
 // ── Schema builder ────────────────────────────────────────────────────────────
@@ -214,6 +213,7 @@ function buildReadingOutputSchema(level: number, availableFormats: string[], que
   lines.push(`• correct_order: correct_order[i] = the 0-based destination position of items[i].`);
   lines.push(`• correct_pairs: every pair [left_idx, right_idx]; cover every left item exactly once.`);
   lines.push(`• correct (classify): correct[i] = 0-based category index for items[i].`);
+  lines.push(`• NEVER use True/False categories, true_false can_do_skill, or T/F-style stems — WIDA reading does not use true/false items. Use fact/opinion, stated vs not in text, pro/con, etc.`);
   lines.push(`• vocabulary: 2–3 words; home_lang_hint is null if home_language input is null or English.`);
 
   return lines.join("\n");
@@ -332,9 +332,9 @@ export const FALLBACK_READING: ReadingContent = {
       correct: 1, explanation: "Evaporates means water turns into vapor and rises.",
     },
     {
-      id: "4", type: "classify", canDoSkill: "true_false",
-      question: "Mark each statement True or False based on the passage.",
-      categories: ["True", "False"],
+      id: "4", type: "classify", canDoSkill: "fact_opinion",
+      question: "Sort each statement based on the passage.",
+      categories: ["Stated in the text", "Not in the text"],
       items: ["Water vapor rises into the atmosphere.", "The water cycle creates new water.", "The cycle supports all life on Earth."],
       correct: [0, 1, 0],
     },
@@ -481,16 +481,22 @@ export async function generateReadingContent(params: {
             correct_pairs: (q.correct_pairs ?? []) as [number, number][],
           } satisfies ReadingQuestionMatchColumns;
 
-        case "classify":
+        case "classify": {
+          const sanitized = sanitizeReadingClassifyQuestion(
+            toDisplayText(q.question ?? ""),
+            q.categories ?? [],
+            q.can_do_skill,
+          );
           return {
             id: q.id,
             type: "classify" as const,
-            canDoSkill: q.can_do_skill ?? "fact_opinion",
-            question: toDisplayText(q.question ?? ""),
-            categories: q.categories ?? [],
+            canDoSkill: sanitized.canDoSkill,
+            question: sanitized.question,
+            categories: sanitized.categories,
             items: q.items ?? [],
             correct: Array.isArray(q.correct) ? (q.correct as number[]) : [],
           } satisfies ReadingQuestionClassify;
+        }
 
         default: { // multiple_choice (fallback)
           const four = clampToFourOptions(q.options, q.correct);

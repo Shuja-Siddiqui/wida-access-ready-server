@@ -10,6 +10,8 @@ export {
   getAiFormatGuide,
   aiFormatDescriptionsFor,
   validateQuestionShape,
+  normalizeReadingClassifyDisplay,
+  sanitizeReadingClassifyQuestion,
   QUESTION_TYPE_REGISTRY,
   SPEAKING_PROMPT_TYPES,
   WRITING_TASK_TYPES,

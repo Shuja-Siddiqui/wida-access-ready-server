@@ -163,7 +163,7 @@ export const QUESTION_TYPE_REGISTRY: Record<string, QuestionTypeDefinition> = {
     label: "Sort statements (reading)",
     ui: "classify",
     ai: {
-      use: "Fact vs opinion, true vs false, pro vs con from the passage",
+      use: "Fact vs opinion, stated vs not in text, pro vs con from the passage (never True/False)",
       note: "categories + items + correct (array: category index per item).",
     },
     minLevel: 1,
@@ -332,6 +332,45 @@ function hasClassifyShape(q: Record<string, unknown>): boolean {
   );
 }
 
+function isTrueFalseCategoryPair(categories: string[]): boolean {
+  if (categories.length !== 2) return false;
+  const norm = categories.map((c) => c.trim().toLowerCase());
+  return norm.includes("true") && norm.includes("false");
+}
+
+/** WIDA reading: never present True/False classify UI (legacy content is relabeled). */
+export function normalizeReadingClassifyDisplay(
+  question: string,
+  categories: string[],
+): { question: string; categories: string[] } {
+  let q = question.trim();
+  if (/true\s*\/?\s*false/i.test(q)) {
+    q = q
+      .replace(/\bTrue\s*\/?\s*False\b/gi, "the passage")
+      .replace(/\btrue\s*\/?\s*false\b/gi, "the passage");
+  }
+  if (/^Mark each statement True or False/i.test(q)) {
+    q = "Sort each statement based on the passage.";
+  }
+  const cats = isTrueFalseCategoryPair(categories)
+    ? ["Stated in the text", "Not in the text"]
+    : [...categories];
+  return { question: q, categories: cats };
+}
+
+export function sanitizeReadingClassifyQuestion(
+  question: string,
+  categories: string[],
+  canDoSkill?: string,
+): { question: string; categories: string[]; canDoSkill: string } {
+  const display = normalizeReadingClassifyDisplay(question, categories);
+  let skill = (canDoSkill ?? "fact_opinion").trim();
+  if (skill === "true_false" || isTrueFalseCategoryPair(categories)) {
+    skill = isTrueFalseCategoryPair(categories) ? "stated_in_text" : "fact_opinion";
+  }
+  return { ...display, canDoSkill: skill };
+}
+
 /**
  * Resolve which UI component should render a question payload.
  * Unknown types with options fall back to multiple_choice.
@@ -360,6 +399,7 @@ export function resolveQuestionUi(
   }
 
   if (type === "agree_disagree") {
+    if (domain === "reading") return hasOptions(q) ? "multiple_choice" : "unsupported";
     if (hasOptions(q)) return "multiple_choice";
     if (q.answer === "agree" || q.answer === "disagree") return "agree_disagree";
     return "multiple_choice";

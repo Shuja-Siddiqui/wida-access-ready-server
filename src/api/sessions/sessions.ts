@@ -649,6 +649,7 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
     const persistedTopic: string | null = null;
     const lastKeyUse = lastAnyAcademic?.keyUse ?? lastAcademicSession?.keyUse ?? null;
     const priorPracticeReport = parsePracticeReport(lastAcademicSession?.practiceReport);
+    const listeningVarietySeed = recentAcademicSessions.length;
 
     const academicCtx = buildAcademicListeningContext(
       currentLevel,
@@ -796,6 +797,7 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
           libraryCandidates:     listeningLibraryCandidates,
           priorPracticeReport,
           frameworkContext:      mathCtx ?? undefined,
+          varietySeed:           listeningVarietySeed,
         });
       } else if (sciCtx) {
         // ── Science ──────────────────────────────────────────────────────────
@@ -817,6 +819,7 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
           libraryCandidates:     listeningLibraryCandidates,
           priorPracticeReport,
           frameworkContext:      sciCtx ?? undefined,
+          varietySeed:           listeningVarietySeed,
         });
       } else if (ssCtx) {
         // ── Social Studies ────────────────────────────────────────────────────
@@ -838,6 +841,7 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
           libraryCandidates:     listeningLibraryCandidates,
           priorPracticeReport,
           frameworkContext:      ssCtx ?? undefined,
+          varietySeed:           listeningVarietySeed,
         });
       } else if (elaCtx) {
         // ── English Language Arts ─────────────────────────────────────────────
@@ -859,6 +863,7 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
           libraryCandidates:     listeningLibraryCandidates,
           priorPracticeReport,
           frameworkContext:      elaCtx ?? undefined,
+          varietySeed:           listeningVarietySeed,
         });
       }
     } catch (err) {
@@ -1728,8 +1733,13 @@ router.post("/students/:studentId/sessions/:sessionId/complete", requireStudentA
     });
   }
 
-  // Calculate XP earned
-  let xpEarned = 10; // base XP for completing a session
+  // Calculate XP earned — base only when meeting the practice bar (≥70%)
+  let xpEarned = 0;
+  if (scorePct >= 70) {
+    xpEarned = 10;
+  } else if (scorePct > 0) {
+    xpEarned = 3; // partial effort
+  }
   if (scorePct >= 80) xpEarned += 10; // accuracy bonus
   if (scorePct >= 90) xpEarned += 5; // excellence bonus
   if (scorePct === 100) xpEarned += 10; // perfect bonus

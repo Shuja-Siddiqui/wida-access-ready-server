@@ -25,10 +25,15 @@ import {
 } from "./academicListeningLibrary";
 import type { WritingLibraryCandidate } from "../content/writingLibraryCandidates";
 import { parseOptionDiagrams, parseVisual } from "./prompts/optional-line-visuals";
-import { buildListening2020SystemPrompt, buildListeningOutputSchema, type ListeningContent } from "./listening";
+import {
+  buildListening2020SystemPrompt,
+  buildListeningOutputSchema,
+  finalizeListeningQuestionsWithRetry,
+  listeningGenerationVarietyFields,
+  type ListeningContent,
+} from "./listening";
 import { listeningAvailableFormats } from "../content/formatCapabilities";
 import { frameworkTaskDescriptor, serializeFrameworkTask, type FrameworkTask } from "./standards/2020";
-import { clampToThreeOptions } from "../choice-options";
 import { logger } from "../../config/logger";
 import { dumpContentGenRequest } from "./dump-content-gen";
 import { mergePriorPractice, type PracticeReport } from "../practice-report";
@@ -100,11 +105,17 @@ export async function generateAcademicScienceListeningContent(params: {
   libraryCandidates?: WritingLibraryCandidate[];
   priorPracticeReport?: PracticeReport | null;
   frameworkContext?: Partial<AcademicFrameworkFields>;
+  varietySeed?: number;
 }): Promise<ListeningContent> {
   const { questionCount, passageSentenceTarget, maxTokens } = academicSessionScale(params.level);
   const availableFormats = params.permittedFormats.length > 0
     ? params.permittedFormats
     : listeningAvailableFormats(params.level);
+  const { questionTypePlan, varietySeed } = listeningGenerationVarietyFields(
+    availableFormats,
+    questionCount,
+    params.varietySeed ?? 0,
+  );
   const libraryCandidates = params.libraryCandidates ?? [];
   const curriculum = buildAcademicListeningLibraryCurriculum({
     unit:             params.scienceUnit,
@@ -161,6 +172,7 @@ export async function generateAcademicScienceListeningContent(params: {
     last_session_score:      params.lastSessionScore ?? null,
     question_count:          questionCount,
     available_question_formats: availableFormats,
+    question_type_plan:      questionTypePlan,
     ...libraryPromptFields,
   }, params.priorPracticeReport));
 
@@ -204,18 +216,17 @@ export async function generateAcademicScienceListeningContent(params: {
       topic:       result.topic ?? params.topic,
       context:     result.context ?? "Teacher explaining a science concept to the class",
       visual:      parseVisual((result as { visual?: unknown }).visual),
-      questions: (result.questions || []).map((q) => {
-        const three = clampToThreeOptions(q.options, q.correct);
-        return {
-        id:          q.id,
-        type:        q.type,
-        question:    toDisplayText(q.question),
-        options:     three.options,
-        correct:     three.correct,
-        explanation: q.explanation,
-        optionDiagrams: parseOptionDiagrams((q as { option_diagrams?: unknown }).option_diagrams)?.slice(0, 3),
-        visual:      parseVisual((q as { visual?: unknown }).visual),
-      };
+      questions: await finalizeListeningQuestionsWithRetry({
+        systemPrompt,
+        maxTokens,
+        permittedFormats: availableFormats,
+        questionCount,
+        audioScript: finalized.audioScript,
+        topic: result.topic ?? params.topic,
+        context: result.context ?? "Teacher explaining a science concept to the class",
+        rawQuestions: result.questions as Array<Record<string, unknown>>,
+        questionTypePlan,
+        varietySeed,
       }),
     };
   } catch (err) {

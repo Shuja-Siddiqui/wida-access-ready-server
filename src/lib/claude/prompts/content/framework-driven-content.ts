@@ -8,6 +8,7 @@ BUILD ORDER (listening / reading)
 2. Academic world = academic_unit, content_standards, tier3_vocabulary; scenario_example (if any) is tone-only — invent a new scene.
 3. Choose question type(s) from available_question_formats that best assess the functions — not a fixed template per key use.
 4. Questions test comprehension of language in the passage/audio — not memorized facts or photo labels alone.
+5. audio_script is heard-only narration/explanation — do NOT embed student quiz questions in audio_script. Every item in questions[] must be answerable only from what was heard (same scene, facts, and claims).
 `.trim();
 
 export const FRAMEWORK_EXPRESSIVE_BUILD_ORDER = `

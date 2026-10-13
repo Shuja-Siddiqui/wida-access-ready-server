@@ -7,7 +7,7 @@
  */
 
 export type { ListeningContent } from "./listening";
-export { generateListeningContent, FALLBACK_LISTENING } from "./listening";
+export { generateListeningContent, FALLBACK_LISTENING, pickListeningFallback } from "./listening";
 
 export type { ImagePassageContent, ImagePassageQuestion } from "./image-library";
 export { generateImagePassageContent } from "./image-library";
