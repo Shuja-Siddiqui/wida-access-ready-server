@@ -495,9 +495,24 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
   // Both are independent axes stored in separate columns — no composite strings.
   const domain = parsed.data.domain as Domain;
   // Writing is always academic WIDA — coerce legacy clients that omit tier or send "general".
-  const tier: Tier = domain === "writing" ? "academic" : (parsed.data.tier as Tier);
+  let tier: Tier = domain === "writing" ? "academic" : (parsed.data.tier as Tier);
   const configDomain = domain; // domain is always a core Domain — no mapping needed
   const config = getAssessmentConfig(assessment);
+
+  // One listening domain in the UI — alternate general/academic content server-side.
+  if (domain === "listening") {
+    const [lastListeningSession] = await db
+      .select({ tier: sessionsTable.tier })
+      .from(sessionsTable)
+      .where(and(
+        eq(sessionsTable.studentId, student.id),
+        eq(sessionsTable.domain, "listening"),
+      ))
+      .orderBy(desc(sessionsTable.createdAt))
+      .limit(1);
+    tier = lastListeningSession?.tier === "academic" ? "general" : "academic";
+    if (!lastListeningSession) tier = "general";
+  }
 
   // Get current level — ORDER BY updatedAt DESC so duplicates never serve a stale row
   const [levelRow] = await db

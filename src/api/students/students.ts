@@ -964,6 +964,67 @@ router.get("/students/:studentId/ai-usage", requireStudentAccess("studentId"), a
   sendSuccess(res, usage);
 });
 
+type ProgressDomainRow = {
+  domain: string;
+  tier: Tier;
+  currentLevel: number;
+  exitThreshold: number;
+  gap: number;
+  normalizedLevel: number;
+  levelLabel: string;
+  atExit: boolean;
+  growthRate: ReturnType<typeof calculateGrowthRate>;
+  exitProjection: { domain: string; projectedDate: string | null; weeksToExit: number | null; status: string };
+  sessionHistory: Array<{ date: string; level: number; score: number }>;
+  lastSessionScore: number | null;
+  lastPracticed: string | null;
+  scaleMin: number;
+  scaleMax: number;
+};
+
+/** Single listening card in UI — merges general + academic tier stats. */
+function mergeListeningProgress(
+  general: ProgressDomainRow,
+  academic: ProgressDomainRow,
+  assessment: Assessment,
+  config: ReturnType<typeof getAssessmentConfig>,
+): ProgressDomainRow {
+  const sessionHistory = [...general.sessionHistory, ...academic.sessionHistory]
+    .sort((a, b) => Date.parse(a.date) - Date.parse(b.date))
+    .slice(-20);
+  const currentLevel = Math.max(general.currentLevel, academic.currentLevel);
+  const gap = Math.max(0, general.exitThreshold - currentLevel);
+  const growthRate = calculateGrowthRate(
+    sessionHistory.map((s, i) => ({
+      levelStart: i > 0 ? sessionHistory[i - 1].level : general.currentLevel,
+      levelEnd: s.level,
+      createdAt: new Date(s.date),
+    })),
+    currentLevel,
+  );
+  const exitProjection = projectExitDate(gap, growthRate);
+
+  const lastPracticed = [general.lastPracticed, academic.lastPracticed]
+    .filter(Boolean)
+    .sort((a, b) => Date.parse(b!) - Date.parse(a!))[0] ?? null;
+
+  return {
+    ...general,
+    domain: "listening",
+    tier: "general",
+    currentLevel,
+    gap,
+    normalizedLevel: config.normalize(currentLevel),
+    levelLabel: getLevelLabel(currentLevel, assessment),
+    atExit: gap <= 0,
+    growthRate,
+    exitProjection: { domain: "listening", ...exitProjection },
+    sessionHistory,
+    lastSessionScore: general.lastSessionScore ?? academic.lastSessionScore,
+    lastPracticed,
+  };
+}
+
 async function buildProgress(studentId: string, assessment: Assessment) {
   const config = getAssessmentConfig(assessment);
 
@@ -1023,10 +1084,28 @@ async function buildProgress(studentId: string, assessment: Assessment) {
       lastPracticed: lastSession?.createdAt?.toISOString() ?? null,
       scaleMin: config.scale.min,
       scaleMax: config.scale.max,
-    };
+    } satisfies ProgressDomainRow;
   });
 
-  const nonExitProjections = domainData
+  const generalListening = domainData.find((d) => d.domain === "listening");
+  const academicListening = domainData.find((d) => d.domain === "listening_academic");
+  const mergedListening =
+    generalListening && academicListening
+      ? mergeListeningProgress(generalListening, academicListening, assessment, config)
+      : generalListening ?? academicListening;
+
+  const domainOrder = ["listening", "speaking", "reading", "writing"] as const;
+  const consolidatedDomains = [
+    ...(mergedListening ? [mergedListening] : []),
+    ...domainData.filter(
+      (d) => d.domain !== "listening" && d.domain !== "listening_academic",
+    ),
+  ].sort(
+    (a, b) => domainOrder.indexOf(a.domain as typeof domainOrder[number])
+      - domainOrder.indexOf(b.domain as typeof domainOrder[number]),
+  );
+
+  const nonExitProjections = consolidatedDomains
     .filter((d) => !d.atExit && d.exitProjection.projectedDate)
     .map((d) => new Date(d.exitProjection.projectedDate!).getTime());
 
@@ -1040,7 +1119,7 @@ async function buildProgress(studentId: string, assessment: Assessment) {
     assessment,
     scaleMin: config.scale.min,
     scaleMax: config.scale.max,
-    domains: domainData.map((d) => ({
+    domains: consolidatedDomains.map((d) => ({
       domain: d.domain,
       currentLevel: d.currentLevel,
       exitThreshold: d.exitThreshold,
@@ -1054,7 +1133,7 @@ async function buildProgress(studentId: string, assessment: Assessment) {
       scaleMin: d.scaleMin,
       scaleMax: d.scaleMax,
     })),
-    growthRates: domainData.map((d) => ({
+    growthRates: consolidatedDomains.map((d) => ({
       domain: d.domain,
       perSession: d.growthRate.perSession,
       weekly: d.growthRate.weekly,
@@ -1062,7 +1141,7 @@ async function buildProgress(studentId: string, assessment: Assessment) {
       isStalled: d.growthRate.isStalled,
       stalledSessionCount: d.growthRate.stalledSessionCount,
     })),
-    exitProjections: domainData.map((d) => d.exitProjection),
+    exitProjections: consolidatedDomains.map((d) => d.exitProjection),
     overallProjectedDate,
   };
 }
