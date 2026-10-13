@@ -7,24 +7,11 @@
 import { callClaude, toDisplayText } from "./client";
 import { rethrowIfClaudeCapacity } from "./queue";
 import { logger } from "../../config/logger";
-import { feedbackCoachPrompt, normalizeFeedbackDomain } from "./prompts/wida-feedback-guide";
+import { feedbackCoachPrompt } from "./prompts/wida-feedback-guide";
 import { accessRubricBlockForDomain, rubricPromptAudit } from "../wida-access-rubric";
-import {
-  frameworkFeedbackCoachNote,
-  parseFrameworkTask,
-  serializeFrameworkForFeedback,
-  serializeFrameworkForFeedbackFromRecord,
-  type FeedbackFrameworkDomain,
-} from "./standards/2020";
-import {
-  type InterpretiveScore,
-  serializeInterpretiveScoreForPrompt,
-} from "../interpretive-scoring";
 
 const MAX_ANSWER_CHARS = 1200;
 const MAX_ITEMS = 8;
-/** Session feedback JSON is bounded — avoid unused output headroom. */
-const ATTEMPT_FEEDBACK_MAX_TOKENS = 550;
 
 export interface AttemptFeedbackItem {
   question: string;
@@ -97,8 +84,7 @@ function attemptSystemPrompt(domain: string, level: number, rubricBlock: string)
 ${rubricBlock}
 
 This is end-of-session feedback for ONE domain and ONE band only. Do not mix in other domains.
-If an ACCESS speaking or writing rubric is above, judge remarks against that rubric (Language Forms: Discourse, Sentence, Word-Phrase).
-If an INTERPRETIVE COMPREHENSION RUBRIC is above, align recommended_level with interpretive_score when present (literal / organizing / inferential item bands). Do not print 0–7 numbers or category names to the student.
+If an ACCESS speaking or writing rubric is above, judge remarks against that rubric (Language Forms: Discourse, Sentence, Word-Phrase). Do not print 0–7 numbers or category names to the student.
 - Use only the answers given. Do not invent what the student said.
 - Do not mention photos that were not in the questions.
 - Correct items are not mistakes.
@@ -138,8 +124,6 @@ export async function generateAttemptFeedback(params: {
   scorePct: number;
   topic?: string | null;
   keyUse?: string | null;
-  framework?: Record<string, unknown> | null;
-  interpretiveScore?: InterpretiveScore | null;
   answers: Array<{
     question?: string;
     content?: unknown;
@@ -149,39 +133,14 @@ export async function generateAttemptFeedback(params: {
 }): Promise<AttemptFeedback> {
   const items = serializeAttemptAnswers(params.answers ?? []);
   const rubric = accessRubricBlockForDomain(params.domain);
-  const feedbackDomain = normalizeFeedbackDomain(params.domain) as FeedbackFrameworkDomain;
-  const frameworkTask = parseFrameworkTask(params.framework);
-  const feedbackFramework = frameworkTask
-    ? serializeFrameworkForFeedback(frameworkTask)
-    : serializeFrameworkForFeedbackFromRecord(params.framework ?? null);
-  const frameworkNote = frameworkTask
-    ? frameworkFeedbackCoachNote(frameworkTask, feedbackDomain)
-    : "";
   const systemPrompt = attemptSystemPrompt(params.domain, params.level, rubric.text);
-  const interpretiveBlock = params.interpretiveScore
-    ? serializeInterpretiveScoreForPrompt(params.interpretiveScore)
-    : null;
-
   const userPrompt = JSON.stringify({
     domain: params.domain,
-    tier: params.tier ?? "academic",
+    tier: params.tier ?? "general",
     current_level: params.level,
     score_pct: Math.round(params.scorePct),
     topic: params.topic ?? null,
-    key_use: params.keyUse ?? feedbackFramework?.key_language_use ?? null,
-    framework: feedbackFramework,
-    framework_coach: frameworkNote || null,
-    interpretive_score: params.interpretiveScore
-      ? {
-          score_point: params.interpretiveScore.scorePoint,
-          label: params.interpretiveScore.label,
-          weighted_pct: params.interpretiveScore.weightedPct,
-          raw_pct: params.interpretiveScore.rawPct,
-          meets_task: params.interpretiveScore.meetsTask,
-          items: params.interpretiveScore.items,
-        }
-      : null,
-    interpretive_score_summary: interpretiveBlock,
+    key_use: params.keyUse ?? null,
     answers: items,
   });
   const audit = rubricPromptAudit(`${systemPrompt}\n${userPrompt}`);
@@ -200,7 +159,7 @@ export async function generateAttemptFeedback(params: {
   );
 
   try {
-    const result = (await callClaude(systemPrompt, userPrompt, ATTEMPT_FEEDBACK_MAX_TOKENS)) as {
+    const result = (await callClaude(systemPrompt, userPrompt, 900)) as {
       recommended_level?: unknown;
       summary?: unknown;
       mistakes?: unknown;

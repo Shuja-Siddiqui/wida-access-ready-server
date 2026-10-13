@@ -86,7 +86,7 @@ interface DescribeResult {
   concept: string | null;
 }
 
-export async function describeImage(
+async function describeImage(
   base64Data: string,
   mediaType: SupportedMediaType,
 ): Promise<DescribeResult> {

@@ -14,11 +14,6 @@
  */
 
 import curriculumData from "../../data/academicMathCurriculum.json";
-import {
-  mathFrameworkFromUnit,
-  scenarioExamplesForPrompt,
-  type AcademicFrameworkFields,
-} from "./academicFrameworkContext";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -27,27 +22,34 @@ export interface MathUnit {
   grade:         number;
   unit:          string;
   ccs:           string;
-  standards?:    string[];
   tier3ByLevel:  Record<string, string[]>;
   scenarios:     string[];
 }
 
-export interface MathSessionContext extends Partial<AcademicFrameworkFields> {
+export interface MathSessionContext {
   /** The math unit targeted this session */
   unit:             string;
-  /** Internal rotation seed (dedup only — not sent as mandatory scene text) */
+  /** The specific real-world scenario Claude will use for the word problem */
   scenario:         string;
-  /** Sample scenario seeds from the unit — examples for the model */
-  scenarioExamples: string[];
   /** Tier-3 math vocabulary appropriate for this WIDA level */
   tier3Vocabulary:  string[];
   /** Topic string written to the sessions record and echoed by Claude */
   topicLabel:       string;
-  /** UI-capable question formats at this level (model chooses from framework) */
-  permittedFormats?: string[];
+  /** Permitted question formats — always excludes agree_disagree */
+  permittedFormats: string[];
 }
 
-import { listeningAvailableFormats } from "../content/formatCapabilities";
+// ── Permitted formats (math override) ────────────────────────────────────────
+
+/**
+ * Academic math sessions never use agree_disagree.
+ * sequence_ordering is promoted because math procedures are naturally sequential.
+ */
+export const MATH_PERMITTED_FORMATS: string[] = [
+  "multiple_choice",
+  "sequence_ordering",
+  "pair_matching",
+];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -80,18 +82,9 @@ export function getMathVocabForLevel(unit: MathUnit, widalLevel: number): string
  * @param persistedTopic   - topic from the last failed session ("Unit: Scenario"), or null
  * @param topicsUsedToday  - topic labels used in the last 24 h (for dedup)
  */
-function scenarioRecentlyUsed(scenario: string, recentScenarios: string[]): boolean {
-  const needle = scenario.slice(0, 48).toLowerCase();
-  return recentScenarios.some((r) => {
-    const hay = r.toLowerCase();
-    return hay.includes(needle) || needle.includes(hay.slice(0, 48));
-  });
-}
-
 export function selectMathScenario(
   persistedTopic:  string | null,
   topicsUsedToday: string[] = [],
-  recentScenarios: string[] = [],
 ): MathSessionContext {
   const units = getMathUnits();
 
@@ -117,19 +110,11 @@ export function selectMathScenario(
     const pool = available.length > 0 ? available : units;
     chosenUnit = pool[Math.floor(Math.random() * pool.length)];
     const scenarioPool = chosenUnit.scenarios.filter(
-      (s) =>
-        !usedLower.some((used) => used.includes(s.slice(0, 40).toLowerCase()))
-        && !scenarioRecentlyUsed(s, recentScenarios),
+      (s) => !usedLower.some((used) => used.includes(s.slice(0, 40).toLowerCase())),
     );
-    const fallbackPool = chosenUnit.scenarios.filter(
-      (s) => !scenarioRecentlyUsed(s, recentScenarios),
-    );
-    const pickFrom = scenarioPool.length > 0
-      ? scenarioPool
-      : fallbackPool.length > 0
-        ? fallbackPool
-        : chosenUnit.scenarios;
-    chosenScenario = pickFrom[Math.floor(Math.random() * pickFrom.length)]!;
+    chosenScenario = (scenarioPool.length > 0 ? scenarioPool : chosenUnit.scenarios)[
+      Math.floor(Math.random() * (scenarioPool.length > 0 ? scenarioPool.length : chosenUnit.scenarios.length))
+    ];
   }
 
   const topicLabel = `Mathematics — Grade ${chosenUnit.grade}: ${chosenUnit.unit}`;
@@ -137,9 +122,9 @@ export function selectMathScenario(
   return {
     unit:             chosenUnit.unit,
     scenario:         chosenScenario,
-    scenarioExamples: [],
     tier3Vocabulary:  [],  // caller fills this in after resolving WIDA level
     topicLabel,
+    permittedFormats: MATH_PERMITTED_FORMATS,
   };
 }
 
@@ -151,17 +136,10 @@ export function buildMathSessionContext(
   fractionalLevel:  number,
   persistedTopic:   string | null,
   topicsUsedToday:  string[] = [],
-  recentScenarios:  string[] = [],
 ): MathSessionContext {
-  const ctx   = selectMathScenario(persistedTopic, topicsUsedToday, recentScenarios);
+  const ctx   = selectMathScenario(persistedTopic, topicsUsedToday);
   const units = getMathUnits();
   const unit  = units.find((u) => u.unit === ctx.unit) ?? units[0];
   const vocab = getMathVocabForLevel(unit, fractionalLevel);
-  return {
-    ...ctx,
-    tier3Vocabulary: vocab,
-    scenarioExamples: scenarioExamplesForPrompt(unit.scenarios),
-    permittedFormats: listeningAvailableFormats(clampLevel(fractionalLevel)),
-    ...mathFrameworkFromUnit(unit),
-  };
+  return { ...ctx, tier3Vocabulary: vocab };
 }

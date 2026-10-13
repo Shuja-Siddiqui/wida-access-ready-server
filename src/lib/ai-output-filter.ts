@@ -10,7 +10,6 @@
  * We do not strip ordinary words like "adequate", "attempted", or "strong".
  */
 
-import { stripWritingCopyableModels } from "./claude/writing-coach-guard";
 import { logger } from "../config/logger";
 import { writingRubricLabel } from "./writing-level-progression";
 import type { ItemFeedback } from "./claude/item-feedback";
@@ -113,10 +112,8 @@ export function filterItemFeedbackForStudent(feedback: ItemFeedback): Record<str
     modelResponse: filterStudentFacingText(feedback.modelResponse ?? "") || feedback.modelResponse || "",
     howToSayIt: filterStudentFacingText(feedback.howToSayIt ?? "") || feedback.howToSayIt || "",
     keepInMind: scrubList(feedback.keepInMind),
-    tryAgainTip: stripWritingCopyableModels(
-      filterStudentFacingText(feedback.tryAgainTip ?? "") || feedback.tryAgainTip || "",
-    ),
-    spokenText: stripWritingCopyableModels(spoken || feedback.spokenText || ""),
+    tryAgainTip: filterStudentFacingText(feedback.tryAgainTip ?? "") || feedback.tryAgainTip || "",
+    spokenText: spoken || feedback.spokenText,
     judgment: feedback.judgment,
     meetsTask: feedback.meetsTask,
   };
@@ -128,31 +125,7 @@ export function filterItemFeedbackForStudent(feedback: ItemFeedback): Record<str
       accessWritingLabel: writingRubricLabel(score),
     };
   }
-  if (feedback.accessSpeaking) {
-    return {
-      ...base,
-      accessSpeakingCategory: feedback.accessSpeaking,
-      accessSpeakingLabel: speakingRubricLabel(feedback.accessSpeaking),
-    };
-  }
   return base;
-}
-
-function speakingRubricLabel(category: string): string {
-  switch (category) {
-    case "Exemplary":
-      return "Exemplary response";
-    case "Strong":
-      return "Strong response";
-    case "Adequate":
-      return "Adequate response";
-    case "Attempted":
-      return "Attempted response";
-    case "No Response":
-      return "No response";
-    default:
-      return category;
-  }
 }
 
 export function filterWritingFeedbackForStudent(feedback: WritingFeedback): Record<string, unknown> {
@@ -161,9 +134,7 @@ export function filterWritingFeedbackForStudent(feedback: WritingFeedback): Reco
     passed: feedback.passed,
     strengths: scrubList(feedback.strengths),
     improvements: scrubList(feedback.improvements),
-    coachingNote: stripWritingCopyableModels(
-      filterStudentFacingText(feedback.coachingNote) || feedback.coachingNote,
-    ),
+    coachingNote: filterStudentFacingText(feedback.coachingNote) || feedback.coachingNote,
   };
 }
 

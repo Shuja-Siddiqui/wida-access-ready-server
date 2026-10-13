@@ -1,0 +1,378 @@
+{
+  "domain": "listening",
+  "description": "Curriculum topic bank for listening content generation, aligned with WIDA ELP levels 1–6. Topics increase in cognitive and linguistic complexity as students progress. Each level maps to a proficiency band and provides topic categories, specific topics, discourse types, and vocabulary tiers appropriate for that level.",
+  "questionTypes": {
+    "main_idea":          "Identify the central message or purpose of a listening passage",
+    "detail":             "Recall a specific fact or piece of information stated explicitly",
+    "inference":          "Draw a conclusion not directly stated in the audio",
+    "sequence":           "Identify or reconstruct the order of events or steps",
+    "vocabulary_in_context": "Determine the meaning of a word or phrase as used in the passage",
+    "speaker_purpose":    "Identify why the speaker said something or what they were trying to do",
+    "tone_attitude":      "Recognize the speaker's feelings, tone, or point of view",
+    "cause_effect":       "Identify what caused an event or what resulted from it",
+    "compare_contrast":   "Note how two ideas, people, or things are alike or different",
+    "summarize":          "Condense the key points of a passage into a brief statement"
+  },
+  "levels": [
+    {
+      "elpLevel": 1,
+      "proficiencyLabel": "Entering",
+      "complexityNote": "Grade 6–8 middle school content delivered in 1–2 short oral statements. Single nouns and action verbs, highly repetitive patterns, visual support assumed. Students identify or point to familiar school-subject objects, places, and people.",
+      "discourseForms": ["short oral statements", "one-step oral directions", "naming tasks", "yes/no questions"],
+      "vocabularyTier": "Tier 1 — high-frequency concrete nouns and verbs tied to middle school subjects (e.g. 'cell', 'map', 'vote', 'orbit')",
+      "recommendedQuestionTypes": ["detail", "main_idea"],
+      "topicCategories": [
+        {
+          "category": "Life Science",
+          "topics": [
+            "organisms in ecosystems: producers, consumers, decomposers",
+            "body systems: names and basic organs (skeletal, muscular, digestive)",
+            "plant and animal cell parts: nucleus, cell wall, membrane",
+            "habitats: rainforest, desert, tundra, ocean",
+            "classification of living things: mammals, reptiles, insects, plants"
+          ]
+        },
+        {
+          "category": "Earth & Space Science",
+          "topics": [
+            "landforms: mountain, valley, plateau, canyon, plain",
+            "bodies of water: river, lake, ocean, bay, gulf",
+            "layers of Earth: crust, mantle, outer core, inner core",
+            "planets in the solar system: names and order from the sun",
+            "weather phenomena: tornado, hurricane, blizzard, drought, flood"
+          ]
+        },
+        {
+          "category": "Social Studies",
+          "topics": [
+            "branches of U.S. government: legislative, executive, judicial",
+            "continents and oceans: names and locations on a map",
+            "key historical figures: name, role, and time period",
+            "U.S. regions: Northeast, South, Midwest, West",
+            "types of maps: political, physical, climate, population"
+          ]
+        },
+        {
+          "category": "Math & Data",
+          "topics": [
+            "types of graphs: bar graph, line graph, pie chart, scatter plot",
+            "geometric shapes: triangle, rectangle, circle, polygon, prism",
+            "measurement units in science: meters, grams, liters, Celsius",
+            "place value and number types: integer, fraction, decimal, percent",
+            "basic statistics terms: mean, median, mode, range"
+          ]
+        },
+        {
+          "category": "Health & Physical Education",
+          "topics": [
+            "major organs and their one-sentence function: heart, lungs, brain, kidneys",
+            "nutrients and their role: carbohydrates, proteins, fats, vitamins, minerals",
+            "types of physical activity: aerobic, strength, flexibility, balance",
+            "safety equipment in science lab: goggles, gloves, apron, fire extinguisher",
+            "first aid basics: what to do for a cut, burn, or allergic reaction"
+          ]
+        }
+      ]
+    },
+    {
+      "elpLevel": 2,
+      "proficiencyLabel": "Emerging",
+      "complexityNote": "Grade 6–8 content in 2–3 short sentences with cause/effect and sequencing. Routine academic phrases, simple present and past tense, Tier-1 and basic Tier-2 vocabulary. Topics match WIDA CanDo Emerging examples: environmental vs. genetic factors, weather/climate conditions.",
+      "discourseForms": ["short narratives", "two-step oral directions", "simple cause-effect descriptions", "labeled visual descriptions"],
+      "vocabularyTier": "Tier 1 and basic Tier 2 — routine academic words in context (e.g. 'classify', 'sequence', 'cause', 'effect', 'compare')",
+      "recommendedQuestionTypes": ["main_idea", "detail", "sequence", "cause_effect"],
+      "topicCategories": [
+        {
+          "category": "Earth & Environmental Science",
+          "topics": [
+            "weather patterns and climate conditions: temperature, precipitation, wind",
+            "natural disasters: what causes earthquakes, volcanoes, and floods",
+            "water cycle stages: evaporation, condensation, precipitation, collection",
+            "environmental vs. genetic factors in plant and animal traits",
+            "renewable vs. non-renewable energy: solar, wind, coal, oil"
+          ]
+        },
+        {
+          "category": "Life Science",
+          "topics": [
+            "food chains: producer, primary consumer, secondary consumer, decomposer",
+            "plant adaptations to desert, rainforest, and arctic environments",
+            "animal life cycles: egg, larva, pupa, adult — or birth, growth, reproduction",
+            "how the digestive system breaks down food step by step",
+            "inherited vs. learned traits in animals"
+          ]
+        },
+        {
+          "category": "Social Studies & History",
+          "topics": [
+            "timeline of a key U.S. historical event: sequence of causes and effects",
+            "immigration: reasons people move and the steps involved",
+            "how a bill becomes a law: the basic sequence of steps",
+            "comparing two world regions: climate, population, main resources",
+            "the roles of local, state, and federal government"
+          ]
+        },
+        {
+          "category": "Language Arts",
+          "topics": [
+            "narrative story settings: identifying time, place, and context from a passage",
+            "cause and effect in a short story or informational text",
+            "identifying a character's problem and how it is solved",
+            "comparing two characters based on their actions and words",
+            "point of view: how first-person and third-person narration differ"
+          ]
+        },
+        {
+          "category": "Health & Science Skills",
+          "topics": [
+            "the immune system: how the body fights infection (basic steps)",
+            "nutrition for adolescents: what each food group does for the body",
+            "the scientific method: question, hypothesis, experiment, data, conclusion",
+            "reading and interpreting a simple data table or bar graph",
+            "cause and effect of physical exercise on the heart and lungs"
+          ]
+        }
+      ]
+    },
+    {
+      "elpLevel": 3,
+      "proficiencyLabel": "Developing",
+      "complexityNote": "Multi-sentence paragraphs, compound and simple complex sentences. Academic vocabulary introduced with context clues. Topics include school-subject content and simple cause-effect relationships. Discourse includes explanation and narration.",
+      "discourseForms": ["explanations", "short narratives with complications", "compare-contrast descriptions", "procedural recounts"],
+      "vocabularyTier": "Tier 2 — academic vocabulary with context support (e.g. 'process', 'predict', 'summarize', 'characteristic')",
+      "recommendedQuestionTypes": ["main_idea", "detail", "inference", "sequence", "vocabulary_in_context", "cause_effect"],
+      "topicCategories": [
+        {
+          "category": "Life Science",
+          "topics": [
+            "the water cycle: evaporation, condensation, precipitation",
+            "food chains and energy flow in ecosystems",
+            "adaptations: how animals survive in their environment",
+            "photosynthesis explained simply",
+            "habitats and biodiversity"
+          ]
+        },
+        {
+          "category": "Social Studies & History",
+          "topics": [
+            "local and state government: how it works",
+            "famous historical figures and their contributions",
+            "immigration stories and cultural heritage",
+            "maps, continents, and geographic features",
+            "national holidays and their historical origins"
+          ]
+        },
+        {
+          "category": "Health & Science",
+          "topics": [
+            "the human digestive system",
+            "how the heart and lungs work together",
+            "nutrition: food groups and healthy choices",
+            "the scientific method: steps and purpose",
+            "simple experiments and what observations tell us"
+          ]
+        },
+        {
+          "category": "Literature & Narrative",
+          "topics": [
+            "character motivations in a short story",
+            "plot structure: exposition, rising action, climax, resolution",
+            "theme identification in a fable or short tale",
+            "point of view: first person vs. third person narration",
+            "comparing two versions of the same folk tale"
+          ]
+        },
+        {
+          "category": "Technology & Everyday Life",
+          "topics": [
+            "how the internet connects people and information",
+            "responsible use of social media and digital safety",
+            "how electricity powers our homes",
+            "recycling and reducing waste",
+            "transportation: past and present"
+          ]
+        }
+      ]
+    },
+    {
+      "elpLevel": 4,
+      "proficiencyLabel": "Expanding",
+      "complexityNote": "Multi-paragraph academic discourse with subordinate clauses, passive voice, and cohesive devices. Topics span academic disciplines. Requires inference, cause-effect reasoning, and speaker purpose identification. Tier 2 and early Tier 3 vocabulary.",
+      "discourseForms": ["academic lectures (mini)", "news reports", "debates and opinion sharing", "analytical explanations", "procedural essays"],
+      "vocabularyTier": "Tier 2 and Tier 3 — discipline-specific academic language (e.g. 'hypothesis', 'legislature', 'migration', 'metaphor')",
+      "recommendedQuestionTypes": ["main_idea", "inference", "speaker_purpose", "cause_effect", "compare_contrast", "vocabulary_in_context", "tone_attitude"],
+      "topicCategories": [
+        {
+          "category": "Earth & Environmental Science",
+          "topics": [
+            "climate change: causes, effects, and solutions",
+            "tectonic plates and natural disasters (earthquakes, volcanoes)",
+            "renewable vs. non-renewable energy sources",
+            "ocean ecosystems and threats to marine life",
+            "deforestation and its global impact"
+          ]
+        },
+        {
+          "category": "American History & Civics",
+          "topics": [
+            "the Civil Rights Movement: key events and figures",
+            "how a bill becomes a law",
+            "causes and consequences of World War II",
+            "the role of media in a democratic society",
+            "civil liberties and the Bill of Rights"
+          ]
+        },
+        {
+          "category": "Economics & Society",
+          "topics": [
+            "supply and demand in everyday markets",
+            "global trade: why countries import and export",
+            "the gig economy and changing job markets",
+            "poverty, inequality, and social mobility",
+            "how taxes fund public services"
+          ]
+        },
+        {
+          "category": "Literature & Media Analysis",
+          "topics": [
+            "symbolism and figurative language in poetry",
+            "author's argument and use of evidence in an editorial",
+            "comparing a book and its film adaptation",
+            "propaganda techniques in historical media",
+            "narrative perspective and reliability of the narrator"
+          ]
+        },
+        {
+          "category": "Health & Biology",
+          "topics": [
+            "the immune system and how vaccines work",
+            "genetics: traits, inheritance, and DNA basics",
+            "mental health: stress, anxiety, and coping strategies",
+            "the endocrine system and hormones",
+            "substance use: risks and prevention"
+          ]
+        }
+      ]
+    },
+    {
+      "elpLevel": 5,
+      "proficiencyLabel": "Bridging",
+      "complexityNote": "Complex, multi-clause academic sentences with nuanced hedging, passive constructions, and embedded relative clauses. Abstract and conceptual topics requiring critical analysis, synthesis across ideas, and evaluation of speaker claims. Tier 3 vocabulary throughout.",
+      "discourseForms": ["academic lectures with counterarguments", "panel discussions", "analytical commentaries", "persuasive speeches", "documentary-style narration"],
+      "vocabularyTier": "Tier 3 — technical and discipline-specific vocabulary without definition scaffolding (e.g. 'mitosis', 'jurisprudence', 'utilitarian', 'equilibrium')",
+      "recommendedQuestionTypes": ["inference", "speaker_purpose", "tone_attitude", "cause_effect", "compare_contrast", "summarize", "vocabulary_in_context"],
+      "topicCategories": [
+        {
+          "category": "Advanced Science",
+          "topics": [
+            "CRISPR and the ethics of gene editing",
+            "artificial intelligence: how machine learning works",
+            "quantum physics concepts for general audiences",
+            "the human microbiome and gut-brain connection",
+            "space exploration: current missions and future goals"
+          ]
+        },
+        {
+          "category": "Philosophy & Ethics",
+          "topics": [
+            "ethical frameworks: utilitarianism vs. deontology",
+            "free will vs. determinism",
+            "social contract theory and the origin of government",
+            "environmental ethics: rights of nature",
+            "bioethics: end-of-life decisions and medical autonomy"
+          ]
+        },
+        {
+          "category": "Global History & Politics",
+          "topics": [
+            "colonialism and its long-term economic effects",
+            "the United Nations: structure, purpose, and limitations",
+            "comparative political systems: democracy, authoritarianism",
+            "migration crises and international refugee law",
+            "the Cold War and its ideological legacy"
+          ]
+        },
+        {
+          "category": "Literature & Critical Theory",
+          "topics": [
+            "feminist readings of canonical literary texts",
+            "postcolonial literature and identity",
+            "unreliable narrators in modern fiction",
+            "dystopian literature as social commentary",
+            "the relationship between author biography and text"
+          ]
+        },
+        {
+          "category": "Economics & Global Systems",
+          "topics": [
+            "monetary policy and central banking",
+            "globalization's winners and losers",
+            "cryptocurrency and the future of finance",
+            "the role of NGOs in development",
+            "automation and the future of work"
+          ]
+        }
+      ]
+    },
+    {
+      "elpLevel": 6,
+      "proficiencyLabel": "Reaching",
+      "complexityNote": "Native-like academic proficiency. No ceiling. Highly sophisticated, discipline-specific discourse with nuanced register shifts, irony, satire, technical jargon, and multi-layered argumentation. Content mirrors college-preparatory and professional registers.",
+      "discourseForms": ["academic debates", "research presentations", "satirical commentary", "legal and policy arguments", "interdisciplinary lectures"],
+      "vocabularyTier": "All tiers including technical jargon, field-specific idioms, and nuanced register — no scaffolding",
+      "recommendedQuestionTypes": ["inference", "tone_attitude", "speaker_purpose", "compare_contrast", "summarize", "evaluate_argument"],
+      "topicCategories": [
+        {
+          "category": "College & Career Readiness",
+          "topics": [
+            "writing a college application essay: structure and voice",
+            "financial aid: FAFSA, grants, and loans explained",
+            "college major selection and career alignment",
+            "workplace communication and professional writing",
+            "internships and networking strategies"
+          ]
+        },
+        {
+          "category": "Science & Technology (Advanced)",
+          "topics": [
+            "mRNA vaccine technology and immunological response",
+            "climate modeling and predictive analytics",
+            "neuroethics and brain-computer interfaces",
+            "dark matter and the structure of the universe",
+            "synthetic biology and biofabrication"
+          ]
+        },
+        {
+          "category": "Law & Justice",
+          "topics": [
+            "landmark Supreme Court decisions and their impact",
+            "restorative justice vs. punitive justice systems",
+            "international humanitarian law and war crimes",
+            "digital privacy rights and surveillance law",
+            "affirmative action: arguments and legal history"
+          ]
+        },
+        {
+          "category": "Media & Cultural Criticism",
+          "topics": [
+            "the economics of attention in social media platforms",
+            "critical race theory in educational policy debates",
+            "the representation of marginalized groups in Hollywood",
+            "misinformation, deepfakes, and media literacy",
+            "cultural appropriation vs. cultural exchange"
+          ]
+        },
+        {
+          "category": "Interdisciplinary Topics",
+          "topics": [
+            "the psychology of decision-making under uncertainty",
+            "complexity theory and emergent social phenomena",
+            "language and power: how word choice shapes reality",
+            "intersectionality: race, gender, and class",
+            "the ethics of artificial intelligence in healthcare"
+          ]
+        }
+      ]
+    }
+  ]
+}

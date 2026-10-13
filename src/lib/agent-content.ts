@@ -12,12 +12,8 @@
 import { config } from "../config/index";
 import { logger } from "../config/logger";
 import { runClaudeJob } from "./claude/queue";
-import {
-  frameworkTaskDescriptor,
-  selectFrameworkTask,
-  serializeFrameworkTask,
-  type AcademicSubjectId,
-} from "./claude/standards/2020";
+import { canDoData } from "./claude/standards/2016";
+import { findKeyUseBlock } from "./content";
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -32,40 +28,21 @@ const LEVEL_NAMES: Record<number, string> = {
   6: "Reaching",
 };
 
-// ── 2020 framework lookup (interpretive listening) ────────────────────────────
+// ── canDo lookup ──────────────────────────────────────────────────────────────
 
-function normalizeAgentKeyUse(keyUse: string): "Narrate" | "Inform" | "Explain" | "Argue" {
-  if (keyUse === "Recount") return "Narrate";
-  if (keyUse === "Narrate" || keyUse === "Inform" || keyUse === "Explain" || keyUse === "Argue") {
-    return keyUse;
-  }
-  return "Inform";
-}
-
-/** Language-function lines for the agent tool (replaces 2016 Can Do bullets). */
-export function getListeningCanDo(level: number, keyUse: string, subject: AcademicSubjectId = "ela"): string[] {
-  const elp = Math.min(6, Math.max(1, level));
-  const task = selectFrameworkTask({
-    level: elp,
-    keyUse: normalizeAgentKeyUse(keyUse),
-    mode: "interpretive",
-    academicSubject: subject,
-  });
-  const descriptor = frameworkTaskDescriptor(task);
-  const functions = task.language_functions.map((fn) => fn.function).filter(Boolean);
-  return [descriptor, ...functions];
-}
-
-export function getListeningFramework(level: number, keyUse: string, subject: AcademicSubjectId = "ela") {
-  const elp = Math.min(6, Math.max(1, level));
-  return serializeFrameworkTask(
-    selectFrameworkTask({
-      level: elp,
-      keyUse: normalizeAgentKeyUse(keyUse),
-      mode: "interpretive",
-      academicSubject: subject,
-    }),
+export function getListeningCanDo(level: number, keyUse: string): string[] {
+  const levelEntry = (canDoData as any).levels.find(
+    (l: any) => l.elpLevel === `ELP Level ${level}`,
   );
+  if (!levelEntry) return [];
+
+  const listeningDomain = levelEntry.domains.find(
+    (d: any) => d.domain === "LISTENING",
+  );
+  if (!listeningDomain) return [];
+
+  const keyUseEntry = findKeyUseBlock(listeningDomain.keyUses, keyUse);
+  return keyUseEntry?.canDo ?? [];
 }
 
 // ── Output schemas per format (passed as runtime parameter) ──────────────────
@@ -152,7 +129,7 @@ const TOOL_DEFINITION = {
         type: "array",
         items: { type: "string" },
         description:
-          "2020 framework language-function lines for this level + key use. The question must directly assess these skills.",
+          "The exact Can Do descriptor strings for this level + key use. The question must directly assess one of these skills.",
       },
       format: {
         type: "string",
@@ -263,7 +240,7 @@ RULES
 - Topics rotate across: science, social studies, math, language arts, daily school life.
 - MC distractors must be plausible — never obviously wrong.
 - Levels 3-6: never repeat the correct answer word-for-word in the audioScript (test inference, not recall).
-- The question must directly assess the 2020 language_functions in the framework payload.`;
+- The question must directly assess the Can Do skill(s) provided.`;
 
   const fallbackRes = await fetch(`${baseUrl}/v1/messages`, {
     method: "POST",

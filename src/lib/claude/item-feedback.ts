@@ -5,31 +5,11 @@
  */
 
 import { callClaude, toDisplayText, limitSentences } from "./client";
+import { selectExpressivePld } from "./standards/2020";
 import { rethrowIfClaudeCapacity } from "./queue";
 import { logger } from "../../config/logger";
-import { LANGUAGE_FORMS_NOT_YET_EVIDENCE_LINE } from "./prompts/grammar-correction-rules";
-import {
-  cluePacing,
-  feedbackCoachPrompt,
-  normalizeFeedbackDomain,
-} from "./prompts/wida-feedback-guide";
-import {
-  speakingAnswerEchoesCoach,
-  stripSpeakingCopyableModels,
-} from "./speaking-coach-guard";
-import {
-  stripWritingCopyableModels,
-  writingAnswerEchoesCoach,
-} from "./writing-coach-guard";
-import { speakingFrameworkCoachNote } from "../content";
-import {
-  frameworkTaskDescriptor,
-  parseFrameworkTask,
-  serializeFrameworkForFeedback,
-  frameworkFeedbackCoachNote,
-  selectExpressivePld,
-  type FrameworkTask,
-} from "./standards/2020";
+import { cluePacing, feedbackCoachPrompt } from "./prompts/wida-feedback-guide";
+import { speakingCanDoCoachNote, getKeyLanguageUseGuide } from "../content";
 import {
   applySpeakingHardRules,
   applyWritingScore0,
@@ -85,7 +65,6 @@ export interface ItemFeedbackInput {
   keyUse?: string;
   canDoItems?: string[];
   canDoAction?: string;
-  framework?: FrameworkTask | Record<string, unknown> | null;
   options?: string[];
   responseLength?: string;
   minSentences?: number;
@@ -157,30 +136,27 @@ function parseClaudeMeetsTask(result: Record<string, unknown>): boolean | null {
   return null;
 }
 
-const SPEAKING_COACH_ALOUD = `
-SPEAKING COACHING — TEACHER VOICE (same classroom style as writing)
-• spoken_text NOT YET: use " || " between blocks so TTS pauses — praise | "Listen." + mistake with *wrong word* | simple rule | short try-step.
-• Example: "You named the place well. || Listen. You said *students* but the picture shows one student. || One person takes *student*, not *students*. || Say that part again with *student*."
-• model_response: at most ONE short corrected phrase they can say aloud — never a full paragraph to recite as their answer.
-• On retry: meets_task false if they mostly copy prior coaching instead of revising in their own words.
-• PASS: praise only in spoken_text; try_again_tip empty; model_response empty.
-• Follow LANGUAGE FORMS — CORRECT GRAMMAR. One gap per try. Do not punish accent or STT noise.
-`.trim();
+/** Example line when Claude omits model_response on a not-yet writing item. */
+function writingModelFallback(params: ItemFeedbackInput): string {
+  const prompt = (params.prompt ?? params.question ?? "").toLowerCase();
+  if (prompt.includes("equation") && (prompt.includes("mean") || prompt.includes("means"))) {
+    return "The equation 5 + 5 = 10 means the person has 10 books in all. I chose 5 because that is how many they started with.";
+  }
+  if (params.scaffold?.trim()) {
+    return params.scaffold.replace(/_+/g, "___").trim();
+  }
+  return "Add one sentence that finishes what the prompt asked.";
+}
 
-const WRITING_COACH_NO_MODEL = `
-WRITING COACHING — NO PASTE-READY ANSWERS
-• model_response must always be "" for writing.
-• spoken_text and try_again_tip: what is wrong, why (simple), one revision hint only.
-• Never "You can write:", "Try writing:", "Example response:", or full sentences they could copy.
-• On retry: meets_task false if they pasted or lightly edited prior coaching instead of revising in their own words.
-
-SPOKEN ALOUD — separate blocks with " || " (pause between each; student must hear mistake vs rule vs try)
-1. Optional brief praise
-2. Mistake block — start with "Listen." Point to the error; wrap the wrong word in *asterisks* (e.g. You wrote *is*.)
-3. Rule block — one simple why (e.g. Two things take *are*, not *is*.)
-4. Try block — one short action (change that word, reread)
-Example shape: "You gave a good reason. || Listen. You wrote *is* — line breaks and stanzas are two things. || When you have two things, use *are*. || Change that one word and reread."
-`.trim();
+function stripWritingPassAssignments(text: string): string {
+  return text
+    .replace(/\s*you can write:[\s\S]*/i, "")
+    .replace(/\s*now add more[^.?!]*[.?!]?/gi, "")
+    .replace(/\s*now write why[^.?!]*[.?!]?/gi, "")
+    .replace(/\s*add more sentences[^.?!]*[.?!]?/gi, "")
+    .replace(/\bgood start!?\s*/gi, "")
+    .trim();
+}
 
 function writingLooksComplete(params: ItemFeedbackInput): boolean {
   const text = clip(params.studentAnswer, 1200).toLowerCase();
@@ -236,83 +212,11 @@ function composeSpokenText(params: ItemFeedbackInput, extra?: { objectClue?: str
     return speakingHelpSpoken(params);
   }
   if (params.format === "writing") {
-    return "";
+    const model = extra?.modelResponse?.trim();
+    return model ? `You can write: ${model}` : "";
   }
   if (extra?.objectClue) return extra.objectClue;
   return "Not yet. Listen or read again, then try again.";
-}
-
-function praiseVariantIndex(seed: string, count: number): number {
-  if (count <= 1) return 0;
-  let h = 0;
-  for (let i = 0; i < seed.length; i += 1) {
-    h = (h + seed.charCodeAt(i) * (i + 1)) % count;
-  }
-  return h;
-}
-
-function pictureCorrectSpokenText(params: ItemFeedbackInput): string {
-  const yesNo = /^(agree|disagree)$/i.test(params.studentAnswer ?? "")
-    || /^(agree|disagree)$/i.test(params.correctAnswer ?? "");
-  if (yesNo) {
-    const choice = clip(params.studentAnswer, 40).toLowerCase();
-    const label = choice === "agree" ? "agree" : choice === "disagree" ? "disagree" : choice;
-    const templates = [
-      `Yes — *${label}* matches what you heard.`,
-      `That's right. You said *${label}*.`,
-      `Good listening. *${label}* is correct.`,
-    ];
-    return templates[praiseVariantIndex(`${params.question}:${label}`, templates.length)];
-  }
-  const noun = targetNoun(params);
-  const object = noun || clip(params.studentAnswer, 80) || "the right one";
-  const seed = `${params.question}:${object}:${params.level}`;
-  const templates = [
-    `Yes — you found the *${object}*.`,
-    `That's the *${object}*. Nice listening.`,
-    `Good — the *${object}* is right.`,
-    `You got it. That's the *${object}*.`,
-    `Right — the *${object}*.`,
-  ];
-  return templates[praiseVariantIndex(seed, templates.length)];
-}
-
-/** Instant praise when the student tapped the right picture — no AI round-trip. */
-function pictureCorrectFeedback(params: ItemFeedbackInput): ItemFeedback {
-  const base = fallback(params, true);
-  const yesNo = /^(agree|disagree)$/i.test(params.studentAnswer ?? "")
-    || /^(agree|disagree)$/i.test(params.correctAnswer ?? "");
-  const spokenText = pictureCorrectSpokenText(params);
-  return {
-    ...base,
-    spokenText,
-    headline: yesNo ? "Yes — that's right." : "Yes — that is the one.",
-    objectClue: "",
-  };
-}
-
-/** Instant praise when the student picked the right MC option — no AI round-trip. */
-function selectedResponseCorrectSpokenText(params: ItemFeedbackInput): string {
-  const choice = clip(params.studentAnswer ?? params.correctAnswer ?? "", 140);
-  if (!choice) return "Yes — that's the right answer.";
-  const seed = `${params.question}:${choice}:${params.level}`;
-  const templates = [
-    `Yes — *${choice}* matches what you heard.`,
-    `That's right. You chose *${choice}*.`,
-    `Good listening. *${choice}* is correct.`,
-    `You got it. *${choice}* is the right answer.`,
-  ];
-  return templates[praiseVariantIndex(seed, templates.length)];
-}
-
-function selectedResponseCorrectFeedback(params: ItemFeedbackInput): ItemFeedback {
-  const base = fallback(params, true);
-  return {
-    ...base,
-    spokenText: selectedResponseCorrectSpokenText(params),
-    headline: "Yes — that's right.",
-    correctAnswer: clip(params.correctAnswer ?? params.studentAnswer ?? "", 120),
-  };
 }
 
 function fallback(params: ItemFeedbackInput, meetsTask: boolean): ItemFeedback {
@@ -331,7 +235,7 @@ function fallback(params: ItemFeedbackInput, meetsTask: boolean): ItemFeedback {
       keepInMind: [],
       tryAgainTip: "",
       spokenText: meetsTask
-        ? pictureCorrectSpokenText(params)
+        ? `Yes. You found ${correct || "it"}. Well done.`
         : clue,
       judgment,
       meetsTask,
@@ -389,124 +293,16 @@ function fallback(params: ItemFeedbackInput, meetsTask: boolean): ItemFeedback {
   };
 }
 
-/** Item coaching JSON is short — cap output to avoid paying for unused headroom. */
-const ITEM_FEEDBACK_MAX_TOKENS = 400;
-
-function omitEmptyFields(obj: Record<string, unknown>): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(obj)) {
-    if (value == null || value === "") continue;
-    if (Array.isArray(value) && value.length === 0) continue;
-    out[key] = value;
-  }
-  return out;
-}
-
-function payloadText(payload: Record<string, unknown>, key: string): string {
-  const value = payload[key];
-  return typeof value === "string" ? value : "";
-}
-
-function payloadStringList(payload: Record<string, unknown>, key: string): string[] {
-  const value = payload[key];
-  if (!Array.isArray(value)) return [];
-  return value.map((entry) => toDisplayText(entry).trim()).filter(Boolean);
-}
-
-function buildItemFeedbackPayload(
-  params: ItemFeedbackInput,
-  ctx: {
-    pacing: ReturnType<typeof cluePacing>;
-    feedbackFramework: Record<string, unknown> | null;
-    frameworkTask: FrameworkTask | null;
-    taskDescriptor: string | null;
-    guessedMeet: boolean;
-  },
-): Record<string, unknown> {
-  const { pacing, feedbackFramework, frameworkTask, taskDescriptor, guessedMeet } = ctx;
-  const keyUse = params.keyUse ?? frameworkTask?.key_language_use ?? null;
-  const question = clip(params.question, 400);
-  const studentAnswer = clip(params.studentAnswer, 1200);
-
-  if (params.format === "selected_response") {
-    return omitEmptyFields({
-      domain: params.domain,
-      level: params.level,
-      format: params.format,
-      question,
-      student_answer: clip(params.studentAnswer, 200),
-      correct_answer: params.correctAnswer ? clip(params.correctAnswer, 200) : null,
-      options: (params.options ?? []).slice(0, 6).map((o) => clip(o, 80)),
-      passage: params.passage ? clip(params.passage, 400) : null,
-      key_use: keyUse,
-      framework: feedbackFramework,
-      answer_correct: guessedMeet,
-    });
-  }
-
-  if (params.format === "picture") {
-    return omitEmptyFields({
-      domain: params.domain,
-      level: params.level,
-      format: params.format,
-      question,
-      student_answer: clip(params.studentAnswer, 120),
-      correct_answer: params.correctAnswer ? clip(params.correctAnswer, 120) : null,
-      target_object: targetNoun(params) || null,
-      clue_pace: pacing.style,
-      image_description: params.imageDescription ? clip(params.imageDescription, 220) : null,
-      image_tags: (params.imageTags ?? []).slice(0, 8),
-      key_use: keyUse,
-      framework: feedbackFramework,
-      answer_correct: guessedMeet,
-    });
-  }
-
-  const useLegacyCanDoFields = !feedbackFramework;
-  return omitEmptyFields({
-    domain: params.domain,
-    level: params.level,
-    format: params.format,
-    question,
-    student_answer: studentAnswer,
-    correct_answer: params.correctAnswer ? clip(params.correctAnswer, 200) : null,
-    passage: params.passage ? clip(params.passage, 800) : null,
-    clue_pace: pacing.style,
-    answer_correct: params.format === "speaking" ? null : guessedMeet,
-    image_description: params.imageDescription ? clip(params.imageDescription, 1400) : null,
-    image_tags: (params.imageTags ?? []).slice(0, 12),
-    target_object: targetNoun(params) || null,
-    prompt: params.prompt ? clip(params.prompt, 500) : null,
-    scaffold: params.scaffold ? clip(params.scaffold, 240) : null,
-    framework: feedbackFramework,
-    task_descriptor: taskDescriptor && !feedbackFramework ? taskDescriptor : null,
-    can_do: useLegacyCanDoFields && params.canDo ? clip(params.canDo, 400) : null,
-    can_do_action: useLegacyCanDoFields ? (params.canDoAction ?? null) : null,
-    can_do_items: useLegacyCanDoFields ? (params.canDoItems ?? []).slice(0, 6) : [],
-    key_use: keyUse,
-    options: (params.options ?? []).slice(0, 6).map((o) => clip(o, 80)),
-    response_length: params.responseLength ?? null,
-    min_sentences: params.minSentences ?? null,
-    stt_confidence: params.sttConfidence ?? null,
-    uncertain_words: (params.uncertainWords ?? []).slice(0, 8),
-    transcript_source: params.format === "speaking" ? "speech_to_text" : null,
-    try_count: params.tryCount ?? 1,
-    last_judgment: params.lastJudgment ?? null,
-    last_coach_tip: params.lastCoachTip ? clip(params.lastCoachTip, 500) : null,
-    last_student_answer: params.lastStudentAnswer ? clip(params.lastStudentAnswer, 1200) : null,
-  });
-}
-
 const ITEM_OUTPUT_SCHEMA = `
 OUTPUT SCHEMA — return every key. Never omit a field. Use "" or [] only when that field does not apply to THIS domain. Do not drop coaching into a missing key.
 {
   "judgment": "agree | partial | rejected",
-  "spoken_text": "<required: what the student hears — praise if done; how to meet THIS framework job if not>",
+  "spoken_text": "<required: what the student hears — praise if done; how to meet THIS Can Do if not>",
   "headline": "<required short title>",
   "why_wrong": "<levels 3–6: what missed; levels 1–2: empty string>",
   "correct_answer": "<selected-response label or empty>",
   "object_clue": "<listening picture: same words as spoken_text when they missed; else empty>",
-  "model_response": "<speaking not yet: one short phrase they can try; writing: always empty string>",
+  "model_response": "<speaking/writing not yet: one model line they can copy; empty on agree>",
   "how_to_say_it": "<speaking: pronunciation/frame hint if needed; else empty>",
   "keep_in_mind": ["<optional short reminder; [] if none>"],
   "strengths": [],
@@ -521,8 +317,7 @@ SCHEMA ENFORCEMENT
 • Speaking: always set access_category. judgment and meets_task stay in the JSON (code may recompute them).
 • Writing: always set score_point 0–7 AND judgment and meets_task.
 • Listening/reading/picture: still set judgment, spoken_text, meets_task, headline, correct_answer. access_category and score_point may be unused but keep the keys (use "" / 0).
-• Speaking not yet: model_response may hold one short phrase; spoken_text coaches aloud.
-• Writing not yet: model_response must be ""; coach only in spoken_text / try_again_tip (hint-only, no full answer).
+• Do not skip model_response or try_again_tip on a not-yet speaking/writing item. Put the model line in model_response; put the hearable coach in spoken_text (they may overlap).
 • strengths and next_steps: [] for item coaching (end-of-session uses those keys). keep_in_mind: fill if useful, else [].
 • meets_task is true only when judgment is agree.
 • Do not name ACCESS categories or 0–7 numbers in student-facing strings.
@@ -530,32 +325,8 @@ SCHEMA ENFORCEMENT
 
 function itemSystemPrompt(params: ItemFeedbackInput): string {
   const base = `${feedbackCoachPrompt(params.domain, params.level, params.format)}\n\n${ITEM_OUTPUT_SCHEMA}`;
-  if (params.format === "writing") {
-    return `${base}\n\n${WRITING_COACH_NO_MODEL}`;
-  }
-  if (params.format === "speaking") {
-    const coachNote =
-      params.framework && typeof params.framework === "object" && "language_functions" in params.framework
-        ? speakingFrameworkCoachNote(params.framework as FrameworkTask)
-        : "";
-    return [base, SPEAKING_COACH_ALOUD, coachNote].filter(Boolean).join("\n\n");
-  }
-  return base;
-}
-
-function resolveTaskDescriptor(params: ItemFeedbackInput): string | null {
-  const framework = parseFrameworkTask(params.framework);
-  if (framework) return clip(frameworkTaskDescriptor(framework), 400);
-  if (params.canDo) return clip(params.canDo, 400);
-  return null;
-}
-
-function interpretiveFrameworkBlock(params: ItemFeedbackInput): string {
-  const framework = parseFrameworkTask(params.framework);
-  if (!framework) return "";
-  const domain = normalizeFeedbackDomain(params.domain, params.format);
-  if (domain !== "listening" && domain !== "reading") return "";
-  return frameworkFeedbackCoachNote(framework, domain);
+  if (params.format !== "speaking") return base;
+  return `${base}\n\n${speakingCanDoCoachNote(params.level, params.keyUse || params.canDo)}`;
 }
 
 export async function generateItemFeedback(params: ItemFeedbackInput): Promise<ItemFeedback> {
@@ -618,30 +389,6 @@ export async function generateItemFeedback(params: ItemFeedbackInput): Promise<I
             )
           : false;
 
-  if (params.format === "picture" && guessedMeet) {
-    logger.info(
-      {
-        target: targetNoun(params),
-        studentAnswer: params.studentAnswer,
-        rubricSentToAi: false,
-      },
-      "picture correct — local praise",
-    );
-    return pictureCorrectFeedback(params);
-  }
-
-  if (params.format === "selected_response" && guessedMeet) {
-    logger.info(
-      {
-        studentAnswer: params.studentAnswer,
-        correctAnswer: params.correctAnswer,
-        rubricSentToAi: false,
-      },
-      "selected-response correct — local praise",
-    );
-    return selectedResponseCorrectFeedback(params);
-  }
-
   const pacing = cluePacing(params.level);
   const maxSpoken =
     params.format === "speaking" && params.level <= 2
@@ -652,74 +399,68 @@ export async function generateItemFeedback(params: ItemFeedbackInput): Promise<I
         ? pacing.maxSentences
         : 4;
 
-  const frameworkTask = parseFrameworkTask(params.framework);
-  const taskDescriptor = resolveTaskDescriptor(params);
-  const feedbackFramework = frameworkTask ? serializeFrameworkForFeedback(frameworkTask) : null;
-
-  const payload = buildItemFeedbackPayload(params, {
-    pacing,
-    feedbackFramework,
-    frameworkTask,
-    taskDescriptor,
-    guessedMeet,
-  });
+  const payload = {
+    domain: params.domain,
+    level: params.level,
+    format: params.format,
+    question: clip(params.question, 400),
+    student_tapped: clip(params.studentAnswer, 1200),
+    student_answer: clip(params.studentAnswer, 1200),
+    correct_object: params.correctAnswer ? clip(params.correctAnswer, 200) : null,
+    correct_answer: params.correctAnswer ? clip(params.correctAnswer, 200) : null,
+    passage: params.passage ? clip(params.passage, 800) : null,
+    clue_pace: pacing.style,
+    answer_correct: params.format === "speaking" ? null : guessedMeet,
+    image_description: params.imageDescription ? clip(params.imageDescription, 1400) : null,
+    image_tags: (params.imageTags ?? []).slice(0, 12),
+    target_object: targetNoun(params) || null,
+    other_objects_in_picture: (params.options ?? []).slice(0, 8).map((o) => clip(o, 80)),
+    prompt: params.prompt ? clip(params.prompt, 500) : null,
+    scaffold: params.scaffold ? clip(params.scaffold, 240) : null,
+    can_do: params.canDo ? clip(params.canDo, 400) : null,
+    can_do_action: params.canDoAction ?? null,
+    can_do_items: (params.canDoItems ?? []).slice(0, 6),
+    key_use: params.keyUse ?? null,
+    key_language_use: getKeyLanguageUseGuide(params.keyUse),
+    options: (params.options ?? []).slice(0, 6).map((o) => clip(o, 80)),
+    response_length: params.responseLength ?? null,
+    min_sentences: params.minSentences ?? null,
+    stt_confidence: params.sttConfidence ?? null,
+    uncertain_words: (params.uncertainWords ?? []).slice(0, 8),
+    transcript_source: params.format === "speaking" ? "speech_to_text" : null,
+    try_count: params.tryCount ?? 1,
+    last_judgment: params.lastJudgment ?? null,
+    last_coach_tip: params.lastCoachTip ? clip(params.lastCoachTip, 500) : null,
+    last_student_answer: params.lastStudentAnswer ? clip(params.lastStudentAnswer, 1200) : null,
+  };
 
   const speakingEvidencePrompt = [
-    "READ ALL OF THIS BEFORE YOU SCORE.",
-    "1. ACCESS SPEAKING RUBRIC (official 5 categories)",
+    "Score this speaking response on the official ACCESS speaking rubric (5 categories).",
     serializeSpeakingRubricForPrompt(),
     speakingRules?.cap
       ? `HARD CAP: do not score above ${speakingRules.cap}. Reasons: ${speakingRules.reasons.join("; ")}.`
       : "",
-    speakingRules?.isP1
-      ? "This is a P1-style task (ELP 1–2). Single word = Attempted (already applied in code if so)."
-      : "P3–P5: language from the model scaffold is allowed without penalty.",
-    "2. END-OF-THIS-LEVEL SPEAKING (pld — English hardness for this integer level only)",
-    frameworkTask?.pld
-      ? JSON.stringify(frameworkTask.pld)
-      : JSON.stringify(selectExpressivePld(params.level)),
-    "3. CONTEXT THE STUDENT SAW (when a library image session)",
-    payloadText(payload, "passage")
-      ? `Context passage: ${payloadText(payload, "passage")}`
-      : "Context passage: (none — no image narrative)",
-    payloadText(payload, "image_description")
-      ? `Picture description: ${payloadText(payload, "image_description")}`
+    speakingRules?.isP1 ? "This is a P1-style task (ELP 1–2). Single word = Attempted (already applied in code if so)." : "P3–P5: language from the model is allowed without penalty.",
+    "Then write spoken_text as coaching. Do not name the ACCESS category to the student.",
+    "WIDA CAN DO",
+    speakingCanDoCoachNote(params.level, params.keyUse || params.canDo),
+    params.canDoAction || params.canDoItems?.length
+      ? `Action: ${params.canDoAction ?? ""} Items: ${(params.canDoItems ?? []).join("; ")}`
       : "",
-    payloadStringList(payload, "image_tags").length
-      ? `Picture tags: ${payloadStringList(payload, "image_tags").join(", ")}`
+    params.canDo ? `Descriptor: ${params.canDo}` : "",
+    "TASK ON SCREEN",
+    `Prompt: ${payload.prompt || payload.question || "(none)"}`,
+    `Scaffold: ${payload.scaffold || "(none)"}`,
+    "PICTURE",
+    payload.image_description ? `Description: ${payload.image_description}` : "Description: (none)",
+    payload.image_tags.length ? `Tags: ${payload.image_tags.join(", ")}` : "Tags: (none)",
+    "STUDENT ANSWER (speech-to-text)",
+    payload.student_answer || "(empty)",
+    payload.uncertain_words?.length
+      ? `Uncertain STT words: ${payload.uncertain_words.join(", ")}`
       : "",
-    "4. WHAT WAS ASKED (the only job — do not invent a second job)",
-    `Prompt: ${payloadText(payload, "prompt") || payloadText(payload, "question") || "(none)"}`,
-    payloadText(payload, "scaffold") ? `Sentence starter: ${payloadText(payload, "scaffold")}` : "",
-    payloadStringList(payload, "options").length
-      ? `Word bank: ${payloadStringList(payload, "options").join(", ")}`
-      : "",
-    payload.framework ? `WIDA 2020 framework job: ${JSON.stringify(payload.framework)}` : "",
-    payloadText(payload, "task_descriptor") && !payload.framework
-      ? `Task descriptor: ${payloadText(payload, "task_descriptor")}`
-      : "",
-    "5. THIS RESPONSE (speech-to-text transcript)",
-    payloadText(payload, "student_answer") || "(empty)",
-    payloadStringList(payload, "uncertain_words").length
-      ? `Uncertain STT words (do not over-penalize): ${payloadStringList(payload, "uncertain_words").join(", ")}`
-      : "",
-    payload.stt_confidence != null ? `STT confidence: ${payload.stt_confidence}` : "",
-    `Try number: ${payload.try_count ?? 1}.`,
-    payloadText(payload, "last_student_answer")
-      ? `6. LAST RESPONSE (before they tried again):\n${payloadText(payload, "last_student_answer")}`
-      : "",
-    payloadText(payload, "last_coach_tip")
-      ? `7. LAST TIP they were asked to apply:\n${payloadText(payload, "last_coach_tip")}`
-      : "",
-    "HOW TO DECIDE",
-    "Score ACCESS speaking category first, then check if THIS response does the asked job at this pld.",
-    LANGUAGE_FORMS_NOT_YET_EVIDENCE_LINE,
-    "Also NOT YET when the asked job is missing. Do not add a new topic.",
-    "If this is a resubmit: PASS only if they fixed the last tip in their own words — NOT if they recited coaching.",
-    (params.tryCount ?? 0) > 1 && params.lastCoachTip
-      ? "If THIS RESPONSE mostly copies LAST TIP or prior coaching, meets_task must be false."
-      : "",
-    "spoken_text NOT YET: separate blocks with \" || \" (praise | Listen.+mistake | rule | try). Do not name ACCESS categories.",
+    `Try number: ${payload.try_count}.`,
+    payload.last_judgment ? `Previous judgment: ${payload.last_judgment}.` : "",
   ].filter(Boolean).join("\n");
 
   const writingEvidencePrompt = [
@@ -727,49 +468,34 @@ export async function generateItemFeedback(params: ItemFeedbackInput): Promise<I
     "1. ACCESS WRITING RUBRIC (use this scale 0–7)",
     serializeWritingRubricForPrompt(),
     "2. END-OF-THIS-LEVEL WRITING (pld — English hardness for this integer level only)",
-    frameworkTask?.pld
-      ? JSON.stringify(frameworkTask.pld)
-      : JSON.stringify(selectExpressivePld(params.level)),
+    JSON.stringify(selectExpressivePld(params.level)),
     "3. CONTEXT THE STUDENT READ (when a library image session)",
-    payloadText(payload, "passage")
-      ? `Context passage: ${payloadText(payload, "passage")}`
+    payload.passage
+      ? `Context passage: ${payload.passage}`
       : "Context passage: (none — no image narrative)",
-    payloadText(payload, "image_description")
-      ? `Picture description: ${payloadText(payload, "image_description")}`
-      : "",
-    payloadStringList(payload, "image_tags").length
-      ? `Picture tags: ${payloadStringList(payload, "image_tags").join(", ")}`
-      : "",
+    payload.image_description ? `Picture description: ${payload.image_description}` : "",
+    payload.image_tags.length ? `Picture tags: ${payload.image_tags.join(", ")}` : "",
     "4. WHAT WAS ASKED (the only job — do not invent a second job)",
-    `Prompt: ${payloadText(payload, "prompt") || payloadText(payload, "question") || "(none)"}`,
-    payloadText(payload, "scaffold") ? `Sentence frame: ${payloadText(payload, "scaffold")}` : "",
-    payloadStringList(payload, "options").length
-      ? `Word bank: ${payloadStringList(payload, "options").join(", ")}`
-      : "",
-    payload.framework ? `WIDA 2020 framework job: ${JSON.stringify(payload.framework)}` : "",
-    payloadText(payload, "task_descriptor") && !payload.framework
-      ? `Task descriptor: ${payloadText(payload, "task_descriptor")}`
-      : "",
+    `Prompt: ${payload.prompt || payload.question || "(none)"}`,
+    payload.scaffold ? `Sentence frame: ${payload.scaffold}` : "",
+    payload.options?.length ? `Word bank: ${payload.options.join(", ")}` : "",
+    payload.can_do ? `Task job: ${payload.can_do}` : "",
     "5. THIS SUBMIT (what the student just wrote)",
-    payloadText(payload, "student_answer") || "(empty)",
-    `Try number: ${payload.try_count ?? 1}.`,
-    payloadText(payload, "last_student_answer")
-      ? `6. LAST SUBMIT (before they tried again):\n${payloadText(payload, "last_student_answer")}`
+    payload.student_answer || "(empty)",
+    `Try number: ${payload.try_count}.`,
+    payload.last_student_answer
+      ? `6. LAST SUBMIT (before they tried again):\n${payload.last_student_answer}`
       : "",
-    payloadText(payload, "last_coach_tip")
-      ? `7. LAST TIP they were asked to apply:\n${payloadText(payload, "last_coach_tip")}`
+    payload.last_coach_tip
+      ? `7. LAST TIP they were asked to apply:\n${payload.last_coach_tip}`
       : "",
     "HOW TO DECIDE",
     payload.passage
       ? "When a context passage was provided, score whether the writing connects to that passage and the prompt — not unrelated topic text."
       : "",
-    "If THIS SUBMIT does the asked job and language is fine for this pld: PASS. spoken_text = praise only.",
-    LANGUAGE_FORMS_NOT_YET_EVIDENCE_LINE,
-    "Also NOT YET when the asked job is missing. Do not add a new topic.",
-    "If this is a resubmit: PASS only if they fixed the last tip in their own words — NOT if they pasted coaching text.",
-    (params.tryCount ?? 0) > 1 && params.lastCoachTip
-      ? "If THIS SUBMIT mostly copies LAST TIP or prior coaching, meets_task must be false."
-      : "",
+    "If THIS SUBMIT does the asked job and language is fine for this pld: PASS. spoken_text = praise only. No You can write.",
+    "If NOT YET: you MUST teach. (1) what is wrong in their writing (2) why it is wrong in simple words so they can learn (3) You can write: one or two sentences they can copy. Do not skip the why. One gap only (grammar, verb, pronoun, spelling, or missing the job). Do not add a new topic.",
+    "If this is a resubmit and they applied the last tip: PASS. Do not invent a new gap.",
     "If the prompt says OR, one choice is enough. Do not switch topics.",
     "Never praise as finished while also asking to try again. Do not say the 0–7 number to the student.",
   ].filter(Boolean).join("\n");
@@ -781,23 +507,26 @@ export async function generateItemFeedback(params: ItemFeedbackInput): Promise<I
     : guessedMeet
     ? [
         `This student was CORRECT. Write ${maxSpoken} short sentence(s) of warm praise.`,
+        `They answered: ${payload.student_tapped || payload.student_answer || "(unknown)"}`,
         "Name what they got right. Do not retell the passage. Do not coach a different domain.",
         JSON.stringify(payload),
       ].join("\n")
     : params.format === "picture"
       ? [
           `Write spoken_text in ${maxSpoken} short sentence(s). Same text in object_clue. Nothing else.`,
-          interpretiveFrameworkBlock(params),
+          payload.target_object ? `Target: ${payload.target_object}` : "",
+          payload.image_description ? `Photo (for look/place words only): ${clip(params.imageDescription, 220)}` : "",
           pacing.style,
           "Do not quote the audio. Do not say what they chose. Do not repeat the clue.",
           JSON.stringify(payload),
         ].filter(Boolean).join("\n")
       : [
           `Write spoken_text in ${maxSpoken} short sentence(s) or fewer. Selected response.`,
-          interpretiveFrameworkBlock(params),
-          "Use only this domain's evidence (audio or passage). Point to phrasing that supports the correct option.",
+          `The student chose: ${payload.student_answer || "(unknown)"}`,
+          `The correct answer: ${payload.correct_answer || "(unknown)"}`,
+          "Use only this domain's evidence (audio or this passage).",
           JSON.stringify(payload),
-        ].filter(Boolean).join("\n");
+        ].join("\n");
 
   const systemPrompt = itemSystemPrompt(params);
   const audit = rubricPromptAudit(`${systemPrompt}\n${userPrompt}`);
@@ -822,10 +551,10 @@ export async function generateItemFeedback(params: ItemFeedbackInput): Promise<I
       studentAnswer: payload.student_answer,
       prompt: payload.prompt,
       scaffold: payload.scaffold,
-      wordBank: payload.options,
+      wordBank: payload.options ?? [],
       imageTags: payload.image_tags,
       minSentences: payload.min_sentences,
-      hasFramework: Boolean(payload.framework),
+      canDo: payload.can_do,
       keyUse: payload.key_use,
       userPrompt,
     },
@@ -833,7 +562,7 @@ export async function generateItemFeedback(params: ItemFeedbackInput): Promise<I
   );
 
   try {
-    const result = (await callClaude(systemPrompt, userPrompt, ITEM_FEEDBACK_MAX_TOKENS)) as Record<string, unknown>;
+    const result = (await callClaude(systemPrompt, userPrompt, 900)) as Record<string, unknown>;
     let accessSpeaking: SpeakingCategory | undefined;
     let accessWriting: number | undefined;
     let judgment: SpeakingJudgment =
@@ -846,32 +575,8 @@ export async function generateItemFeedback(params: ItemFeedbackInput): Promise<I
         parseSpeakingCategory(result.access_category ?? result.accessCategory ?? result.category)
         ?? (judgment === "agree" ? "Strong" : judgment === "partial" ? "Adequate" : "Attempted");
       accessSpeaking = clampSpeakingCategory(parsedCat, speakingRules?.cap ?? null);
-      const categoryPass = speakingCategoryMeetsTask(accessSpeaking, params.level);
-      const claudeMeets = parseClaudeMeetsTask(result);
-      const claudeJudgment = parseSpeakingJudgment(result.judgment ?? result.status);
-
-      if (claudeMeets === false || claudeJudgment === "partial" || claudeJudgment === "rejected") {
-        meetsTask = false;
-      } else if (claudeMeets === true || claudeJudgment === "agree") {
-        meetsTask = categoryPass;
-      } else {
-        meetsTask = categoryPass;
-      }
-
-      judgment = meetsTask ? "agree" : accessSpeaking === "Adequate" ? "partial" : "rejected";
-
-      if (
-        meetsTask &&
-        (params.tryCount ?? 0) > 1 &&
-        speakingAnswerEchoesCoach(
-          params.studentAnswer ?? "",
-          params.lastCoachTip,
-          params.lastStudentAnswer,
-        )
-      ) {
-        meetsTask = false;
-        judgment = accessSpeaking === "Adequate" ? "partial" : "rejected";
-      }
+      judgment = speakingCategoryToJudgment(accessSpeaking, params.level);
+      meetsTask = speakingCategoryMeetsTask(accessSpeaking, params.level);
     }
     if (params.format === "writing") {
       const raw = Number(result.score_point ?? result.scorePoint ?? result.score);
@@ -891,19 +596,9 @@ export async function generateItemFeedback(params: ItemFeedbackInput): Promise<I
       }
 
       judgment = meetsTask ? "agree" : accessWriting >= 2 ? "partial" : "rejected";
-
-      if (
-        meetsTask &&
-        (params.tryCount ?? 0) > 1 &&
-        writingAnswerEchoesCoach(
-          params.studentAnswer ?? "",
-          params.lastCoachTip,
-          params.lastStudentAnswer,
-        )
-      ) {
-        meetsTask = false;
-        judgment = accessWriting >= 2 ? "partial" : "rejected";
-      }
+    }
+    if (params.format === "writing" && !meetsTask) {
+      // Keep Claude's coaching; never flip to agree on a filled L1–2 frame alone.
     }
 
     let objectClue = clip(result.object_clue ?? result.objectClue ?? "", 400);
@@ -912,9 +607,10 @@ export async function generateItemFeedback(params: ItemFeedbackInput): Promise<I
     }
 
     let modelResponse = clip(result.model_response ?? result.modelResponse ?? "", 400);
-    if (params.format === "writing") {
-      modelResponse = "";
-    } else if (judgment === "agree") {
+    if (params.format === "writing" && !meetsTask && !modelResponse) {
+      modelResponse = writingModelFallback(params);
+    }
+    if (judgment === "agree") {
       modelResponse = "";
     }
 
@@ -927,44 +623,23 @@ export async function generateItemFeedback(params: ItemFeedbackInput): Promise<I
       spokenRaw = composeSpokenText(params, { objectClue, modelResponse });
     }
     if (params.format === "picture") spokenRaw = stripStrategy(spokenRaw);
-    if (params.format === "writing") {
-      spokenRaw = stripWritingCopyableModels(spokenRaw);
-      if (meetsTask) {
-        spokenRaw = spokenRaw.replace(/\s*Tap try again(?:,? or skip to move on)?\.?/gi, "").trim();
-        if (!spokenRaw) spokenRaw = "Yes. That writing is enough for this level.";
-      } else if (
-        (params.tryCount ?? 0) > 1 &&
-        writingAnswerEchoesCoach(
-          params.studentAnswer ?? "",
-          params.lastCoachTip,
-          params.lastStudentAnswer,
-        ) &&
-        !spokenRaw.toLowerCase().includes("own words")
-      ) {
-        spokenRaw =
-          `${spokenRaw} Revise in your own words — do not copy the coaching.`.trim();
-      }
+    if (params.format === "writing" && meetsTask) {
+      spokenRaw = spokenRaw.replace(/\s*Tap try again(?:,? or skip to move on)?\.?/gi, "").trim();
+      spokenRaw = stripWritingPassAssignments(spokenRaw);
+      if (!spokenRaw) spokenRaw = "Yes. That writing is enough for this level.";
       modelResponse = "";
     }
-    if (params.format === "speaking") {
-      spokenRaw = stripSpeakingCopyableModels(spokenRaw);
-      if (meetsTask) {
-        spokenRaw = spokenRaw.replace(/\s*Tap try again(?:,? or skip to move on)?\.?/gi, "").trim();
-        if (!spokenRaw) spokenRaw = "Yes. That answer works for this level.";
-      } else if (
-        (params.tryCount ?? 0) > 1 &&
-        speakingAnswerEchoesCoach(
-          params.studentAnswer ?? "",
-          params.lastCoachTip,
-          params.lastStudentAnswer,
-        ) &&
-        !spokenRaw.toLowerCase().includes("own words")
-      ) {
-        spokenRaw =
-          `${spokenRaw} Say it in your own words — do not copy the coaching.`.trim();
+    if (params.format === "writing" && !meetsTask) {
+      if (modelResponse && spokenRaw && !spokenRaw.toLowerCase().includes(modelResponse.toLowerCase().slice(0, 24))) {
+        spokenRaw = `${spokenRaw} You can write: ${modelResponse}`.trim();
+      } else if (!spokenRaw && modelResponse) {
+        spokenRaw = `You can write: ${modelResponse}`;
       }
+    }
+    if (params.format === "speaking" && spokenFromModel) {
+      spokenRaw = spokenFromModel;
       if (judgment === "agree") {
-        modelResponse = "";
+        spokenRaw = spokenRaw.replace(/\s*Tap try again\.?/gi, "").trim();
       }
     }
     if (!spokenRaw && objectClue) spokenRaw = objectClue;
