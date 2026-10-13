@@ -7,22 +7,23 @@
  * KEY DIFFERENCE from general image-library.ts:
  *   - Passage teaches an ACADEMIC CONCEPT (not just a scene description)
  *   - Subject guidelines frame the concept (math/science/social_studies/ela)
- *   - canDo + key use drive passage style AND question format (Narrate/Inform/Explain/Argue)
+ *   - 2020 framework + key use drive passage style AND question format (Narrate/Inform/Explain/Argue)
  *   - DINO tags are the ONLY valid question targets (verbatim)
  *   - image_description provides the academic concept story for the passage only
  */
 
-import { callClaude, toDisplayText, limitSentences } from "./client";
+import { callClaude, toDisplayText } from "./client";
 import { logger } from "../../config/logger";
 import type { ImagePassageContent } from "./image-library";
 import { resolvePictureListeningQuestion } from "./image-library";
-import { buildSystemPrompt } from "./prompts/compose";
-import { contentGenPrompt } from "./prompts/content";
 import { clampToThreeOptions } from "../choice-options";
-import { serializeCanDoForPrompt } from "../content";
+import { buildListening2020SystemPrompt } from "./listening";
+import { listeningL12AvailableFormats } from "../content/formatCapabilities";
+import { serializeFrameworkTask, type FrameworkTask } from "./standards/2020";
 import { dumpContentGenRequest } from "./dump-content-gen";
 import { kluSubjectPairingLine } from "../academic";
 import { mergePriorPractice, type PracticeReport } from "../practice-report";
+import { buildWritingPassageSentenceTarget } from "./prompts/content/writing-image-passage";
 
 // ── Subject guidelines (academic framing per subject) ─────────────────────────
 
@@ -76,15 +77,21 @@ PASSAGE FORMAT — Teacher introducing literacy tools or storytelling elements s
 
 // ── System prompt (kernel + listening 1-2 + this subject only)
 
-function academicTapSystem(subject: string, keyUse?: string, subjectLabel?: string): string {
+function academicTapSystem(
+  subject: string,
+  framework: FrameworkTask,
+  keyUse?: string,
+  subjectLabel?: string,
+): string {
   const pairing = subjectLabel
     ? kluSubjectPairingLine(keyUse, subject as "math" | "science" | "social_studies" | "ela", subjectLabel)
     : "Frame Narrate/Inform/Explain/Argue through THIS subject.";
-  return buildSystemPrompt(
-    contentGenPrompt("listening", 1),
-    SUBJECT_GUIDELINES[subject] ?? SUBJECT_GUIDELINES.science,
-    `Academic extras: image_concept overrides inferred topic. avoid_targets = do not reuse as tap targets. variation_seed = vary objects and wording. ${pairing} Never put "Find the" in the spoken passage.`,
-  );
+  return buildListening2020SystemPrompt(framework.pld.level, {
+    extraBlocks: [
+      SUBJECT_GUIDELINES[subject] ?? SUBJECT_GUIDELINES.science,
+      `Academic extras: image_concept overrides inferred topic. avoid_targets = do not reuse as tap targets. variation_seed = vary objects and wording. ${pairing} Never put "Find the" in the spoken passage.`,
+    ],
+  });
 }
 
 // ── Passage-length targets (matches WIDA oral format for levels 1–2) ──────────
@@ -106,7 +113,7 @@ export async function generateAcademicImageTapContent(params: {
   stepWithinLevel:       number;
   complexityInstruction: string;
   oralFormat:            string;           // WIDA oral format for this level
-  canDo:                 { keyUse: string; action: string; items: string[] };
+  framework:             FrameworkTask;
   topic:                 string;
   lastSessionScore?:     number | null;
   /** Explicit concept saved on the library image, e.g. "Chromosomes", "Westward Expansion". */
@@ -118,25 +125,8 @@ export async function generateAcademicImageTapContent(params: {
   priorPracticeReport?:  PracticeReport | null;
 }): Promise<ImagePassageContent> {
   const base = PASSAGE_SENTENCE_TARGETS[params.level] ?? PASSAGE_SENTENCE_TARGETS[2];
-
-  // For Explain key use, the passage must state functions — add that instruction to target
-  const ku = params.canDo.keyUse;
-  const passageSentenceTarget =
-    params.level >= 2 && ku === "Narrate"
-      ? `${base} Name 3 image_tags in time order (first, then, last). Q1 first tag; Q2 last tag.`
-      : params.level >= 2 && ku === "Inform"
-      ? `${base} Name 3 image_tags as a fact process in order. Q1 first; Q2 last.`
-      : params.level >= 2 && ku === "Explain"
-      ? `${base} Name 2 image_tags and compare or classify them, or state cause/effect. Question asks which object matches.`
-      : params.level >= 2 && ku === "Argue"
-      ? `${base} Use 2 real image_tags as evidence. Q1 true claim (agree). Q2 false claim (disagree).`
-      : ku === "Explain"
-      ? `${base} State the function in the passage. Write a function Wh-question that does NOT name the object. Student taps the matching image_tag. Invent new wording for this photo — do not copy instruction examples.`
-      : ku === "Inform"
-      ? `${base} Only name what is there. Do not explain how/why. Write identify questions in your own words; answers must be image_tags.`
-      : ku === "Argue"
-      ? `${base} The passage MUST name BOTH the agreed object (Q1) AND the absent object (Q2 — plausible but not in image_tags).`
-      : base;
+  const ku = params.framework.key_language_use;
+  const passageSentenceTarget = `${base} ${buildWritingPassageSentenceTarget(params.level, ku)} Choose image_object_tap and/or image_yes_no from available_question_formats based on framework.language_functions — not a fixed key-use template.`;
 
   const prompt = JSON.stringify(mergePriorPractice({
     required_key_use:       ku,
@@ -146,12 +136,14 @@ export async function generateAcademicImageTapContent(params: {
     complexity_instruction: params.complexityInstruction,
     oral_format:            params.oralFormat,
     passage_sentence_target: passageSentenceTarget,
-    can_do: serializeCanDoForPrompt(params.canDo, { level: params.level, domain: "LISTENING" }),
+    framework: serializeFrameworkTask(params.framework),
+    goal: "Create one academic image-tap listening task at framework.pld.",
     academic_subject:  params.academicSubject,
     subject_label:     params.subjectLabel,
     topic:             params.topic,
     last_session_score: params.lastSessionScore ?? null,
     question_count:    2,
+    available_question_formats: listeningL12AvailableFormats(),
     image_description: params.imageDescription,
     image_tags:        params.imageTags,
     // Explicit concept label saved by the admin — anchors the passage to the
@@ -165,7 +157,8 @@ export async function generateAcademicImageTapContent(params: {
 
   const systemPrompt = academicTapSystem(
     params.academicSubject,
-    params.canDo.keyUse,
+    params.framework,
+    ku,
     params.subjectLabel,
   );
 
@@ -174,7 +167,7 @@ export async function generateAcademicImageTapContent(params: {
     const result = (await callClaude(systemPrompt, prompt, 2000)) as Record<string, unknown>;
     const questions = (result.questions as Array<Record<string, unknown>>) ?? [];
     const rawPassage = result.audio_script ?? result.passage;
-    const passage = limitSentences(toDisplayText(rawPassage), 3);
+    const passage = toDisplayText(rawPassage);
 
     if (!passage.trim()) {
       throw new Error("Claude returned an empty audio_script — using fallback");
@@ -183,7 +176,7 @@ export async function generateAcademicImageTapContent(params: {
     logger.info(
       {
         subject:       params.academicSubject,
-        keyUse:        params.canDo.keyUse,
+        keyUse:        ku,
         questionCount: questions.length,
         passage:       passage.slice(0, 100),
       },
@@ -229,7 +222,7 @@ export async function generateAcademicImageTapContent(params: {
     };
   } catch (err) {
     logger.error(
-      { err, subject: params.academicSubject, keyUse: params.canDo.keyUse },
+      { err, subject: params.academicSubject, keyUse: ku },
       "generateAcademicImageTapContent failed",
     );
     throw err;

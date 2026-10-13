@@ -1,0 +1,177 @@
+{
+  "subject": "english_language_arts",
+  "framework": "Common Core State Standards for English Language Arts & Literacy",
+  "frameworkRef": "https://www.corestandards.org/ELA-Literacy/",
+  "gradeBand": "6-8",
+  "description": "CCSS Grade 6–8 ELA — literary and informational text units mapped to Reading Literature (RL), Reading Informational (RI), Writing (W), Language (L), and Speaking & Listening (SL). Each unit includes genre tags, CCSS standard codes, and scenario seeds for session generation.",
+  "units": [
+    {
+      "id": "narrative-structure",
+      "unit": "Narrative Structure",
+      "primaryGenre": "narrative",
+      "altGenres": ["author_craft"],
+      "ccssDomains": ["RL"],
+      "standards": ["RL.6.1", "RL.6.2", "RL.6.3", "RL.6.5", "RL.7.1", "RL.7.3", "RL.8.1", "RL.8.3"],
+      "tier3ByLevel": {
+        "3": ["character", "setting", "conflict", "resolution", "plot"],
+        "4": ["protagonist", "antagonist", "rising action", "climax", "falling action"],
+        "5": ["dynamic character", "static character", "internal conflict", "external conflict", "narrative arc"],
+        "6": ["characterization", "narrative perspective", "foil", "subplot", "denouement"]
+      },
+      "scenarios": [
+        "a student who overcomes stage fright before a school performance",
+        "a new student adjusting to a different country and culture",
+        "two friends who must resolve a misunderstanding",
+        "a young person who discovers a talent they did not know they had",
+        "a character who must make a difficult choice between loyalty and honesty"
+      ]
+    },
+    {
+      "id": "informational-text",
+      "unit": "Informational Text Structure",
+      "primaryGenre": "informational",
+      "altGenres": ["argument"],
+      "ccssDomains": ["RI"],
+      "standards": ["RI.6.1", "RI.6.2", "RI.6.3", "RI.6.5", "RI.7.5", "RI.7.8", "RI.8.2", "RI.8.8"],
+      "tier3ByLevel": {
+        "3": ["main idea", "detail", "heading", "topic sentence", "conclusion"],
+        "4": ["text structure", "cause and effect", "compare and contrast", "problem and solution", "chronological order"],
+        "5": ["central idea", "supporting evidence", "inference", "summary", "author's purpose"],
+        "6": ["synthesis", "corroboration", "domain-specific vocabulary", "text feature", "implicit meaning"]
+      },
+      "scenarios": [
+        "how schools in different countries operate differently",
+        "the history and science of why seasons change",
+        "how social media affects young people's mental health",
+        "the process of how laws are made in a democracy",
+        "why sleep is essential for learning and memory"
+      ]
+    },
+    {
+      "id": "argument-writing",
+      "unit": "Argument and Opinion",
+      "primaryGenre": "argument",
+      "altGenres": ["informational"],
+      "ccssDomains": ["W", "RI"],
+      "standards": ["W.6.1", "W.6.1a", "W.6.1b", "W.7.1", "W.7.1a", "W.8.1", "W.8.1b", "RI.6.8", "RI.7.8", "RI.8.8"],
+      "tier3ByLevel": {
+        "3": ["opinion", "reason", "example", "claim", "agree"],
+        "4": ["argument", "evidence", "counterclaim", "persuade", "support"],
+        "5": ["claim", "reasoning", "rebuttal", "credibility", "logical fallacy"],
+        "6": ["rhetorical appeal", "ethos", "pathos", "logos", "concession"]
+      },
+      "scenarios": [
+        "whether schools should allow students to use smartphones in class",
+        "whether student athletes should be required to maintain a minimum GPA",
+        "whether zoos are beneficial or harmful to animals",
+        "whether homework helps or hurts student learning",
+        "whether schools should start later in the morning"
+      ]
+    },
+    {
+      "id": "authors-craft",
+      "unit": "Author's Craft",
+      "primaryGenre": "author_craft",
+      "altGenres": ["narrative", "informational"],
+      "ccssDomains": ["RL", "L"],
+      "standards": ["RL.6.4", "RL.7.4", "RL.8.4", "L.6.5", "L.6.5a", "L.7.5", "L.8.5"],
+      "tier3ByLevel": {
+        "3": ["simile", "metaphor", "repetition", "rhyme", "imagery"],
+        "4": ["figurative language", "personification", "alliteration", "tone", "word choice"],
+        "5": ["symbolism", "irony", "foreshadowing", "flashback", "point of view"],
+        "6": ["narrative voice", "diction", "connotation", "denotation", "literary device"]
+      },
+      "scenarios": [
+        "a short poem about seasons and change read with analysis of figurative language",
+        "a memoir excerpt about a family tradition and the author's use of sensory details",
+        "a passage where the author's word choice creates a suspenseful mood",
+        "a narrative excerpt that uses flashback to reveal a character's motivation",
+        "a descriptive passage where personification makes nature come alive"
+      ]
+    },
+    {
+      "id": "poetry",
+      "unit": "Poetry and Verse",
+      "primaryGenre": "author_craft",
+      "altGenres": ["narrative"],
+      "ccssDomains": ["RL", "L"],
+      "standards": ["RL.6.5", "RL.7.5", "RL.8.5", "RL.6.4", "L.6.5", "L.7.5"],
+      "tier3ByLevel": {
+        "3": ["rhyme", "rhythm", "stanza", "line", "verse"],
+        "4": ["meter", "free verse", "imagery", "repetition", "theme"],
+        "5": ["speaker", "enjambment", "allusion", "extended metaphor", "tone"],
+        "6": ["volta", "apostrophe", "anaphora", "assonance", "consonance"]
+      },
+      "scenarios": [
+        "a short poem about belonging and identity read aloud with discussion of imagery",
+        "a poem about the natural world using vivid personification",
+        "a narrative poem telling the story of a historical event",
+        "a free-verse poem about change and growth with discussion of structure",
+        "a poem using extended metaphor to describe a life challenge"
+      ]
+    },
+    {
+      "id": "speaking-listening",
+      "unit": "Speaking and Listening",
+      "primaryGenre": "informational",
+      "altGenres": ["argument"],
+      "ccssDomains": ["SL"],
+      "standards": ["SL.6.1", "SL.6.1a", "SL.6.1b", "SL.6.1c", "SL.6.1d", "SL.6.2", "SL.6.3", "SL.7.1", "SL.7.2", "SL.8.1", "SL.8.3"],
+      "tier3ByLevel": {
+        "3": ["discussion", "listen", "question", "respond", "idea"],
+        "4": ["collaboration", "elaboration", "clarify", "summarize", "evidence"],
+        "5": ["collaborative discussion", "diverse perspectives", "reasoning", "counterargument", "presentation"],
+        "6": ["deliberation", "rhetorical question", "audience", "formal register", "synthesis"]
+      },
+      "scenarios": [
+        "a classroom debate where students discuss whether community service should be required for graduation",
+        "a student group presentation explaining how a local watershed supports wildlife",
+        "a Socratic seminar about a short story's theme and how different readers interpret the ending",
+        "a peer review session where students give constructive feedback on each other's argumentative essays",
+        "a student explaining a science fair project to classmates who ask clarifying questions"
+      ]
+    },
+    {
+      "id": "research-sources",
+      "unit": "Research and Evidence",
+      "primaryGenre": "informational",
+      "altGenres": ["argument"],
+      "ccssDomains": ["W", "RI"],
+      "standards": ["W.6.7", "W.6.8", "W.6.9", "W.7.7", "W.7.8", "W.7.9", "W.8.7", "W.8.8", "W.8.9", "RI.6.7", "RI.7.7", "RI.8.7"],
+      "tier3ByLevel": {
+        "3": ["source", "fact", "quote", "author", "topic"],
+        "4": ["credible source", "paraphrase", "quotation", "bibliography", "research question"],
+        "5": ["primary source", "secondary source", "relevance", "plagiarism", "citation"],
+        "6": ["corroboration", "bias", "synthesis", "annotated bibliography", "domain authority"]
+      },
+      "scenarios": [
+        "a student researching how renewable energy works and comparing information from a government website and a news article",
+        "a teacher explaining how to tell whether an online article about health is trustworthy",
+        "a class project where students gather facts about a historical figure from multiple sources and note where they agree or disagree",
+        "a student writing a report on endangered species and deciding which sources to cite",
+        "a librarian demonstrating how to use search terms to find relevant articles for a science topic"
+      ]
+    },
+    {
+      "id": "vocabulary-language",
+      "unit": "Vocabulary and Language Conventions",
+      "primaryGenre": "informational",
+      "altGenres": ["author_craft"],
+      "ccssDomains": ["L"],
+      "standards": ["L.6.4", "L.6.4a", "L.6.5", "L.6.6", "L.7.4", "L.7.5", "L.7.6", "L.8.4", "L.8.5", "L.8.6"],
+      "tier3ByLevel": {
+        "3": ["word", "meaning", "context", "prefix", "suffix"],
+        "4": ["context clue", "root word", "synonym", "antonym", "figurative meaning"],
+        "5": ["denotation", "connotation", "domain-specific", "academic vocabulary", "word relationship"],
+        "6": ["nuance", "shades of meaning", "register", "etymology", "language standard"]
+      },
+      "scenarios": [
+        "a teacher explaining how the prefix 'photo-' helps decode words like photosynthesis and photograph",
+        "a passage about ecosystems where students use context clues to figure out what 'biodiversity' means",
+        "a discussion of how the word 'home' has different connotations in a poem versus a real estate article",
+        "a science text introducing Greek and Latin roots common in academic vocabulary",
+        "a teacher comparing formal and informal word choices in two versions of the same announcement"
+      ]
+    }
+  ]
+}

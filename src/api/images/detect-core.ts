@@ -78,9 +78,15 @@ export interface DetectionResult {
  * Probes health on every call so the sidecar can start or stop without
  * restarting this process.
  */
+export interface RunDetectionOptions {
+  /** When false, keep raw DINO boxes (used for AI/factory images where crop-verify rejects illustrations). */
+  verify?: boolean;
+}
+
 export async function runDetection(
   imageDataUri: string,
   labels: string[],
+  options?: RunDetectionOptions,
 ): Promise<DetectionResult> {
   if (!(await isSidecarReady())) {
     throw new Error(
@@ -88,11 +94,19 @@ export async function runDetection(
     );
   }
 
-  logger.info({ labels }, "detect: using Grounding DINO sidecar");
-  const raw = await detectViaSidecar(imageDataUri, labels);
-  logger.info({ found: raw.map((d) => d.label) }, "detect: DINO done, running Claude verification");
+  const verify = options?.verify !== false;
 
-  const detections = await verifyDetections(imageDataUri, raw);
-  logger.info({ found: detections.map((d) => d.label) }, "detect: done");
+  logger.info({ labels, verify }, "detect: using Grounding DINO sidecar");
+  const raw = await detectViaSidecar(imageDataUri, labels);
+  logger.info({ found: raw.map((d) => d.label) }, "detect: DINO raw complete");
+
+  const detections = verify
+    ? await verifyDetections(imageDataUri, raw)
+    : raw.map((d) => ({ ...d, source: d.source ?? "dino" as const }));
+
+  if (verify) {
+    logger.info({ found: detections.map((d) => d.label) }, "detect: verification complete");
+  }
+
   return { detections, model: "grounding_dino" };
 }

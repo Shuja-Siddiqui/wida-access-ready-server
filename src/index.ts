@@ -15,6 +15,15 @@ import { startRenewalCrons } from "./lib/jobs/renewalCron";
 import { startImageFactoryCron } from "./lib/jobs/imageFactoryCron";
 import { getStripeSync } from "./lib/billing/stripeClient";
 
+process.on("unhandledRejection", (reason) => {
+  logger.error({ err: reason }, "Unhandled promise rejection");
+});
+
+process.on("uncaughtException", (err) => {
+  logger.fatal({ err }, "Uncaught exception — shutting down");
+  process.exit(1);
+});
+
 const rawPort = process.env["PORT"] ?? "8080";
 const port = Number(rawPort);
 

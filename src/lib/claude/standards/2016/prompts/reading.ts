@@ -1,6 +1,6 @@
 export const READING_2016_1_2 = `
 CAN DO (2016) — READING 1–2
-Questions still assess the 2016 can_do.items for this level and key_use. When has_library_image, answers must also be grounded in the passage AND the visible tags.
+Questions still assess the 2016 can_do.items for this level and key_use. When has_library_image, compose a passage from tag metadata (not a caption) — answers must come from the passage text only, not from what is visible in the photo alone.
 `.trim();
 
 export const READING_2016_3_6 = `

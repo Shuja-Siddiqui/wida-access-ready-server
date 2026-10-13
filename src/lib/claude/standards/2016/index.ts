@@ -1,10 +1,8 @@
 /**
- * 2016 pack — WIDA Can Do Descriptors, Key Uses Edition, Grades 6–8
+ * ARCHIVED — WIDA Can Do Descriptors, Key Uses Edition (2016), Grades 6–8.
  *
- * data/     Official Can Do table + practice content guide
- * prompts/  Extra Claude instructions for this edition only
- *           shared.ts = every domain; listening|reading|speaking|writing = band extras
- *           feedback.ts = coaching that still judges against Can Dos
+ * Not imported by standards/index.ts or any live generate/feedback path.
+ * Kept for historical reference only. All domains use standards/2020/.
  */
 import { FRAMEWORK_2016_PROMPT_SLICE } from "./prompts/shared";
 import { LISTENING_2016_1_2, LISTENING_2016_3_6 } from "./prompts/listening";

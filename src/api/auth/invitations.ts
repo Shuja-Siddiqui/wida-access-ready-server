@@ -1,4 +1,5 @@
-import { Router, type IRouter, type Request, type Response } from "express";
+import type { IRouter, Request, Response } from "express";
+import { createApiRouter } from "../../lib/http/create-api-router";
 import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import { eq, and, gt, isNull } from "drizzle-orm";
@@ -17,14 +18,19 @@ import { invitationEmail, educatorInvitationEmail } from "../../lib/mail/email-t
 import { config } from "../../config/index";
 import type { Assessment } from "../../lib/assessments";
 import { sendError, sendSuccess } from "../../lib/http/api-response";
+import {
+  createSessionPair as createAuthSessionPair,
+  sessionContextFromRequest,
+  sha256Token,
+} from "../../lib/auth/session";
 
-const router: IRouter = Router();
+const router: IRouter = createApiRouter();
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const BCRYPT_ROUNDS = 12;
 
 function sha256(raw: string): string {
-  return crypto.createHash("sha256").update(raw).digest("hex");
+  return sha256Token(raw);
 }
 function generateToken(): string {
   return crypto.randomBytes(32).toString("hex");
@@ -364,14 +370,11 @@ router.post("/auth/invite/accept", async (req: Request, res: Response): Promise<
       .set({ acceptedAt: now })
       .where(eq(invitationsTable.id, invite.id));
 
-    const sessionToken = generateToken();
-    const sessionHash = sha256(sessionToken);
-    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-    await db.insert(userSessionsTable).values({
+    const { token: sessionToken } = await createAuthSessionPair({
       userId:   result.guardian.id,
-      userType: "teacher",          // principals are backed by a guardians row, same as teachers
-      tokenHash: sessionHash,
-      expiresAt,
+      userType: "teacher",
+      context:  sessionContextFromRequest(req),
+      enforceSingleSession: false,
     });
 
     req.log.info(
@@ -426,14 +429,11 @@ router.post("/auth/invite/accept", async (req: Request, res: Response): Promise<
       .set({ acceptedAt: now })
       .where(eq(invitationsTable.id, invite.id));
 
-    const sessionToken = generateToken();
-    const sessionHash = sha256(sessionToken);
-    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-    await db.insert(userSessionsTable).values({
-      userId: guardian.id,
+    const { token: sessionToken } = await createAuthSessionPair({
+      userId:   guardian.id,
       userType: "teacher",
-      tokenHash: sessionHash,
-      expiresAt,
+      context:  sessionContextFromRequest(req),
+      enforceSingleSession: false,
     });
 
     req.log.info({ guardianId: guardian.id }, "Educator invitation accepted — account created");
@@ -517,15 +517,10 @@ router.post("/auth/invite/accept", async (req: Request, res: Response): Promise<
     .set({ acceptedAt: now })
     .where(eq(invitationsTable.id, invite.id));
 
-  // Issue session
-  const sessionToken = generateToken();
-  const sessionHash = sha256(sessionToken);
-  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-  await db.insert(userSessionsTable).values({
-    userId: student.id,
+  const { token: sessionToken } = await createAuthSessionPair({
+    userId:   student.id,
     userType: "student",
-    tokenHash: sessionHash,
-    expiresAt,
+    context:  sessionContextFromRequest(req),
   });
 
   req.log.info({ studentId: student.id }, "Invitation accepted — account created");

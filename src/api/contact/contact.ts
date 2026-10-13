@@ -1,12 +1,14 @@
-import { Router, type IRouter } from "express";
+import type { IRouter } from "express";
+import { createApiRouter } from "../../lib/http/create-api-router";
 import { SubmitContactMessageBody, SubmitContactMessageResponse } from "../../generated";
 import { sendHtmlEmail } from "../../lib/mail/mailer";
 import { config } from "../../config/index";
 import { sendError, sendSuccess } from "../../lib/http/api-response";
+import { rateLimitContact } from "../../middlewares/rate-limit-public";
 
-const router: IRouter = Router();
+const router: IRouter = createApiRouter();
 
-router.post("/contact", async (req, res): Promise<void> => {
+router.post("/contact", rateLimitContact(), async (req, res): Promise<void> => {
   const parsed = SubmitContactMessageBody.safeParse(req.body);
   if (!parsed.success) {
     req.log.warn({ errors: parsed.error.message }, "Invalid contact form submission");

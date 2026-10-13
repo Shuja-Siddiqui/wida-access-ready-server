@@ -18,6 +18,10 @@ export interface PracticeReport {
   /** Sub-step within the integer level (0=Entry … 4=Advanced). */
   stepWithinLevel?: number;
   scorePct: number;
+  /** Writing / interpretive: passed rubric or comprehension gate (not raw score %). */
+  meetsTask?: boolean;
+  /** Listening / reading: interpretive comprehension score point 0–7. */
+  interpretiveScorePoint?: number;
   keyUse: string | null;
   topic: string | null;
   summary: string;
@@ -43,6 +47,8 @@ export function buildPracticeReport(params: {
   fractionalLevel?: number;
   stepWithinLevel?: number;
   scorePct: number;
+  meetsTask?: boolean;
+  interpretiveScorePoint?: number;
   keyUse?: string | null;
   topic?: string | null;
   feedback: AttemptFeedback;
@@ -59,6 +65,8 @@ export function buildPracticeReport(params: {
     fractionalLevel: fractional,
     stepWithinLevel: step,
     scorePct: Math.round(params.scorePct),
+    meetsTask: params.meetsTask,
+    interpretiveScorePoint: params.interpretiveScorePoint,
     keyUse: params.keyUse ?? null,
     topic: params.topic ?? null,
     summary: clip(params.feedback.summary ?? ""),
@@ -86,6 +94,10 @@ export function parsePracticeReport(raw: unknown): PracticeReport | null {
     fractionalLevel,
     stepWithinLevel,
     scorePct: typeof r.scorePct === "number" ? r.scorePct : 0,
+    meetsTask: typeof r.meetsTask === "boolean" ? r.meetsTask : undefined,
+    interpretiveScorePoint: typeof r.interpretiveScorePoint === "number"
+      ? r.interpretiveScorePoint
+      : undefined,
     keyUse: typeof r.keyUse === "string" ? r.keyUse : null,
     topic: typeof r.topic === "string" ? r.topic : null,
     summary: clip(summary),
@@ -102,6 +114,8 @@ export function priorPracticeForGenerator(report: PracticeReport | null | undefi
   return {
     from_last_session: true,
     score_pct: report.scorePct,
+    interpretive_score_point: report.interpretiveScorePoint,
+    meets_task: report.meetsTask,
     level: report.level,
     fractional_level: report.fractionalLevel ?? report.level,
     step_within_level: report.stepWithinLevel,

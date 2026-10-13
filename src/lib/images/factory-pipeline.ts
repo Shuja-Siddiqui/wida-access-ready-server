@@ -63,7 +63,7 @@ export async function runFactorySeededPipeline(
   let model: PipelineResult["detectionResults"]["model"] = "grounding_dino";
 
   try {
-    const dinoResult = await runDetection(image, dinoLabels);
+    const dinoResult = await runDetection(image, dinoLabels, { verify: false });
     detections = dinoResult.detections;
     model = dinoResult.model;
   } catch (err) {

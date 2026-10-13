@@ -1,4 +1,5 @@
-import { Router, type IRouter, type Request, type Response } from "express";
+import type { IRouter, Request, Response } from "express";
+import { createApiRouter } from "../../lib/http/create-api-router";
 import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import { eq, and, gt, isNull } from "drizzle-orm";
@@ -21,8 +22,17 @@ import { verificationEmail, passwordResetEmail } from "../../lib/mail/email-temp
 import { config } from "../../config/index";
 import { sendError, sendSuccess } from "../../lib/http/api-response";
 import { getRequestOrigin } from "../../lib/http/request-origin";
+import { rateLimitAuth } from "../../middlewares/rate-limit-public";
+import {
+  createSessionPair as createAuthSessionPair,
+  sessionContextFromRequest,
+  sha256Token,
+  SESSION_TTL_MS,
+  REFRESH_TTL_MS,
+  type SessionUserType,
+} from "../../lib/auth/session";
 
-const router: IRouter = Router();
+const router: IRouter = createApiRouter();
 
 // ── Constants ──────────────────────────────────────────────────────────────
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -32,8 +42,6 @@ const GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo";
 const STATE_COOKIE = "g_oauth_state";
 const DEFAULT_GRADE_BAND = "6-8";
 const DEFAULT_ASSESSMENT: Assessment = "WIDA";
-const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
-const REFRESH_TTL_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
 const RESET_TTL_MS = 60 * 60 * 1000;             // 1 hour
 const VERIFY_TTL_MS = 24 * 60 * 60 * 1000;       // 24 hours
 const BCRYPT_ROUNDS = 12;
@@ -66,7 +74,7 @@ function parseCookies(header: string | undefined): Record<string, string> {
 }
 
 function sha256(raw: string): string {
-  return crypto.createHash("sha256").update(raw).digest("hex");
+  return sha256Token(raw);
 }
 
 function generateToken(): string {
@@ -121,18 +129,16 @@ async function sendVerificationEmailTo(
 }
 
 async function createSessionPair(
+  req: Request,
   userId: string,
-  userType: "student" | "teacher" | "parent" | "principal" | "district_admin",
+  userType: SessionUserType,
 ): Promise<{ token: string; refreshToken: string }> {
-  const token        = generateToken();
-  const refreshToken = generateToken();
-  const expiresAt        = new Date(Date.now() + SESSION_TTL_MS);
-  const refreshExpiresAt = new Date(Date.now() + REFRESH_TTL_MS);
-  await Promise.all([
-    db.insert(userSessionsTable).values({ userId, userType, tokenHash: sha256(token), expiresAt }),
-    db.insert(refreshTokensTable).values({ userId, userType, tokenHash: sha256(refreshToken), expiresAt: refreshExpiresAt }),
-  ]);
-  return { token, refreshToken };
+  const pair = await createAuthSessionPair({
+    userId,
+    userType,
+    context: sessionContextFromRequest(req),
+  });
+  return { token: pair.token, refreshToken: pair.refreshToken };
 }
 
 function extractBearer(req: Request): string | null {
@@ -179,7 +185,7 @@ router.get("/auth/config", (_req, res): void => {
 // ── Email / Password: Register ─────────────────────────────────────────────
 // Creates a new student account with email + password.
 // Source of truth is the users table; students table holds the profile.
-router.post("/auth/register", async (req: Request, res: Response): Promise<void> => {
+router.post("/auth/register", rateLimitAuth(), async (req: Request, res: Response): Promise<void> => {
   const { name, email, password, gradeBand, stateAssessment, homeLanguage, teacherCode, track } = req.body as {
     name?: string;
     email?: string;
@@ -273,7 +279,7 @@ router.post("/auth/register", async (req: Request, res: Response): Promise<void>
 });
 
 // ── Email / Password: Login ────────────────────────────────────────────────
-router.post("/auth/login", async (req: Request, res: Response): Promise<void> => {
+router.post("/auth/login", rateLimitAuth(), async (req: Request, res: Response): Promise<void> => {
   const { email, password, role } = req.body as {
     email?: string;
     password?: string;
@@ -320,7 +326,7 @@ router.post("/auth/login", async (req: Request, res: Response): Promise<void> =>
         sendError(res, 401, "Account setup incomplete. Please contact support if this problem persists.");
         return;
       }
-      const { token, refreshToken } = await createSessionPair(guardian.id, "teacher");
+      const { token, refreshToken } = await createSessionPair(req, guardian.id, "teacher");
       setSessionCookie(res, token);
       sendSuccess(res, { token, refreshToken, teacherId: guardian.id, userType: "teacher" });
       return;
@@ -341,7 +347,7 @@ router.post("/auth/login", async (req: Request, res: Response): Promise<void> =>
         sendError(res, 401, "Account setup incomplete. Please contact support if this problem persists.");
         return;
       }
-      const { token, refreshToken } = await createSessionPair(guardian.id, "parent");
+      const { token, refreshToken } = await createSessionPair(req, guardian.id, "parent");
       setSessionCookie(res, token);
       sendSuccess(res, { token, refreshToken, userId: guardian.id, userType: "parent" });
       return;
@@ -358,7 +364,7 @@ router.post("/auth/login", async (req: Request, res: Response): Promise<void> =>
         return;
       }
       await db.update(studentsTable).set({ lastLoginAt: new Date() }).where(eq(studentsTable.id, student.id));
-      const { token, refreshToken } = await createSessionPair(student.id, "student");
+      const { token, refreshToken } = await createSessionPair(req, student.id, "student");
       setSessionCookie(res, token);
       sendSuccess(res, { token, refreshToken, studentId: student.id, teacherId: student.guardianId, userType: "student" });
       return;
@@ -378,7 +384,7 @@ router.post("/auth/login", async (req: Request, res: Response): Promise<void> =>
           sendError(res, 401, "Account setup incomplete. Please contact support.");
           return;
         }
-        const { token, refreshToken } = await createSessionPair(guardian.id, user.role as "teacher" | "principal");
+        const { token, refreshToken } = await createSessionPair(req, guardian.id, user.role as "teacher" | "principal");
         setSessionCookie(res, token);
         sendSuccess(res, { token, refreshToken, teacherId: guardian.id, userType: user.role });
         return;
@@ -395,7 +401,7 @@ router.post("/auth/login", async (req: Request, res: Response): Promise<void> =>
           sendError(res, 401, "Account setup incomplete. Please contact support.");
           return;
         }
-        const { token, refreshToken } = await createSessionPair(da.id, "district_admin");
+        const { token, refreshToken } = await createSessionPair(req, da.id, "district_admin");
         setSessionCookie(res, token);
         sendSuccess(res, { token, refreshToken, teacherId: da.id, districtId: da.districtId, userType: "district_admin" });
         return;
@@ -412,7 +418,7 @@ router.post("/auth/login", async (req: Request, res: Response): Promise<void> =>
           sendError(res, 401, "Account setup incomplete. Please contact support.");
           return;
         }
-        const { token, refreshToken } = await createSessionPair(guardian.id, "parent");
+        const { token, refreshToken } = await createSessionPair(req, guardian.id, "parent");
         setSessionCookie(res, token);
         sendSuccess(res, { token, refreshToken, teacherId: guardian.id, userType: "parent", role: user.role });
         return;
@@ -430,7 +436,7 @@ router.post("/auth/login", async (req: Request, res: Response): Promise<void> =>
           sendError(res, 401, "Account setup incomplete. Please contact support.");
           return;
         }
-        const { token, refreshToken } = await createSessionPair(guardian.id, "teacher");
+        const { token, refreshToken } = await createSessionPair(req, guardian.id, "teacher");
         setSessionCookie(res, token);
         sendSuccess(res, { token, refreshToken, teacherId: guardian.id, userType: "super_admin", role: "super_admin" });
         return;
@@ -443,6 +449,69 @@ router.post("/auth/login", async (req: Request, res: Response): Promise<void> =>
 
   // No account found
   sendError(res, 401, "Invalid email or password");
+});
+
+// ── Super-admin portal login (super_admin role only) ───────────────────────
+router.post("/auth/admin/login", rateLimitAuth(), async (req: Request, res: Response): Promise<void> => {
+  const { email, password } = req.body as { email?: string; password?: string };
+
+  if (!email?.trim() || !password) {
+    sendError(res, 400, "email and password are required");
+    return;
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+  const [user] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.email, normalizedEmail))
+    .limit(1);
+
+  if (!user?.passwordHash) {
+    sendError(res, 401, "Invalid email or password");
+    return;
+  }
+
+  const valid = await bcrypt.compare(password, user.passwordHash);
+  if (!valid) {
+    sendError(res, 401, "Invalid email or password");
+    return;
+  }
+
+  if (!user.emailVerified) {
+    sendError(res, 403, "Please verify your email before logging in", { requiresVerification: true });
+    return;
+  }
+
+  if (user.role !== "super_admin") {
+    req.log.warn({ userId: user.id, role: user.role }, "admin login rejected — not super_admin");
+    sendError(res, 403, "Super admin access required");
+    return;
+  }
+
+  const [guardian] = await db
+    .select()
+    .from(profilesTable)
+    .where(eq(profilesTable.userId, user.id))
+    .limit(1);
+
+  if (!guardian) {
+    req.log.warn({ userId: user.id }, "Super admin login: no profile row found");
+    sendError(res, 401, "Account setup incomplete. Please contact support.");
+    return;
+  }
+
+  const { token, refreshToken } = await createSessionPair(req, guardian.id, "teacher");
+  setSessionCookie(res, token);
+  sendSuccess(res, {
+    token,
+    refreshToken,
+    teacherId: guardian.id,
+    userType:  "super_admin",
+    role:      "super_admin",
+    email:     user.email,
+    name:      user.name,
+  });
 });
 
 // ── Session: Me ────────────────────────────────────────────────────────────
@@ -592,8 +661,9 @@ router.post("/auth/refresh", async (req: Request, res: Response): Promise<void> 
 
   // Issue a new session + refresh pair
   const { token, refreshToken: newRefreshToken } = await createSessionPair(
+    req,
     record.userId,
-    record.userType as "student" | "teacher" | "parent" | "principal" | "district_admin",
+    record.userType as SessionUserType,
   );
 
   setSessionCookie(res, token);
@@ -606,7 +676,7 @@ router.post("/auth/refresh", async (req: Request, res: Response): Promise<void> 
 
 // ── Educator Register ──────────────────────────────────────────────────────
 // Creates a unified user record + educator profile + teacher profile row.
-router.post("/auth/register/educator", async (req: Request, res: Response): Promise<void> => {
+router.post("/auth/register/educator", rateLimitAuth(), async (req: Request, res: Response): Promise<void> => {
   const { name, email, password, school } = req.body as {
     name?: string;
     email?: string;
@@ -718,7 +788,7 @@ router.get("/auth/verify-email", async (req: Request, res: Response): Promise<vo
       .limit(1);
 
     if (student) {
-      const { token: sessionToken, refreshToken } = await createSessionPair(student.id, "student");
+      const { token: sessionToken, refreshToken } = await createSessionPair(req, student.id, "student");
       setSessionCookie(res, sessionToken);
       sendSuccess(res, { ok: true, userType: "student", token: sessionToken, refreshToken, studentId: student.id, teacherId: student.guardianId });
       return;
@@ -738,7 +808,7 @@ router.get("/auth/verify-email", async (req: Request, res: Response): Promise<vo
         .limit(1);
 
       if (guardian) {
-        const { token: sessionToken, refreshToken } = await createSessionPair(guardian.id, "parent");
+        const { token: sessionToken, refreshToken } = await createSessionPair(req, guardian.id, "parent");
         setSessionCookie(res, sessionToken);
         sendSuccess(res, { ok: true, userType: "parent", token: sessionToken, refreshToken, userId: guardian.id, teacherId: guardian.id });
         return;
@@ -760,7 +830,7 @@ router.get("/auth/verify-email", async (req: Request, res: Response): Promise<vo
         .limit(1);
 
       if (teacher) {
-        const { token: sessionToken, refreshToken } = await createSessionPair(teacher.id, "teacher");
+        const { token: sessionToken, refreshToken } = await createSessionPair(req, teacher.id, "teacher");
         setSessionCookie(res, sessionToken);
         sendSuccess(res, { ok: true, userType: "teacher", token: sessionToken, refreshToken, teacherId: teacher.id });
         return;
@@ -772,7 +842,7 @@ router.get("/auth/verify-email", async (req: Request, res: Response): Promise<vo
 });
 
 // ── Resend Verification Email ──────────────────────────────────────────────
-router.post("/auth/resend-verification", async (req: Request, res: Response): Promise<void> => {
+router.post("/auth/resend-verification", rateLimitAuth(), async (req: Request, res: Response): Promise<void> => {
   const { email, role } = req.body as { email?: string; role?: string };
 
   // Always 200 to prevent enumeration
@@ -799,7 +869,7 @@ router.post("/auth/resend-verification", async (req: Request, res: Response): Pr
 });
 
 // ── Forgot Password ────────────────────────────────────────────────────────
-router.post("/auth/forgot-password", async (req: Request, res: Response): Promise<void> => {
+router.post("/auth/forgot-password", rateLimitAuth(), async (req: Request, res: Response): Promise<void> => {
   const { email, role } = req.body as { email?: string; role?: string };
 
   // Always respond 200 to prevent email enumeration
@@ -845,7 +915,7 @@ router.post("/auth/forgot-password", async (req: Request, res: Response): Promis
 });
 
 // ── Reset Password ─────────────────────────────────────────────────────────
-router.post("/auth/reset-password", async (req: Request, res: Response): Promise<void> => {
+router.post("/auth/reset-password", rateLimitAuth(), async (req: Request, res: Response): Promise<void> => {
   const { token, newPassword } = req.body as { token?: string; newPassword?: string };
 
   if (!token || !newPassword) {
@@ -1082,7 +1152,7 @@ router.get("/auth/google/callback", async (req, res): Promise<void> => {
 
     if (oauthRole === "educator" || oauthRole === "district") {
       const { teacherId, isNewUser } = await findOrCreateGoogleEducator(profile, oauthRole);
-      const { token: sessionToken, refreshToken: sessionRefreshToken } = await createSessionPair(teacherId, "teacher");
+      const { token: sessionToken, refreshToken: sessionRefreshToken } = await createSessionPair(req, teacherId, "teacher");
       // SSR (e.g. `/billing`) authenticates via the `authToken` cookie, not the
       // hash params below — without this, Google-authenticated users would
       // hit SSR routes as anonymous even though they hold a valid session.
@@ -1095,7 +1165,7 @@ router.get("/auth/google/callback", async (req, res): Promise<void> => {
 
     if (oauthRole === "parent") {
       const { guardianId, isNewUser } = await findOrCreateGoogleParent(profile);
-      const { token: sessionToken, refreshToken: sessionRefreshToken } = await createSessionPair(guardianId, "parent");
+      const { token: sessionToken, refreshToken: sessionRefreshToken } = await createSessionPair(req, guardianId, "parent");
       setSessionCookie(res, sessionToken);
       const params = new URLSearchParams({ userId: guardianId, token: sessionToken, refreshToken: sessionRefreshToken, role: "parent" });
       if (isNewUser) params.set("isNewUser", "true");
@@ -1107,7 +1177,7 @@ router.get("/auth/google/callback", async (req, res): Promise<void> => {
     const { studentId, teacherId, isNewUser } = await findOrCreateGoogleStudent(profile);
 
     await db.update(studentsTable).set({ lastLoginAt: new Date() }).where(eq(studentsTable.id, studentId));
-    const { token: sessionToken, refreshToken: sessionRefreshToken } = await createSessionPair(studentId, "student");
+    const { token: sessionToken, refreshToken: sessionRefreshToken } = await createSessionPair(req, studentId, "student");
     setSessionCookie(res, sessionToken);
 
     const params = new URLSearchParams({ studentId, token: sessionToken, refreshToken: sessionRefreshToken, role: "student" });
@@ -1178,7 +1248,7 @@ router.post("/auth/google/complete-profile/parent", async (req: Request, res: Re
 });
 
 // ── District Admin Register ────────────────────────────────────────────────
-router.post("/auth/register/district", async (req: Request, res: Response): Promise<void> => {
+router.post("/auth/register/district", rateLimitAuth(), async (req: Request, res: Response): Promise<void> => {
   const { name, email, password, district, title } = req.body as {
     name?: string;
     email?: string;
@@ -1237,7 +1307,7 @@ router.post("/auth/register/district", async (req: Request, res: Response): Prom
 });
 
 // ── Parent Register ────────────────────────────────────────────────────────
-router.post("/auth/register/parent", async (req: Request, res: Response): Promise<void> => {
+router.post("/auth/register/parent", rateLimitAuth(), async (req: Request, res: Response): Promise<void> => {
   const { name, email, password } = req.body as {
     name?: string;
     email?: string;

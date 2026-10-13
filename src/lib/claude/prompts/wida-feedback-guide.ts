@@ -3,12 +3,12 @@
  * Never concatenate all slices — that mixes listening, speaking, reading, and writing.
  */
 
-import { WIDA_FRAMEWORK_VERSION } from "../standards";
 import {
-  FEEDBACK_2016_SHARED,
-  FEEDBACK_2016_SPEAKING_1_2,
-  FEEDBACK_2016_SPEAKING_3_6,
-} from "../standards/2016";
+  FEEDBACK_2020_SHARED,
+  FEEDBACK_2020_SPEAKING_1_2,
+  FEEDBACK_2020_SPEAKING_3_6,
+} from "../standards/2020";
+import { languageFormsCorrectionCoachingForDomain } from "./grammar-correction-rules";
 
 export type FeedbackDomain = "listening" | "reading" | "speaking" | "writing";
 export type FeedbackBand = "1_2" | "3_6";
@@ -24,7 +24,8 @@ Mark 1–2 key words with *asterisks* for spoken stress.
 No emojis.
 
 If this item is listening or reading selected-response: YOU set meets_task from the student answer vs the correct option/target in the user message.
-meets_task true (or judgment agree) means they can go Next. Otherwise they should Try again or Skip.
+meets_task true (or judgment agree) means they can advance (the app shows Next, Finish, or another continue button). Otherwise they should Try again or Skip.
+Do not tell the student to tap Next, Finish, Try again, or Skip — the app speaks that cue.
 If answer_correct / meets_task is true on other domains: warm praise. Name what they got right. Never "not yet."
 If false on other domains: follow THIS domain's slice. Do not copy another domain.
 `.trim();
@@ -71,30 +72,36 @@ Do not coach speaking or writing length.
 const SPEAKING_1_2 = `
 DOMAIN: SPEAKING  |  BAND: levels 1–2  |  ACCESS practice for Grade 6–8
 
-You decide from the evidence (on-screen task, picture, transcript). Do not punish accent. Speech-to-text may be messy; close sounds can be the same word. Use only those facts. Do not invent objects. Stay on this item.
+Two checks, in this order:
+1. ACCESS speaking rubric (5 categories in the user message).
+2. Did THIS RESPONSE do WHAT WAS ASKED, at THIS level (pld)? You also get LAST RESPONSE and LAST TIP on a retry.
 
-How to judge:
-  First score ACCESS Speaking: Exemplary, Strong, Adequate, Attempted, or No Response (official rubric in the user message). Hard rules (single-word P1, I don't know, repeating the question) are applied in code.
-  Student-facing spoken_text: coach in Language Forms (Discourse, Sentence, Word-Phrase). Do not say the category name.
+Evidence: on-screen task, picture, transcript. Do not punish accent. STT may be messy. Use only those facts.
 
-If spoken_text says they are exactly right / already met this task, judgment MUST be agree and try_again_tip must be empty. Never praise as finished while also asking for another try.
+PASS: the asked job is done AND there is no clear teachable language slip. spoken_text = praise only.
 
-Do not coach Level 3+ talk (paragraphs, long explanations) on Level 1–2. Do not invent a different question than the one on screen.
+NOT YET: the job is missing, OR there is a teachable language slip — follow LANGUAGE FORMS — CORRECT GRAMMAR below.
+spoken_text NOT YET: use " || " between (1) brief praise (2) "Listen." + mistake with *wrong word* (3) simple rule (4) short try-step — so TTS pauses between mistake and instruction.
+model_response: at most ONE short phrase they can say aloud — never a full answer to recite.
+On retry: PASS only if they revised in their own words and fixed the coached gap — not if they copied coaching.
 
-spoken_text = what they hear. Write naturally as a teacher. No bullet list. Do not write "what went well". Do not say "Tap Next" or "Tap Try again" — the app adds that once.
-  agree    — one short praise of what they said. Stop.
-  partial / rejected — what they did and what to try, in spoken_text only.
-
+Coach in Discourse, Sentence, Word-Phrase. Do not say category names. Do not say "Tap Next" or "Tap Try again".
 meets_task is true only for agree.
 `.trim();
 
 const SPEAKING_3_6 = `
 DOMAIN: SPEAKING  |  BAND: levels 3–6  |  longer oral discourse
-YOU judge against the ACCESS speaking rubric, then the task, picture facts, and transcript.
-Set access_category. Do not invent.
+
+Two checks, in this order:
+1. Score holistically on ACCESS speaking rubric (official categories in the user message). Do not show category names to the student.
+2. Compatible with THIS task? If the response does not do the prompt's job, or is weaker than end-of-level pld, it is NOT YET.
+
+PASS: they did this task in English that matches this level with no teachable language slip. Praise only.
+NOT YET: the job is missing or there is a teachable language slip — follow LANGUAGE FORMS — CORRECT GRAMMAR below.
+spoken_text NOT YET: use " || " between praise, "Listen."+mistake, rule, and try-step.
+
 L3: 3–5 sentences with a sequence word. L4: short organized paragraph. L5–6: extended organized talk.
-spoken_text: Language Forms (Discourse / Sentence / Word-Phrase). No category names.
-If you praise as finished, judgment MUST be agree. If they still need another try, judgment is partial or rejected — do not say they already did it right.
+On retry: PASS only if they fixed the last tip in their own words — not if they recited coaching.
 meets_task = true only for agree.
 `.trim();
 
@@ -105,16 +112,12 @@ Two checks, in this order:
 1. ACCESS writing rubric 0–7 (in the user message).
 2. Did THIS SUBMIT do WHAT WAS ASKED, at THIS level (pld)? You also get LAST SUBMIT and LAST TIP on a retry.
 
-PASS: the asked job is done AND there is no clear teachable language slip (grammar, verb, pronoun, spelling of a key word). spoken_text = praise only. No You can write.
+PASS: the asked job is done AND there is no clear teachable language slip. spoken_text = praise only.
 
-NOT YET: the job is missing, OR there is one clear language slip they can learn (grammar, verb, he/it, spelling).
-  spoken_text MUST have three parts, in this order:
-  (1) What is wrong — point to their word or pattern
-  (2) Why it is wrong — one simple reason so they can learn (not a grammar-class label dump)
-  (3) You can write: one or two simple sentences they can copy, same topic as the prompt
-  Example shape (invent new words for THIS item): "You wrote he for the cell. A cell is a thing, so we say it. You can write: It protects the cell."
-  One gap only. Do not add a new job or extra sentences about a new idea.
-On retry: if they applied the last tip, PASS. Do not open a new gap.
+NOT YET: the job is missing, OR there is a teachable language slip — follow LANGUAGE FORMS — CORRECT GRAMMAR below.
+Never give "You can write:" or full example sentences. model_response must be "".
+spoken_text NOT YET: use " || " between (1) brief praise (2) "Listen." + mistake with *wrong word* (3) simple rule (4) short try-step — so TTS pauses between mistake and instruction.
+On retry: PASS only if they revised in their own words and fixed the coached gap — not if they pasted coaching.
 
 Coach in Discourse, Sentence, Word-Phrase. Do not say 0–7 numbers. Do not coach pronunciation.
 `.trim();
@@ -126,8 +129,8 @@ Two checks, in this order:
 1. Score holistically on ACCESS writing rubric 0–7 (in the user message). Do not show 0–7 numbers to the student.
 2. Compatible with THIS task? If the writing does not do the prompt's job, or is weaker than end_of_level_writing in the user JSON, it is NOT YET. Coach the gap (organization, how ideas stick, detail, sentences, words). Do not ask for the next English level.
 
-PASS: they did this task in English that matches this level. Praise only. Do not give a leftover fix. The app says Tap Next.
-NOT YET: they must change the writing. Say what is wrong, why (so they can learn), then "You can write:" plus a model. One gap only. The app says Tap Try again. Do not praise as finished.
+PASS: they did this task in English that matches this level with no teachable language slip. Praise only. Do not name the continue button.
+NOT YET: the job is missing or there is a teachable language slip — follow LANGUAGE FORMS — CORRECT GRAMMAR below. Do not praise as finished. Do not name Try again or Skip.
 
 L3: one short paragraph, main idea + details (4+ sentences); simple connectors.
 L4: two paragraphs, topic sentence + support.
@@ -188,22 +191,22 @@ export function feedbackCoachPrompt(domain: string, level: number, format?: stri
   const d = normalizeFeedbackDomain(domain, format);
   const band = feedbackBand(level);
   const slice = SLICES[d][band];
-  const edition =
-    d === "writing"
-      ? ""
-      : WIDA_FRAMEWORK_VERSION === "2016"
-      ? [
-          FEEDBACK_2016_SHARED,
-          d === "speaking" && band === "1_2" ? FEEDBACK_2016_SPEAKING_1_2 : "",
-          d === "speaking" && band === "3_6" ? FEEDBACK_2016_SPEAKING_3_6 : "",
-        ]
-          .filter(Boolean)
-          .join("\n\n")
-      : "";
+  const edition = d === "writing"
+    ? ""
+    : [
+        FEEDBACK_2020_SHARED,
+        d === "speaking" && band === "1_2" ? FEEDBACK_2020_SPEAKING_1_2 : "",
+        d === "speaking" && band === "3_6" ? FEEDBACK_2020_SPEAKING_3_6 : "",
+      ]
+        .filter(Boolean)
+        .join("\n\n");
   const head = [FEEDBACK_KERNEL, edition].filter(Boolean).join("\n\n");
-  if (band !== "1_2") return `${head}\n\n${slice}`;
+  const languageForms = languageFormsCorrectionCoachingForDomain(d);
+  const languageFormsBlock = languageForms ? `\n\n${languageForms}` : "";
+
+  if (band !== "1_2") return `${head}\n\n${slice}${languageFormsBlock}`;
   if (d === "listening") {
     return `${head}\n\n${slice}\n\n${PICTURE_LOOKS_1_2}\n\n${cluePacing(level).style}`;
   }
-  return `${head}\n\n${slice}`;
+  return `${head}\n\n${slice}${languageFormsBlock}`;
 }

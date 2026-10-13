@@ -13,46 +13,46 @@
  */
 
 import curriculumData from "../../data/academicScienceCurriculum.json";
+import {
+  scienceFrameworkFromUnit,
+  scenarioExamplesForPrompt,
+  type AcademicFrameworkFields,
+} from "./academicFrameworkContext";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface ScienceUnit {
   id:            string;
-  strand:        string;  // "Life Science" | "Physical Science" | "Earth and Space Science"
+  strand:        string;
   unit:          string;
   topics:        string;
+  ngssDomain?:   string;
+  standards?:    string[];
+  practices?:    string[];
+  crosscuttingConcepts?: string[];
   tier3ByLevel:  Record<string, string[]>;
   scenarios:     string[];
 }
 
-export interface ScienceSessionContext {
+export interface ScienceSessionContext extends Partial<AcademicFrameworkFields> {
   /** The science unit targeted this session */
   unit:             string;
   /** The strand this unit belongs to, e.g. "Life Science" */
   strand:           string;
-  /** The specific scenario Claude will use for the narration */
+  /** Internal rotation seed (dedup only) */
   scenario:         string;
+  scenarioExamples: string[];
   /** Tier-3 science vocabulary appropriate for this WIDA level */
   tier3Vocabulary:  string[];
   /** Topic string written to the sessions record and echoed by Claude */
   topicLabel:       string;
   /** Permitted question formats */
-  permittedFormats: string[];
+  permittedFormats?: string[];
 }
 
 // ── Permitted formats ─────────────────────────────────────────────────────────
 
-/**
- * Science sessions permit all four formats.
- * agree_disagree is appropriate for evidence-based scientific claims.
- * sequence_ordering is useful for processes (rock cycle, cellular respiration, etc.).
- */
-export const SCIENCE_PERMITTED_FORMATS: string[] = [
-  "multiple_choice",
-  "sequence_ordering",
-  "pair_matching",
-  "agree_disagree",
-];
+import { listeningAvailableFormats } from "../content/formatCapabilities";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -120,9 +120,9 @@ export function selectScienceScenario(
     unit:             chosenUnit.unit,
     strand:           chosenUnit.strand,
     scenario:         chosenScenario,
+    scenarioExamples: [],
     tier3Vocabulary:  [],  // caller fills in after resolving WIDA level
     topicLabel,
-    permittedFormats: SCIENCE_PERMITTED_FORMATS,
   };
 }
 
@@ -139,5 +139,11 @@ export function buildScienceSessionContext(
   const units = getScienceUnits();
   const unit  = units.find((u) => u.unit === ctx.unit) ?? units[0];
   const vocab = getScienceVocabForLevel(unit, fractionalLevel);
-  return { ...ctx, tier3Vocabulary: vocab };
+  return {
+    ...ctx,
+    tier3Vocabulary: vocab,
+    scenarioExamples: scenarioExamplesForPrompt(unit.scenarios),
+    permittedFormats: listeningAvailableFormats(clampLevel(fractionalLevel)),
+    ...scienceFrameworkFromUnit(unit),
+  };
 }

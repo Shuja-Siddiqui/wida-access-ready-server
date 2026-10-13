@@ -1,4 +1,5 @@
-import { Router, type IRouter } from "express";
+import type { IRouter } from "express";
+import { createApiRouter } from "../../lib/http/create-api-router";
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod/v4";
 import {
@@ -12,7 +13,7 @@ import {
 import { sendError, sendSuccess } from "../../lib/http/api-response";
 import { requireAuth } from "../../middlewares/auth";
 
-const router: IRouter = Router();
+const router: IRouter = createApiRouter();
 
 router.use("/district", requireAuth);
 

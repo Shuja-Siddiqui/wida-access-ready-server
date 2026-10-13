@@ -13,46 +13,45 @@
  */
 
 import curriculumData from "../../data/academicSocialStudiesCurriculum.json";
+import {
+  socialStudiesFrameworkFromUnit,
+  scenarioExamplesForPrompt,
+  type AcademicFrameworkFields,
+} from "./academicFrameworkContext";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface SocialStudiesUnit {
   id:            string;
-  strand:        string;  // "World History" | "U.S. History" | "Financial Literacy and Economics"
+  strand:        string;
   unit:          string;
   topics:        string;
+  c3Discipline?: string;
+  standards?:    string[];
+  inquiryDimensions?: string[];
   tier3ByLevel:  Record<string, string[]>;
   scenarios:     string[];
 }
 
-export interface SocialStudiesSessionContext {
+export interface SocialStudiesSessionContext extends Partial<AcademicFrameworkFields> {
   /** The social studies unit targeted this session */
   unit:             string;
   /** The strand this unit belongs to, e.g. "U.S. History" */
   strand:           string;
-  /** The specific scenario Claude will use for the narration */
+  /** Internal rotation seed (dedup only) */
   scenario:         string;
+  scenarioExamples: string[];
   /** Tier-3 social studies vocabulary appropriate for this WIDA level */
   tier3Vocabulary:  string[];
   /** Topic string written to the sessions record and echoed by Claude */
   topicLabel:       string;
   /** Permitted question formats */
-  permittedFormats: string[];
+  permittedFormats?: string[];
 }
 
 // ── Permitted formats ─────────────────────────────────────────────────────────
 
-/**
- * Social studies sessions permit all four formats.
- * agree_disagree is especially effective for historical interpretation and civics claims.
- * sequence_ordering is useful for timelines of events and cause-effect chains.
- */
-export const SS_PERMITTED_FORMATS: string[] = [
-  "multiple_choice",
-  "sequence_ordering",
-  "pair_matching",
-  "agree_disagree",
-];
+import { listeningAvailableFormats } from "../content/formatCapabilities";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -123,9 +122,9 @@ export function selectSocialStudiesScenario(
     unit:             chosenUnit.unit,
     strand:           chosenUnit.strand,
     scenario:         chosenScenario,
+    scenarioExamples: [],
     tier3Vocabulary:  [],  // caller fills in after resolving WIDA level
     topicLabel,
-    permittedFormats: SS_PERMITTED_FORMATS,
   };
 }
 
@@ -142,5 +141,11 @@ export function buildSocialStudiesSessionContext(
   const units = getSocialStudiesUnits();
   const unit  = units.find((u) => u.unit === ctx.unit) ?? units[0];
   const vocab = getSocialStudiesVocabForLevel(unit, fractionalLevel);
-  return { ...ctx, tier3Vocabulary: vocab };
+  return {
+    ...ctx,
+    tier3Vocabulary: vocab,
+    scenarioExamples: scenarioExamplesForPrompt(unit.scenarios),
+    permittedFormats: listeningAvailableFormats(clampLevel(fractionalLevel)),
+    ...socialStudiesFrameworkFromUnit(unit),
+  };
 }

@@ -74,35 +74,55 @@ export function buildImageFactoryAcademicBundle(opts: {
     case "math": {
       const ctx = buildMathSessionContext(level, null, []);
       unit = ctx.unit;
-      scenarioExample = ctx.scenario ?? null;
+      scenarioExample = ctx.scenarioExamples[0] ?? null;
       tier3 = ctx.tier3Vocabulary;
       topicLabel = ctx.topicLabel;
+      unitId = ctx.unitId ?? null;
+      contentFramework = ctx.contentFramework ?? null;
+      contentStandards = ctx.contentStandards ?? [];
+      contentGuidelines = ctx.contentGuidelines ?? null;
+      domainCode = ctx.domainCode ?? null;
       break;
     }
     case "science": {
       const ctx = buildScienceSessionContext(level, null, []);
       unit = ctx.unit;
-      scenarioExample = ctx.scenario ?? null;
+      scenarioExample = ctx.scenarioExamples[0] ?? null;
       tier3 = ctx.tier3Vocabulary;
       topicLabel = ctx.topicLabel;
+      unitId = ctx.unitId ?? null;
+      contentFramework = ctx.contentFramework ?? null;
+      contentStandards = ctx.contentStandards ?? [];
+      contentGuidelines = ctx.contentGuidelines ?? null;
+      domainCode = ctx.domainCode ?? null;
       strand = ctx.strand ?? null;
       break;
     }
     case "social_studies": {
       const ctx = buildSocialStudiesSessionContext(level, null, []);
       unit = ctx.unit;
-      scenarioExample = ctx.scenario ?? null;
+      scenarioExample = ctx.scenarioExamples[0] ?? null;
       tier3 = ctx.tier3Vocabulary;
       topicLabel = ctx.topicLabel;
+      unitId = ctx.unitId ?? null;
+      contentFramework = ctx.contentFramework ?? null;
+      contentStandards = ctx.contentStandards ?? [];
+      contentGuidelines = ctx.contentGuidelines ?? null;
+      domainCode = ctx.domainCode ?? null;
       strand = ctx.strand ?? null;
       break;
     }
     case "ela": {
       const ctx = buildElaSessionContext(level, null, []);
       unit = ctx.unit;
-      scenarioExample = ctx.scenario ?? null;
+      scenarioExample = ctx.scenarioExamples[0] ?? null;
       tier3 = ctx.tier3Vocabulary;
       topicLabel = ctx.topicLabel;
+      unitId = ctx.unitId ?? null;
+      contentFramework = ctx.contentFramework ?? null;
+      contentStandards = ctx.contentStandards ?? [];
+      contentGuidelines = ctx.contentGuidelines ?? null;
+      domainCode = ctx.domainCode ?? null;
       break;
     }
     default:

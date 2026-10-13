@@ -3,7 +3,9 @@
  * Inject after LISTENING_CORE_BLOCK when subject = "social_studies".
  */
 
-export const SOCIAL_STUDIES_SUBJECT_BLOCK = `━━ SUBJECT: Social Studies (Grade 6–8 — World History, U.S. History, Financial Literacy & Economics) ━━
+export const SOCIAL_STUDIES_SUBJECT_BLOCK = `━━ SUBJECT: Social Studies (C3 Framework — History, Geography, Civics, Economics) ━━
+
+Align to content_framework "C3", D2 indicators in content_standards, and c3_inquiry_dimensions when present.
 
 PASSAGE FORMAT — Teacher or Historian Narration
 A teacher or historian narrates an event, concept, or system. Must:
@@ -14,11 +16,7 @@ A teacher or historian narrates an event, concept, or system. Must:
 • Speak dates aloud: "seventeen seventy-six" not "1776"
 • is_retry: use a different angle, person, or specific example within the same ss_unit
 
-PERMITTED FORMATS (use all four — vary them)
-  multiple_choice    → 3 options (1 correct + 2 distractors); wrong options are realistic misreadings of the narration
-  sequence_ordering  → 3–4 events or steps; tests whether the student followed the timeline
-  pair_matching      → 3–4 pairs; match terms to meanings, events to outcomes, or causes to effects
-  agree_disagree     → a historical or civic claim; student decides if the passage supports or contradicts it
+Choose question types from available_question_formats — pick what best assesses framework.language_functions for this narration.
 
 WHAT QUESTIONS MUST TEST (historical/civic language comprehension — never memorized facts)
   ✓ "According to the teacher, why were colonists angry about the Stamp Act?" — cause from narration

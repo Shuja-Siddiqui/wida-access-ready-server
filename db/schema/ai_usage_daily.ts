@@ -16,6 +16,9 @@ export const aiUsageDailyTable = pgTable(
     generateCalls: integer("generate_calls").notNull().default(0),
     coachingCalls: integer("coaching_calls").notNull().default(0),
     speechCalls: integer("speech_calls").notNull().default(0),
+    inputTokens: integer("input_tokens").notNull().default(0),
+    outputTokens: integer("output_tokens").notNull().default(0),
+    totalTokens: integer("total_tokens").notNull().default(0),
   },
   (t) => [primaryKey({ columns: [t.studentId, t.usageDate] })],
 );

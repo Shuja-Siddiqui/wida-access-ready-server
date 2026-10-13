@@ -118,20 +118,24 @@ async function resolveSession(req: Request): Promise<AuthContext | null> {
  * Responds 401 and stops the chain if no valid session exists.
  */
 export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
-  const raw = extractBearer(req);
-  if (!raw) {
-    sendError(res, 401, "Authentication required");
-    return;
-  }
+  try {
+    const raw = extractBearer(req);
+    if (!raw) {
+      sendError(res, 401, "Authentication required");
+      return;
+    }
 
-  const auth = await resolveSession(req);
-  if (!auth) {
-    sendError(res, 401, "Invalid or expired session");
-    return;
-  }
+    const auth = await resolveSession(req);
+    if (!auth) {
+      sendError(res, 401, "Invalid or expired session");
+      return;
+    }
 
-  req.auth = auth;
-  next();
+    req.auth = auth;
+    next();
+  } catch (err) {
+    next(err);
+  }
 }
 
 /**
@@ -170,50 +174,54 @@ export function requireStudentAccess(paramName = "studentId", options: { allowSe
   const { allowSelf = true } = options;
 
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    const auth = req.auth;
-    if (!auth) { sendError(res, 401, "Authentication required"); return; }
-    if (auth.role === "super_admin") { next(); return; }
+    try {
+      const auth = req.auth;
+      if (!auth) { sendError(res, 401, "Authentication required"); return; }
+      if (auth.role === "super_admin") { next(); return; }
 
-    const studentId = req.params[paramName] as string | undefined;
-    if (!studentId) { sendError(res, 400, `Missing ${paramName}`); return; }
+      const studentId = req.params[paramName] as string | undefined;
+      if (!studentId) { sendError(res, 400, `Missing ${paramName}`); return; }
 
-    if (auth.userType === "student") {
-      if (!allowSelf || auth.id !== studentId) {
-        sendError(res, 403, "You do not have access to this student's data");
+      if (auth.userType === "student") {
+        if (!allowSelf || auth.id !== studentId) {
+          sendError(res, 403, "You do not have access to this student's data");
+          return;
+        }
+        next();
         return;
       }
-      next();
-      return;
-    }
 
-    const [student] = await db
-      .select({
-        guardianId: studentsTable.guardianId,
-        schoolId: studentsTable.schoolId,
-        districtId: studentsTable.districtId,
-      })
-      .from(studentsTable)
-      .where(eq(studentsTable.id, studentId))
-      .limit(1);
+      const [student] = await db
+        .select({
+          guardianId: studentsTable.guardianId,
+          schoolId: studentsTable.schoolId,
+          districtId: studentsTable.districtId,
+        })
+        .from(studentsTable)
+        .where(eq(studentsTable.id, studentId))
+        .limit(1);
 
-    if (!student) { sendError(res, 404, "Student not found"); return; }
+      if (!student) { sendError(res, 404, "Student not found"); return; }
 
-    if (student.guardianId && student.guardianId === auth.id) {
-      next();
-      return;
-    }
-
-    if (auth.userType === "principal" || auth.userType === "district_admin") {
-      const denied = await assertStudentOrgAccess(auth, student);
-      if (denied) {
-        sendAccessDenied(res, denied);
+      if (student.guardianId && student.guardianId === auth.id) {
+        next();
         return;
       }
-      next();
-      return;
-    }
 
-    sendError(res, 403, "You do not have access to this student's data");
+      if (auth.userType === "principal" || auth.userType === "district_admin") {
+        const denied = await assertStudentOrgAccess(auth, student);
+        if (denied) {
+          sendAccessDenied(res, denied);
+          return;
+        }
+        next();
+        return;
+      }
+
+      sendError(res, 403, "You do not have access to this student's data");
+    } catch (err) {
+      next(err);
+    }
   };
 }
 
@@ -226,36 +234,40 @@ export function requireStudentAccess(paramName = "studentId", options: { allowSe
  */
 export function requireTeacherAccess(paramName = "teacherId") {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    const auth = req.auth;
-    if (!auth) { sendError(res, 401, "Authentication required"); return; }
-    if (auth.role === "super_admin") { next(); return; }
+    try {
+      const auth = req.auth;
+      if (!auth) { sendError(res, 401, "Authentication required"); return; }
+      if (auth.role === "super_admin") { next(); return; }
 
-    const teacherId = req.params[paramName] as string | undefined;
-    if (!teacherId) { sendError(res, 403, "You do not have access to this teacher's data"); return; }
+      const teacherId = req.params[paramName] as string | undefined;
+      if (!teacherId) { sendError(res, 403, "You do not have access to this teacher's data"); return; }
 
-    if (auth.userType === "principal" || auth.userType === "district_admin") {
-      const denied = await assertTeacherProfileOrgAccess(auth, teacherId);
-      if (denied) {
-        sendAccessDenied(res, denied);
+      if (auth.userType === "principal" || auth.userType === "district_admin") {
+        const denied = await assertTeacherProfileOrgAccess(auth, teacherId);
+        if (denied) {
+          sendAccessDenied(res, denied);
+          return;
+        }
+        next();
         return;
       }
-      next();
-      return;
+
+      if (auth.userType !== "student" && auth.id === teacherId) { next(); return; }
+
+      if (auth.userType === "student") {
+        const [row] = await db
+          .select({ guardianId: studentsTable.guardianId })
+          .from(studentsTable)
+          .where(eq(studentsTable.id, auth.id))
+          .limit(1);
+
+        if (row?.guardianId && row.guardianId === teacherId) { next(); return; }
+      }
+
+      sendError(res, 403, "You do not have access to this teacher's data");
+    } catch (err) {
+      next(err);
     }
-
-    if (auth.userType !== "student" && auth.id === teacherId) { next(); return; }
-
-    if (auth.userType === "student") {
-      const [row] = await db
-        .select({ guardianId: studentsTable.guardianId })
-        .from(studentsTable)
-        .where(eq(studentsTable.id, auth.id))
-        .limit(1);
-
-      if (row?.guardianId && row.guardianId === teacherId) { next(); return; }
-    }
-
-    sendError(res, 403, "You do not have access to this teacher's data");
   };
 }
 

@@ -1,6 +1,6 @@
 export const LISTENING_2016_1_2 = `
 CAN DO (2016) — LISTENING 1–2
-ONE PHOTO RULE: picture.count means how many DINO tags to build the item around. If the Can Do would use two side-by-side photos, pick TWO tags in this photo and talk about both.
+ONE PHOTO RULE: picture.count means how many tag objects to ground the heard text in — compose a mini-story or subject audio_script, not a scene caption. Questions must be answerable from audio_script only, not from viewing the photo. If the Can Do would use two side-by-side photos, pick TWO tags as anchors in one composed passage.
 OUTPUT includes can_do_descriptor (WIDA action + the chosen can_do item).
 `.trim();
 

@@ -3,7 +3,9 @@
  * Inject after LISTENING_CORE_BLOCK when subject = "ela".
  */
 
-export const ELA_SUBJECT_BLOCK = `━━ SUBJECT: English Language Arts (Grade 6–8 — Literary & Informational Text, Author's Craft, Argument) ━━
+export const ELA_SUBJECT_BLOCK = `━━ SUBJECT: English Language Arts (CCSS RL, RI, W, L, SL Grades 6–8) ━━
+
+Align to content_framework "CCSS-ELA", domain_code (RL/RI/W/L/SL), and content_standards in user JSON.
 
 PASSAGE FORMAT — Text Read Aloud
 A teacher reads a short literary or informational text aloud. Genre depends on ela_genre:
@@ -19,11 +21,7 @@ Must:
 • Provide enough context for questions about literary elements, text structure, or the author's choices
 • is_retry: different character, topic, or setting; same ela_unit and literary focus
 
-PERMITTED FORMATS (use all four — vary them)
-  multiple_choice    → 3 options (1 correct + 2 distractors); wrong options are realistic misreadings or over-interpretations
-  sequence_ordering  → 3–4 events or steps in a narrative, argument structure, or informational sequence
-  pair_matching      → 3–4 pairs; match literary terms to examples in the text or causes to effects
-  agree_disagree     → a claim about the text, author's purpose, or character motivation
+Choose question types from available_question_formats — pick what best assesses framework.language_functions for this read-aloud text.
 
 WHAT QUESTIONS MUST TEST (textual/literary comprehension — never prior knowledge)
   ✓ "According to the passage, what is the main problem the character faces?" — narrative comprehension

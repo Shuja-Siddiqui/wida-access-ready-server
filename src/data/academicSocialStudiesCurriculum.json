@@ -1,13 +1,18 @@
 {
   "subject": "social_studies",
+  "framework": "College, Career, and Civic Life (C3) Framework for Social Studies State Standards",
+  "frameworkRef": "https://www.socialstudies.org/standards/c3",
   "gradeBand": "6-8",
-  "description": "Grade 6-8 social studies units — organized by strand. Each unit includes listening scenario seeds (a teacher, historian, or narrator explaining a concept or event) and Tier-3 vocabulary scaled to WIDA levels 3-6.",
+  "description": "C3 Framework Grade 6–8 social studies — Dimension 2 disciplinary content (History, Geography, Civics, Economics) with inquiry hooks for Dimensions 1, 3, and 4. Each unit maps to D2 indicator codes and includes scenario seeds for narrated academic content.",
   "units": [
     {
       "id": "wh_ancient_civ",
       "strand": "World History",
       "unit": "Ancient Civilizations",
       "topics": "Mesopotamia, Ancient Egypt, Indus Valley, and Early China",
+      "c3Discipline": "History",
+      "standards": ["D2.His.1.6-8", "D2.His.2.6-8", "D2.His.3.6-8", "D2.His.4.6-8"],
+      "inquiryDimensions": ["D1", "D2", "D3", "D4"],
       "tier3ByLevel": {
         "3": ["civilization", "ancient", "farmer", "river", "ruler"],
         "4": ["civilization", "ancient", "agriculture", "irrigation", "trade", "government"],
@@ -27,6 +32,9 @@
       "strand": "World History",
       "unit": "Classical Empires",
       "topics": "Ancient Greece, the Roman Empire, and the Mesoamerican Empires",
+      "c3Discipline": "History",
+      "standards": ["D2.His.1.6-8", "D2.His.2.6-8", "D2.His.5.6-8", "D2.His.6.6-8"],
+      "inquiryDimensions": ["D1", "D2", "D3"],
       "tier3ByLevel": {
         "3": ["empire", "citizen", "law", "soldier", "trade"],
         "4": ["empire", "democracy", "republic", "citizen", "conquest", "territory"],
@@ -43,9 +51,12 @@
     },
     {
       "id": "wh_geography",
-      "strand": "World History",
+      "strand": "Geography",
       "unit": "Global Geography",
       "topics": "Physical landforms, human migration, mapping, and regional cultures",
+      "c3Discipline": "Geography",
+      "standards": ["D2.Geo.1.6-8", "D2.Geo.2.6-8", "D2.Geo.3.6-8", "D2.Geo.4.6-8", "D2.Geo.5.6-8"],
+      "inquiryDimensions": ["D1", "D2", "D4"],
       "tier3ByLevel": {
         "3": ["mountain", "river", "map", "migrate", "culture"],
         "4": ["landform", "migration", "geography", "latitude", "longitude", "culture"],
@@ -65,6 +76,9 @@
       "strand": "World History",
       "unit": "Middle Ages",
       "topics": "European feudalism, the Silk Road, and African trading kingdoms",
+      "c3Discipline": "History",
+      "standards": ["D2.His.2.6-8", "D2.His.3.6-8", "D2.His.4.6-8", "D2.His.9.6-8"],
+      "inquiryDimensions": ["D1", "D2", "D3"],
       "tier3ByLevel": {
         "3": ["king", "peasant", "trade", "knight", "castle"],
         "4": ["feudalism", "peasant", "knight", "trade route", "kingdom", "noble"],
@@ -80,10 +94,35 @@
       ]
     },
     {
+      "id": "wh_industrial_global",
+      "strand": "World History",
+      "unit": "Industrialization and Global Connections",
+      "topics": "Industrial Revolution, imperialism, and global trade in the 1800s–1900s",
+      "c3Discipline": "History",
+      "standards": ["D2.His.1.6-8", "D2.His.2.6-8", "D2.His.3.6-8", "D2.Eco.1.6-8"],
+      "inquiryDimensions": ["D1", "D2", "D3", "D4"],
+      "tier3ByLevel": {
+        "3": ["factory", "machine", "trade", "empire", "change"],
+        "4": ["industrialization", "factory", "urbanization", "imperialism", "colony"],
+        "5": ["industrialization", "urbanization", "imperialism", "colony", "natural resource", "global trade"],
+        "6": ["industrialization", "urbanization", "imperialism", "colonialism", "natural resource", "globalization", "labor movement"]
+      },
+      "scenarios": [
+        "A history teacher explains how the invention of the steam engine changed where people lived and how goods were made during the Industrial Revolution.",
+        "A teacher describes how European nations competed to control colonies in Africa and Asia for raw materials and markets.",
+        "A historian explains how railroads and telegraphs connected distant parts of the world and sped up global trade in the 1800s.",
+        "A teacher describes working conditions in early factories and why labor unions began to form.",
+        "A geography teacher explains how industrial cities grew rapidly as people moved from rural farms to urban factories."
+      ]
+    },
+    {
       "id": "ush_early_america",
       "strand": "U.S. History",
       "unit": "Early America",
       "topics": "Indigenous cultures, European exploration, and the thirteen colonies",
+      "c3Discipline": "History",
+      "standards": ["D2.His.1.6-8", "D2.His.2.6-8", "D2.His.3.6-8", "D2.His.4.6-8"],
+      "inquiryDimensions": ["D1", "D2", "D3"],
       "tier3ByLevel": {
         "3": ["colony", "settler", "Native American", "explore", "land"],
         "4": ["colony", "indigenous", "settler", "explore", "trade", "conflict"],
@@ -103,6 +142,9 @@
       "strand": "U.S. History",
       "unit": "The American Revolution",
       "topics": "Causes of the war, the Declaration of Independence, and the Revolutionary War",
+      "c3Discipline": "History",
+      "standards": ["D2.His.1.6-8", "D2.His.2.6-8", "D2.His.3.6-8", "D2.Civ.5.6-8"],
+      "inquiryDimensions": ["D1", "D2", "D3", "D4"],
       "tier3ByLevel": {
         "3": ["revolution", "colonist", "freedom", "war", "rights"],
         "4": ["revolution", "colonist", "taxation", "independence", "rights", "militia"],
@@ -118,10 +160,35 @@
       ]
     },
     {
+      "id": "civ_citizenship",
+      "strand": "Civics",
+      "unit": "Citizenship and Civic Participation",
+      "topics": "Rights, responsibilities, participation, and the role of citizens in democracy",
+      "c3Discipline": "Civics",
+      "standards": ["D2.Civ.1.6-8", "D2.Civ.2.6-8", "D2.Civ.3.6-8", "D2.Civ.4.6-8", "D2.Civ.5.6-8", "D2.Civ.6.6-8"],
+      "inquiryDimensions": ["D1", "D2", "D4"],
+      "tier3ByLevel": {
+        "3": ["citizen", "vote", "law", "community", "help"],
+        "4": ["citizenship", "civic duty", "vote", "public good", "community service"],
+        "5": ["citizenship", "civic duty", "political participation", "public policy", "advocacy"],
+        "6": ["citizenship", "civic virtue", "political participation", "public policy", "advocacy", "civil society", "informed action"]
+      },
+      "scenarios": [
+        "A civics teacher explains the difference between a right and a responsibility and gives examples of each for American citizens.",
+        "A teacher describes how students can participate in their community by attending town meetings or volunteering.",
+        "A civics teacher explains why voting is both a right and a way citizens influence government decisions.",
+        "A teacher describes how peaceful protest has been used throughout U.S. history to bring about change.",
+        "A civics teacher explains how citizens can contact elected officials to share their views on a local issue."
+      ]
+    },
+    {
       "id": "ush_constitution",
-      "strand": "U.S. History",
-      "unit": "The Constitution",
+      "strand": "Civics",
+      "unit": "The Constitution and Government",
       "topics": "The three branches of government, the Bill of Rights, and civic duties",
+      "c3Discipline": "Civics",
+      "standards": ["D2.Civ.3.6-8", "D2.Civ.4.6-8", "D2.Civ.5.6-8", "D2.Civ.10.6-8"],
+      "inquiryDimensions": ["D1", "D2", "D3"],
       "tier3ByLevel": {
         "3": ["government", "law", "vote", "rights", "president"],
         "4": ["constitution", "government", "branch", "congress", "rights", "amendment"],
@@ -141,6 +208,9 @@
       "strand": "U.S. History",
       "unit": "Westward Expansion",
       "topics": "Manifest Destiny, industrialization, and the impacts on Native Americans",
+      "c3Discipline": "History",
+      "standards": ["D2.His.1.6-8", "D2.His.2.6-8", "D2.His.3.6-8", "D2.Geo.4.6-8"],
+      "inquiryDimensions": ["D1", "D2", "D3", "D4"],
       "tier3ByLevel": {
         "3": ["west", "settler", "railroad", "Native American", "land"],
         "4": ["Manifest Destiny", "settler", "railroad", "Native American", "territory", "migration"],
@@ -158,8 +228,11 @@
     {
       "id": "ush_civil_war",
       "strand": "U.S. History",
-      "unit": "The Civil War",
+      "unit": "The Civil War and Reconstruction",
       "topics": "Sectionalism, slavery, states' rights, and the Reconstruction era",
+      "c3Discipline": "History",
+      "standards": ["D2.His.1.6-8", "D2.His.2.6-8", "D2.His.3.6-8", "D2.His.4.6-8"],
+      "inquiryDimensions": ["D1", "D2", "D3", "D4"],
       "tier3ByLevel": {
         "3": ["slavery", "freedom", "soldier", "South", "North"],
         "4": ["slavery", "sectionalism", "states' rights", "Confederacy", "Union", "emancipation"],
@@ -175,10 +248,79 @@
       ]
     },
     {
+      "id": "ush_modern_america",
+      "strand": "U.S. History",
+      "unit": "Modern America: World Wars and the Great Depression",
+      "topics": "World War I, the Great Depression, World War II, and their impact on American society",
+      "c3Discipline": "History",
+      "standards": ["D2.His.1.6-8", "D2.His.2.6-8", "D2.His.3.6-8", "D2.His.9.6-8"],
+      "inquiryDimensions": ["D1", "D2", "D3", "D4"],
+      "tier3ByLevel": {
+        "3": ["war", "soldier", "job", "money", "help"],
+        "4": ["World War", "alliance", "depression", "unemployment", "New Deal"],
+        "5": ["World War I", "World War II", "Great Depression", "New Deal", "isolationism", "home front"],
+        "6": ["World War I", "World War II", "Great Depression", "New Deal", "isolationism", "home front", "internment", "Lend-Lease", "economic recovery"]
+      },
+      "scenarios": [
+        "A history teacher explains why the United States entered World War I and how the war changed America's role in the world.",
+        "A teacher describes what life was like for American families during the Great Depression when many people lost jobs and savings.",
+        "A teacher explains how President Franklin Roosevelt's New Deal programs tried to create jobs and stabilize the economy.",
+        "A historian describes how Americans on the home front supported World War II by working in factories and rationing supplies.",
+        "A teacher explains why the attack on Pearl Harbor led the United States to enter World War II."
+      ]
+    },
+    {
+      "id": "ush_civil_rights",
+      "strand": "U.S. History",
+      "unit": "Civil Rights and Social Change",
+      "topics": "The civil rights movement, voting rights, and ongoing struggles for equality",
+      "c3Discipline": "History",
+      "standards": ["D2.His.2.6-8", "D2.His.3.6-8", "D2.His.8.6-8", "D2.Civ.5.6-8"],
+      "inquiryDimensions": ["D1", "D2", "D3", "D4"],
+      "tier3ByLevel": {
+        "3": ["rights", "fair", "protest", "law", "vote"],
+        "4": ["civil rights", "segregation", "protest", "Supreme Court", "voting rights"],
+        "5": ["civil rights movement", "segregation", "discrimination", "legislation", "nonviolent protest"],
+        "6": ["civil rights movement", "segregation", "discrimination", "legislation", "nonviolent protest", "Civil Rights Act", "Voting Rights Act", "social justice"]
+      },
+      "scenarios": [
+        "A history teacher explains how the Supreme Court's Brown v. Board of Education decision declared school segregation unconstitutional.",
+        "A teacher describes the Montgomery Bus Boycott and how Rosa Parks's action sparked a year-long protest.",
+        "A teacher explains what Dr. Martin Luther King Jr. meant by nonviolent protest and why it was central to the civil rights movement.",
+        "A historian describes the March on Washington and the goals activists hoped to achieve.",
+        "A teacher explains how the Civil Rights Act of 1964 and the Voting Rights Act of 1965 changed federal law and daily life for many Americans."
+      ]
+    },
+    {
+      "id": "ss_inquiry_sources",
+      "strand": "Inquiry Skills",
+      "unit": "Evaluating Sources and Using Evidence",
+      "topics": "Primary and secondary sources, corroboration, bias, and evidence-based claims",
+      "c3Discipline": "Inquiry",
+      "standards": ["D3.1.6-8", "D3.2.6-8", "D3.3.6-8", "D3.4.6-8"],
+      "inquiryDimensions": ["D1", "D3", "D4"],
+      "tier3ByLevel": {
+        "3": ["source", "fact", "story", "picture", "document"],
+        "4": ["primary source", "secondary source", "evidence", "author", "date"],
+        "5": ["primary source", "secondary source", "corroboration", "bias", "credibility"],
+        "6": ["primary source", "secondary source", "corroboration", "bias", "credibility", "contextualization", "sourcing"]
+      },
+      "scenarios": [
+        "A history teacher explains the difference between a primary source like a diary from the Civil War and a secondary source like a textbook chapter.",
+        "A teacher describes how historians check whether two sources agree before drawing a conclusion about an event.",
+        "A civics teacher explains why knowing who wrote a document and when helps you judge whether it is trustworthy.",
+        "A teacher walks through how a political cartoon from the 1800s can reveal what people believed even though it is not a neutral fact list.",
+        "A librarian explains how students can tell whether a website about history is written by experts or by someone with a strong bias."
+      ]
+    },
+    {
       "id": "econ_systems",
       "strand": "Financial Literacy and Economics",
       "unit": "Economic Systems",
       "topics": "Traditional, command, market, and mixed economies",
+      "c3Discipline": "Economics",
+      "standards": ["D2.Eco.1.6-8", "D2.Eco.2.6-8", "D2.Eco.3.6-8", "D2.Eco.4.6-8"],
+      "inquiryDimensions": ["D1", "D2", "D4"],
       "tier3ByLevel": {
         "3": ["economy", "buy", "sell", "price", "government"],
         "4": ["economy", "market", "supply", "demand", "government control", "trade"],
@@ -198,6 +340,9 @@
       "strand": "Financial Literacy and Economics",
       "unit": "Personal Finance",
       "topics": "Budgeting, saving, taxes, and understanding scarcity",
+      "c3Discipline": "Economics",
+      "standards": ["D2.Eco.1.6-8", "D2.Eco.2.6-8", "D2.Eco.3.6-8"],
+      "inquiryDimensions": ["D1", "D2", "D4"],
       "tier3ByLevel": {
         "3": ["budget", "save", "spend", "money", "tax"],
         "4": ["budget", "savings", "income", "expense", "tax", "interest"],

@@ -1,4 +1,5 @@
-import { Router, type IRouter, type Request, type Response } from "express";
+import type { IRouter, Request, Response } from "express";
+import { createApiRouter } from "../../lib/http/create-api-router";
 import { Readable } from "stream";
 import { z } from "zod/v4";
 import {
@@ -15,7 +16,7 @@ import {
 import { sendError, sendSuccess } from "../../lib/http/api-response";
 import { requireAuth } from "../../middlewares/auth";
 
-const router: IRouter = Router();
+const router: IRouter = createApiRouter();
 const objectStorageService = new ObjectStorageService();
 
 /**

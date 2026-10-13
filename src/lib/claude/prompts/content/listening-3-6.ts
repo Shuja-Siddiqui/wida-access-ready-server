@@ -1,15 +1,18 @@
-/** Listening levels 3–6: oral passage + selected response. Not picture taps. Not reading print. */
+/** Listening levels 3–6: oral passage + selected response; framework-driven. */
+
+import { FRAMEWORK_FORMAT_SELECTION, FRAMEWORK_INTERPRETIVE_BUILD_ORDER } from "./framework-driven-content";
 
 export const LISTENING_CONTENT_3_6 = `
-DOMAIN: LISTENING  |  BAND: 3–6  |  student hears a passage, then answers from the AUDIO
+DOMAIN: LISTENING  |  BAND: 3–6  |  student hears audio_script, then answers from the AUDIO
 
-Write audio_script so the skill is clear from listening alone. Match oral_format and passage_sentence_target.
-Narrate → chronological story; one main idea. Inform → facts/report; one main idea.
-Explain → how/why explicit in the audio.
-Argue → a position with stated evidence.
-No SSML, symbols, or "as you can see".
-Questions: exactly question_count, ONLY formats in OUTPUT SCHEMA. Include every schema key. Each selected-response item has exactly 3 options (1 correct + 2 distractors). Foils are plausible mishearings, not random.
-last_session_score < 70 → clearer signals, same skill. is_retry → new speaker/setting, same skill.
-explanation: max 8 words.
-L3: familiar paragraph, main idea/detail. L4: longer talk, not guesswork. L5: gist/sequence/purpose. L6: inference only if the audio supports it.
+${FRAMEWORK_INTERPRETIVE_BUILD_ORDER}
+
+${FRAMEWORK_FORMAT_SELECTION}
+
+• Match oral_format and passage_sentence_target. Plain spoken English — no SSML or "as you can see".
+• audio_script = what the speaker says (story, lecture, dialogue). Student-facing stems live only in questions[] — never ask a quiz question in the script that you do not also assess in questions[].
+• Each question (stem, options, items, pairs) must be grounded in audio_script — no off-topic or different-scenario items.
+• multiple_choice / agree_disagree: exactly 3 options. Foils = plausible mishearings of THIS audio. explanation: max 8 words on MC only.
+• sequence_ordering, pair_matching, category_sorting: use interactive JSON (items/order, left/right/pairs, categories/items) — not options-only. Follow question_type_plan; vary types across questions.
+• last_session_score < 70 → clearer signals, same skill. is_retry → new speaker/setting, same skill.
 `.trim();

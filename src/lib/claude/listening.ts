@@ -1,7 +1,9 @@
 /**
- * General Listening content generator — WIDA levels 3–6, text-only passages.
- * For image-based listening (levels 0–2) see image-library.ts.
- * For academic math listening see academic-math.ts.
+ * Shared listening schema, system prompt, finalize/retry, and legacy text-only generator.
+ * Production sessions use academic-* listening (ela/math/science/social_studies) in sessions.ts —
+ * same WIDA 2020 SF domain "listening", one API domain, subject rotation via buildAcademicListeningContext.
+ * For image-based listening (levels 0–2) see academic-image-tap / image-library paths.
+ * generateListeningContent() is legacy/dev-only (not wired in sessions.ts).
  *
  * Schema is built dynamically per call (level + permittedFormats + questionCount) so
  * Claude always sees the exact question types, valid "type" field values, and structural
@@ -15,43 +17,24 @@ import {
   LEVEL_QUESTION_COUNT,
   LEVEL_MAX_TOKENS,
 } from "./client";
-import { clampToThreeOptions } from "../choice-options";
-import { OPTIONAL_LINE_VISUALS_BLOCK, parseOptionDiagrams, parseVisual } from "./prompts/optional-line-visuals";
-import { buildSystemPrompt } from "./prompts/compose";
-import { contentGenPrompt } from "./prompts/content";
-import { serializeCanDoForPrompt } from "../content";
+import { parseOptionDiagrams, parseVisual } from "./prompts/optional-line-visuals";
+import { buildContentSystemPrompt } from "./prompts/content/system-prompt";
+import {
+  frameworkTaskDescriptor,
+  serializeFrameworkTask,
+  type FrameworkTask,
+} from "./standards/2020";
 import { dumpContentGenRequest } from "./dump-content-gen";
 import { logger } from "../../config/logger";
 import { mergePriorPractice, type PracticeReport } from "../practice-report";
-
-// ── Per-level schema tables ───────────────────────────────────────────────────
-
-/**
- * Human-readable description and usage rule for each listening question format.
- * These appear in the schema section so Claude knows when to use each type.
- */
-const FORMAT_DESCRIPTIONS: Record<string, { use: string; note: string }> = {
-  multiple_choice: {
-    use: "Any Can Do skill — main idea, detail, inference, vocabulary, comparison, summary, claim/evidence, opposing_view",
-    note: "3 options A–C (1 correct + 2 distractors); correct is 0-based index; explanation max 8 words.",
-  },
-  pair_matching: {
-    use: "Explain — matching spoken terms/concepts to their definitions or examples; Inform — matching speakers to their stated views",
-    note: "3 options A–C presented as labeled pairs; student picks the correctly matched pair.",
-  },
-  sequence_ordering: {
-    use: "Narrate — ordering narrative events as heard; Inform — ordering reported facts; Explain — ordering process steps",
-    note: "3 options A–C each representing a different ordering of events/steps; student picks the correct order.",
-  },
-  agree_disagree: {
-    use: "Argue — evaluating a speaker's claim; identifying stated evidence; distinguishing claim from opinion",
-    note: "3 options A–C (claim evaluation); correct is 0-based index.",
-  },
-  category_sorting: {
-    use: "Inform/Explain — classifying spoken items into categories (e.g. cause vs effect; pros vs cons; step type)",
-    note: "3 options A–C each representing a different grouping; student picks the correct categorization.",
-  },
-};
+import { aiFormatDescriptionsFor } from "../content/formatCapabilities";
+import {
+  buildListeningQuestionTypePlan,
+  buildListeningQuestionsFixPrompt,
+  mapListeningQuestionsFromClaude,
+  validateListeningSessionQuestions,
+  type MappedListeningQuestion,
+} from "../content/listening-question-pipeline";
 
 /**
  * Valid can_do_skill values that can appear in the `type` field of each question
@@ -74,34 +57,47 @@ const LEVEL_MC_SKILLS: Record<number, string[]> = {
  * Shows only the question format types permitted at this level with correct structural
  * examples and enforcement rules.
  */
-function buildListeningOutputSchema(
+export function buildListeningOutputSchema(
   level: number,
-  permittedFormats: string[],
+  availableFormats: string[],
   questionCount: number,
+  opts?: { libraryCompose?: boolean },
 ): string {
   const mcSkills = LEVEL_MC_SKILLS[level] ?? ["main_idea", "detail", "vocabulary"];
+  const FORMAT_DESCRIPTIONS = aiFormatDescriptionsFor(availableFormats);
 
   const lines: string[] = [
     `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
     `OUTPUT SCHEMA — LEVEL ${level}`,
-    `Permitted question formats this session: ${permittedFormats.join(" | ")}`,
-    `You MUST produce exactly ${questionCount} questions using ONLY the formats listed above.`,
+    `Available question formats (UI-capable): ${availableFormats.join(" | ")}`,
+    `Choose type(s) from this list that best assess framework.language_functions. Produce exactly ${questionCount} questions.`,
+    questionCount >= 2 && availableFormats.length >= 2
+      ? `Use at least ${Math.min(2, questionCount)} different "type" values from the list — follow question_type_plan in user JSON when provided.`
+      : "",
+    questionCount >= 3 && availableFormats.some((f) => ["sequence_ordering", "pair_matching", "category_sorting"].includes(f))
+      ? `Include at least one interactive type (sequence_ordering, pair_matching, or category_sorting) when listed above.`
+      : "",
     `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
     ``,
     `{`,
-    `  "can_do_descriptor": "<WIDA action + chosen can_do item>",`,
+    `  "task_descriptor": "<echo 2–3 language_functions this session assesses>",`,
+    ...(opts?.libraryCompose
+      ? [
+          `  "selected_image_id": "<REQUIRED uuid from library_candidates — pick BEFORE writing audio_script>",`,
+        ]
+      : []),
     `  "audio_script": "<spoken passage — plain English, no stage directions or SSML>",`,
     `  "topic": "<echo input topic>",`,
     `  "context": "<one sentence: who speaks and to whom — e.g. 'A science teacher explains to students'>",`,
-    `  "format": "${permittedFormats[0]}",`,
-    `  /* Echo the primary format used — the first format in permitted_formats */`,
+    `  "format": "<primary format you chose for this session>",`,
+    `  /* Echo the main question type used — must appear in available_question_formats */`,
     `  "questions": [`,
     ``,
   ];
 
   const blocks: string[] = [];
 
-  if (permittedFormats.includes("multiple_choice")) {
+  if (availableFormats.includes("multiple_choice")) {
     const d = FORMAT_DESCRIPTIONS.multiple_choice;
     blocks.push(
 `    /* ── multiple_choice ── */
@@ -121,50 +117,40 @@ function buildListeningOutputSchema(
     );
   }
 
-  if (permittedFormats.includes("pair_matching")) {
+  if (availableFormats.includes("pair_matching")) {
     const d = FORMAT_DESCRIPTIONS.pair_matching;
     blocks.push(
-`    /* ── pair_matching ── */
+`    /* ── pair_matching (interactive — NOT options-only) ── */
     /* Use for: ${d.use} */
     /* ${d.note} */
     {
       "id": "2",
       "type": "pair_matching",
-      "question": "<ask student to identify the correctly matched pair from the audio>",
-      "options": [
-        "<Term A → Definition 1, Term B → Definition 2>",
-        "<Term A → Definition 2, Term B → Definition 1>",
-        "<Term A → Definition 3, Term B → Definition 1>"
-      ],
-      "correct": 0,
-      "explanation": "<max 8 words>"
+      "question": "<match terms from the audio to definitions or effects>",
+      "left_items": ["<term A>", "<term B>"],
+      "right_items": ["<match B>", "<match A>"],
+      "correct_pairs": [[0, 1], [1, 0]]
     }`,
     );
   }
 
-  if (permittedFormats.includes("sequence_ordering")) {
+  if (availableFormats.includes("sequence_ordering")) {
     const d = FORMAT_DESCRIPTIONS.sequence_ordering;
     blocks.push(
-`    /* ── sequence_ordering ── */
+`    /* ── sequence_ordering (interactive — NOT options-only) ── */
     /* Use for: ${d.use} */
     /* ${d.note} */
     {
       "id": "3",
       "type": "sequence_ordering",
-      "question": "<ask student to identify the correct order of events/steps heard in the audio>",
-      "options": [
-        "<Step A → Step B → Step C>",
-        "<Step B → Step A → Step C>",
-        "<Step C → Step A → Step B>"
-      ],
-      "correct": 0,
-      /* 0-based index of the option that lists events in the correct order */
-      "explanation": "<max 8 words>"
+      "question": "Put these steps or events in the correct order.",
+      "items": ["<step B>", "<step A>", "<step C>"],
+      "correct_order": [1, 0, 2]
     }`,
     );
   }
 
-  if (permittedFormats.includes("agree_disagree")) {
+  if (availableFormats.includes("agree_disagree")) {
     const d = FORMAT_DESCRIPTIONS.agree_disagree;
     blocks.push(
 `    /* ── agree_disagree ── */
@@ -185,23 +171,19 @@ function buildListeningOutputSchema(
     );
   }
 
-  if (permittedFormats.includes("category_sorting")) {
+  if (availableFormats.includes("category_sorting")) {
     const d = FORMAT_DESCRIPTIONS.category_sorting;
     blocks.push(
-`    /* ── category_sorting ── */
+`    /* ── category_sorting (interactive — NOT options-only) ── */
     /* Use for: ${d.use} */
     /* ${d.note} */
     {
       "id": "5",
       "type": "category_sorting",
-      "question": "<ask student to identify which grouping correctly categorizes items from the audio>",
-      "options": [
-        "<Category A: item1, item2 | Category B: item3, item4>  ← correct",
-        "<Category A: item1, item3 | Category B: item2, item4>",
-        "<Category A: item2, item3 | Category B: item1, item4>"
-      ],
-      "correct": 0,
-      "explanation": "<max 8 words>"
+      "question": "Sort each idea into the correct group.",
+      "categories": ["<Group A>", "<Group B>"],
+      "items": ["<idea 1>", "<idea 2>", "<idea 3>"],
+      "correct_categories": [0, 1, 0]
     }`,
     );
   }
@@ -212,22 +194,124 @@ function buildListeningOutputSchema(
   lines.push(`}`);
   lines.push(``);
   lines.push(`SCHEMA ENFORCEMENT RULES`);
-  lines.push(`• Return every key in this OUTPUT SCHEMA. Never omit a field. Use null only where this schema shows null.`);
-  lines.push(`• Only these question formats are valid: ${permittedFormats.join(", ")}.`);
-  lines.push(`• Produce exactly ${questionCount} questions.`);
-  lines.push(`• The "type" field in each question MUST match one of the permitted formats.`);
-  lines.push(`• "correct" is always a 0-based integer index into the "options" array.`);
-  lines.push(`• Every selected-response item has exactly 3 options (1 correct + 2 distractors).`);
-  lines.push(`• "explanation" is max 8 words — a brief factual reason, not a full sentence.`);
+  lines.push(`• Return every key above. Produce exactly ${questionCount} questions.`);
+  lines.push(`• Each question "type" must be one of: ${availableFormats.join(", ")}.`);
+  lines.push(`• Vary types across the session when formats allow.`);
+  lines.push(`• multiple_choice / agree_disagree: exactly 3 options + "correct" (0-based index). "explanation" max 8 words on MC only.`);
+  lines.push(`• sequence_ordering: MUST include "items" + "correct_order" — never options-only for this type.`);
+  lines.push(`• pair_matching: MUST include "left_items" + "right_items" + "correct_pairs" — never options-only for this type.`);
+  lines.push(`• category_sorting: MUST include "categories" + "items" + "correct_categories" — never options-only for this type.`);
+  lines.push(`• If you cannot build a valid interactive shape, set "type" to "multiple_choice" instead of mis-labeling.`);
   lines.push(`• "audio_script" must be plain spoken English — no stage directions, SSML, or image references.`);
+  lines.push(`• Students hear audio_script via TTS only — it is never shown as on-screen text; questions must be answerable from listening.`);
+  lines.push(`• Do NOT put student quiz questions inside audio_script — script narrates/explains; questions[] holds every assessed stem. If the speaker raises an idea, assess it in questions[] with matching wording.`);
   lines.push(`• Do NOT include image_tags, imageUrls, or target_label in any field.`);
+  if (opts?.libraryCompose) {
+    lines.push(`• selected_image_id is REQUIRED when library_candidates exist — audio_script MUST match that photo's concept/tags.`);
+    lines.push(`• Never write audio_script about a different topic than the selected photo shows.`);
+  }
 
-  return lines.join("\n");
+  return lines.filter((line) => line !== "").join("\n");
+}
+
+export async function finalizeListeningQuestionsWithRetry(params: {
+  systemPrompt: string;
+  maxTokens: number;
+  permittedFormats: string[];
+  questionCount: number;
+  audioScript: string;
+  topic: string;
+  context: string;
+  rawQuestions: Array<Record<string, unknown>> | undefined;
+  questionTypePlan?: string[];
+  varietySeed?: number;
+}): Promise<MappedListeningQuestion[]> {
+  const questionTypePlan =
+    params.questionTypePlan
+    ?? buildListeningQuestionTypePlan(
+      params.permittedFormats,
+      params.questionCount,
+      params.varietySeed ?? 0,
+    );
+
+  let mapped = mapListeningQuestionsFromClaude(params.rawQuestions);
+  let validation = validateListeningSessionQuestions(
+    mapped,
+    params.permittedFormats,
+    params.questionCount,
+    params.audioScript,
+  );
+  if (validation.ok) return mapped;
+
+  for (let attempt = 0; attempt < 2 && !validation.ok; attempt += 1) {
+    logger.warn(
+      { attempt: attempt + 1, issues: validation.issues, mcFallback: validation.mcFallbackCount },
+      "listening questions validation failed — retrying shape fix",
+    );
+    try {
+      const fixUser = buildListeningQuestionsFixPrompt(
+        {
+          audio_script: params.audioScript,
+          topic: params.topic,
+          context: params.context,
+          questions: mapped,
+        },
+        validation,
+        params.permittedFormats,
+        params.questionCount,
+        questionTypePlan,
+      );
+      const fixed = (await callClaude(params.systemPrompt, fixUser, params.maxTokens)) as {
+        questions?: Array<Record<string, unknown>>;
+      };
+      if (Array.isArray(fixed.questions) && fixed.questions.length > 0) {
+        mapped = mapListeningQuestionsFromClaude(fixed.questions);
+        validation = validateListeningSessionQuestions(
+          mapped,
+          params.permittedFormats,
+          params.questionCount,
+          params.audioScript,
+        );
+      }
+    } catch (err) {
+      logger.warn({ err, attempt: attempt + 1 }, "listening questions fix call failed");
+      break;
+    }
+  }
+
+  if (!validation.ok) {
+    logger.warn(
+      { issues: validation.issues, mcFallback: validation.mcFallbackCount },
+      "listening questions still imperfect after fix — shipping best effort",
+    );
+  }
+
+  return mapped;
+}
+
+export function listeningGenerationVarietyFields(
+  permittedFormats: string[],
+  questionCount: number,
+  varietySeed: number,
+): { questionTypePlan: string[]; varietySeed: number } {
+  return {
+    varietySeed,
+    questionTypePlan: buildListeningQuestionTypePlan(
+      permittedFormats,
+      questionCount,
+      varietySeed,
+    ),
+  };
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface ListeningContent {
+  taskDescriptor?: string;
+  canDoDescriptor?: string;
+  framework?: FrameworkTask;
+  /** Set when L1–2 compose picks a library photo — sessions.ts resolves illustrationUrl from this. */
+  selectedLibraryImageId?: string | null;
   audioScript: string;
   topic: string;
   context: string;
@@ -270,7 +354,7 @@ export const FALLBACK_LISTENING: ListeningContent = {
   questions: [
     {
       id: "1",
-      type: "comprehension",
+      type: "multiple_choice",
       question: "What are the three things plants need for photosynthesis?",
       options: [
         "Sunlight, water, carbon dioxide",
@@ -282,26 +366,127 @@ export const FALLBACK_LISTENING: ListeningContent = {
     },
     {
       id: "2",
-      type: "inference",
-      question: "Why did Ms. Chen call plants important?",
-      options: [
-        "They are beautiful",
-        "They produce oxygen animals need",
-        "They grow quickly",
+      type: "sequence_ordering",
+      question: "Put these steps in the order Ms. Chen described.",
+      items: [
+        "Plants take in carbon dioxide",
+        "Sunlight provides energy in the leaf",
+        "Plants release oxygen",
       ],
-      correct: 1,
-      explanation: "Plants produce oxygen that animals need to breathe.",
+      correct_order: [0, 1, 2],
     },
     {
       id: "3",
-      type: "sequence",
-      question: "What does photosynthesis produce?",
-      options: ["Carbon dioxide", "Water vapor", "Oxygen"],
-      correct: 2,
-      explanation: "The audio says the process produces oxygen.",
+      type: "agree_disagree",
+      question: "Plants are important because they produce oxygen animals need.",
+      options: ["Agree", "Disagree", "Not in the audio"],
+      correct: 0,
     },
   ],
 };
+
+const LISTENING_FALLBACK_VARIANTS: ListeningContent[] = [
+  FALLBACK_LISTENING,
+  {
+    audioScript:
+      "In social studies, Mr. Rivera described how a bill becomes a law. First, someone in Congress writes a bill. Next, committees review it and both houses vote. If both approve, the bill goes to the president, who can sign it or veto it.",
+    topic: "How a bill becomes a law",
+    context: "Social studies class",
+    questions: [
+      {
+        id: "1",
+        type: "sequence_ordering",
+        question: "Order the steps Mr. Rivera gave.",
+        items: [
+          "Congress votes on the bill",
+          "Someone writes a bill",
+          "The president signs or vetoes it",
+          "Committees review the bill",
+        ],
+        correct_order: [1, 3, 0, 2],
+      },
+      {
+        id: "2",
+        type: "multiple_choice",
+        question: "What can the president do with a bill?",
+        options: ["Sign it or veto it", "Rewrite it alone", "Skip the vote"],
+        correct: 0,
+      },
+      {
+        id: "3",
+        type: "pair_matching",
+        question: "Match each step to who does it.",
+        left_items: ["Writes the bill", "Votes on the bill", "Signs or vetoes"],
+        right_items: ["Congress member", "Congress", "President"],
+        correct_pairs: [[0, 0], [1, 1], [2, 2]],
+      },
+    ],
+  },
+  {
+    audioScript:
+      "The school nurse explained healthy habits: drink water, sleep eight hours, wash hands before eating. Sugary drinks can make you tired later. Exercise helps your heart and brain stay strong.",
+    topic: "Healthy habits",
+    context: "School nurse",
+    questions: [
+      {
+        id: "1",
+        type: "category_sorting",
+        question: "Sort each habit.",
+        categories: ["Healthy habit", "Avoid"],
+        items: ["Drink water", "Sleep eight hours", "Many sugary drinks"],
+        correct_categories: [0, 0, 1],
+      },
+      {
+        id: "2",
+        type: "multiple_choice",
+        question: "Why did the nurse mention sugary drinks?",
+        options: [
+          "They can make you tired later",
+          "They replace sleep",
+          "They are required at lunch",
+        ],
+        correct: 0,
+      },
+      {
+        id: "3",
+        type: "agree_disagree",
+        question: "Exercise helps your heart and brain.",
+        options: ["Agree", "Disagree", "Not in the audio"],
+        correct: 0,
+      },
+    ],
+  },
+];
+
+export function pickListeningFallback(varietySeed = 0): ListeningContent {
+  const n = LISTENING_FALLBACK_VARIANTS.length;
+  const idx = ((Math.floor(varietySeed) % n) + n) % n;
+  return LISTENING_FALLBACK_VARIANTS[idx] ?? FALLBACK_LISTENING;
+}
+
+export interface Listening2020SystemPromptOptions {
+  academicContentLayer?: string;
+  extraBlocks?: string[];
+  hasLibraryImage?: boolean;
+  hasLibraryCandidates?: boolean;
+  schemaSection?: string;
+  includeLineVisuals?: boolean;
+}
+
+/** Assembled via buildContentSystemPrompt — PLD lives in user JSON framework only. */
+export function buildListening2020SystemPrompt(
+  level: number,
+  opts: Listening2020SystemPromptOptions = {},
+): string {
+  const clamped = Math.min(Math.max(level, 1), 6);
+  return buildContentSystemPrompt("listening", clamped, opts.schemaSection ?? "", {
+    academicContentLayer: opts.academicContentLayer,
+    extraBlocks:          opts.extraBlocks,
+    hasLibraryImage:      opts.hasLibraryImage ?? opts.hasLibraryCandidates,
+    hasLibraryCandidates: opts.hasLibraryCandidates,
+    includeLineVisuals:   opts.includeLineVisuals,
+  });
+}
 
 // ── Generator ─────────────────────────────────────────────────────────────────
 
@@ -312,35 +497,42 @@ export async function generateListeningContent(params: {
   complexityInstruction: string;
   oralFormat: string;
   permittedFormats: string[];
-  canDo: { keyUse: string; action: string; items: string[] };
+  framework: FrameworkTask;
   topic: string;
   isRetry?: boolean;
   lastSessionScore?: number | null;
   hasLibraryImage?: boolean;
   priorPracticeReport?: PracticeReport | null;
+  varietySeed?: number;
 }): Promise<ListeningContent> {
   // Levels 0–2 use image_library sessions; levels 3–6 scale question count with level.
   const clampedLevel          = Math.min(Math.max(params.level, 3), 6);
   const questionCount         = LEVEL_QUESTION_COUNT[clampedLevel]         ?? 3;
   const passageSentenceTarget = PASSAGE_SENTENCE_TARGETS[clampedLevel]     ?? PASSAGE_SENTENCE_TARGETS[3];
   const maxTokens             = LEVEL_MAX_TOKENS[clampedLevel]              ?? 1500;
+  const varietySeed           = params.varietySeed ?? 0;
+  const { questionTypePlan } = listeningGenerationVarietyFields(
+    params.permittedFormats,
+    questionCount,
+    varietySeed,
+  );
 
   // Build a level-specific output schema and combine with the static base prompt
   const schemaSection = buildListeningOutputSchema(clampedLevel, params.permittedFormats, questionCount);
-  const systemPrompt  = buildSystemPrompt(
-    contentGenPrompt("listening", clampedLevel),
-    OPTIONAL_LINE_VISUALS_BLOCK,
-    schemaSection,
-  );
+  const systemPrompt = buildListening2020SystemPrompt(clampedLevel, { schemaSection });
 
   const userPrompt = JSON.stringify(mergePriorPractice({
+    domain:                  "listening",
     current_score:           params.fractionalLevel,
     integer_level:           params.level,
     step_within_level:       params.stepWithinLevel,
     complexity_instruction:  params.complexityInstruction,
-    can_do: serializeCanDoForPrompt(params.canDo, { level: params.level, domain: "LISTENING" }),
+    framework:               serializeFrameworkTask(params.framework),
+    goal:                    "Create one listening task so the student can practice understanding language at framework.pld (end of this integer level).",
+    required_key_use:      params.framework.key_language_use,
     oral_format:              params.oralFormat,
-    permitted_formats:        params.permittedFormats,
+    available_question_formats: params.permittedFormats,
+    question_type_plan:       questionTypePlan,
     topic:                    params.topic,
     is_retry:                 params.isRetry ?? false,
     last_session_score:       params.lastSessionScore ?? null,
@@ -358,37 +550,26 @@ export async function generateListeningContent(params: {
       questions: Array<Record<string, unknown>>;
     };
 
-    // Preserve all question fields — different formats have different shapes.
-    // Never forward image_tags, target_label, imageUrls for levels 3+.
-    const questions = (result.questions || []).map((q) => {
-      const three = Array.isArray(q.options)
-        ? clampToThreeOptions(q.options, q.correct)
-        : { options: undefined as string[] | undefined, correct: q.correct as number | undefined };
-      return {
-      id:                 q.id          as string,
-      type:               q.type        as string,
-      question:           toDisplayText((q.question as string) ?? ""),
-      visual:             parseVisual(q.visual),
-      optionDiagrams:     parseOptionDiagrams(q.option_diagrams)?.slice(0, three.options?.length ?? 3),
-      options:            three.options,
-      correct:            three.correct,
-      explanation:        q.explanation as string   | undefined,
-      // pair_matching
-      left_items:         q.left_items  as string[] | undefined,
-      right_items:        q.right_items as string[] | undefined,
-      correct_pairs:      q.correct_pairs as [number, number][] | undefined,
-      // sequence_ordering
-      items:              q.items       as string[] | undefined,
-      correct_order:      q.correct_order as number[] | undefined,
-      // agree_disagree
-      answer:             q.answer      as "agree" | "disagree" | undefined,
-      // category_sorting
-      categories:         q.categories  as string[] | undefined,
-      correct_categories: q.correct_categories as number[] | undefined,
-      };
+    const questions = await finalizeListeningQuestionsWithRetry({
+      systemPrompt,
+      maxTokens,
+      permittedFormats: params.permittedFormats,
+      questionCount,
+      audioScript: toDisplayText(result.audio_script),
+      topic: result.topic,
+      context: result.context,
+      rawQuestions: result.questions,
+      questionTypePlan,
+      varietySeed,
     });
 
+    const taskDescriptor = (result as { task_descriptor?: string; can_do_descriptor?: string }).task_descriptor
+      ?? (result as { can_do_descriptor?: string }).can_do_descriptor
+      ?? frameworkTaskDescriptor(params.framework);
     return {
+      taskDescriptor,
+      canDoDescriptor: taskDescriptor,
+      framework:       params.framework,
       audioScript: toDisplayText(result.audio_script),
       topic:       result.topic,
       context:     result.context,
@@ -397,6 +578,6 @@ export async function generateListeningContent(params: {
     };
   } catch (err) {
     logger.error({ err }, "generateListeningContent failed, using fallback");
-    return FALLBACK_LISTENING;
+    return pickListeningFallback(varietySeed);
   }
 }

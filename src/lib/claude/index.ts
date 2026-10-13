@@ -7,7 +7,7 @@
  */
 
 export type { ListeningContent } from "./listening";
-export { generateListeningContent, FALLBACK_LISTENING } from "./listening";
+export { generateListeningContent, FALLBACK_LISTENING, pickListeningFallback } from "./listening";
 
 export type { ImagePassageContent, ImagePassageQuestion } from "./image-library";
 export { generateImagePassageContent } from "./image-library";
@@ -17,6 +17,11 @@ export { generateAcademicScienceListeningContent, FALLBACK_ACADEMIC_SCIENCE } fr
 export { generateAcademicSocialStudiesListeningContent, FALLBACK_ACADEMIC_SOCIAL_STUDIES } from "./academic-social-studies";
 export { generateAcademicElaListeningContent, FALLBACK_ACADEMIC_ELA } from "./academic-ela";
 export { generateAcademicImageTapContent } from "./academic-image-tap";
+export {
+  decideAcademicListeningL12Mode,
+  type AcademicListeningL12ModeDecision,
+  type ListeningL12TapDelivery,
+} from "./academic-listening-l12-mode";
 
 export type { ReadingContent } from "./reading";
 export { generateReadingContent, FALLBACK_READING } from "./reading";

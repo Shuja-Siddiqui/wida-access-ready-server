@@ -27,7 +27,8 @@
  *   PUT    /api/admin/library/images/:libraryImageId/topic-assignments  body: { topicIds: string[] }
  */
 
-import { Router, type IRouter } from "express";
+import type { IRouter } from "express";
+import { createApiRouter } from "../../lib/http/create-api-router";
 import { eq, count, asc, and, desc } from "drizzle-orm";
 import { z } from "zod/v4";
 import { db } from "../../../db";
@@ -40,12 +41,12 @@ import {
 import { sendError, sendSuccess } from "../../lib/http/api-response";
 import { ObjectStorageService } from "../../lib/images/objectStorage";
 import { logger } from "../../config/logger";
-import { requireAuth, requireSuperAdmin } from "../../middlewares/auth";
+import { requireSuperAdminApiStack } from "../../middlewares/admin-guard";
 
-const router: IRouter = Router();
+const router: IRouter = createApiRouter();
 const storage = new ObjectStorageService();
 
-router.use("/admin", requireAuth, requireSuperAdmin);
+router.use("/admin", ...requireSuperAdminApiStack);
 
 function slugify(text: string): string {
   return text.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");

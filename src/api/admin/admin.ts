@@ -1,4 +1,5 @@
-import { Router, type IRouter } from "express";
+import type { IRouter } from "express";
+import { createApiRouter } from "../../lib/http/create-api-router";
 import { eq, count, sql, desc, isNull } from "drizzle-orm";
 import { z } from "zod/v4";
 import {
@@ -15,9 +16,12 @@ import { libraryTable, libraryTopicsTable, topicsTable, contentCategoriesTable }
 import { asc } from "drizzle-orm";
 import { sendError, sendSuccess } from "../../lib/http/api-response";
 import { requireAuth, requireSuperAdmin } from "../../middlewares/auth";
+import { requireSuperAdminApiStack } from "../../middlewares/admin-guard";
+import { requireSuperAdminOrInternalJob } from "../../middlewares/internal-job";
 import { getUncachableStripeClient } from "../../lib/billing/stripeClient";
 import { ObjectStorageService } from "../../lib/images/objectStorage";
 import { runImagePipeline, type SupportedMediaType } from "../../lib/images/image-pipeline";
+import { runDetection } from "../images/detect-core";
 import { logger } from "../../config/logger";
 import {
   getRateLimitSettings,
@@ -30,13 +34,111 @@ import { imageFactoryRouter } from "../../image-factory";
 
 const storage = new ObjectStorageService();
 
-const router: IRouter = Router();
+const router: IRouter = createApiRouter();
 
+// Image factory + cron job routes use requireSuperAdminOrInternalJob internally.
 router.use(imageFactoryRouter);
 
-router.use("/admin", requireAuth, requireSuperAdmin);
+// Cron may re-run DINO on library rows — must register before blanket super-admin middleware.
+router.post("/admin/library/:id/run-dino", requireSuperAdminOrInternalJob, async (req, res): Promise<void> => {
+  const id = req.params.id as string;
+
+  try {
+    const [row] = await db
+      .select()
+      .from(libraryTable)
+      .where(eq(libraryTable.id, id))
+      .limit(1);
+
+    if (!row) {
+      sendError(res, 404, "Item not found");
+      return;
+    }
+
+    const { buffer, contentType } = await storage.getImageBuffer(row.s3Key);
+    const mediaType = (contentType ?? "image/jpeg") as SupportedMediaType;
+    const base64 = buffer.toString("base64");
+    const image = `data:${mediaType};base64,${base64}`;
+
+    const prev = (row.detectionResults ?? {}) as { visionTags?: unknown };
+    const visionTags = Array.isArray(prev.visionTags)
+      ? prev.visionTags.filter((t): t is string => typeof t === "string" && t.trim().length > 0)
+      : [];
+
+    const labels = [
+      ...new Set(
+        [...row.tags, ...visionTags]
+          .map((t) => t.trim().toLowerCase())
+          .filter(Boolean),
+      ),
+    ];
+
+    if (labels.length === 0) {
+      sendError(res, 400, "No labels to detect — add tags or vision labels first");
+      return;
+    }
+
+    const { detections } = await runDetection(image, labels, { verify: false });
+
+    if (detections.length === 0) {
+      sendError(res, 422, "DINO found no objects. Draw boxes manually or edit labels and retry.");
+      return;
+    }
+
+    const tags = [...new Set(detections.map((d) => d.label))];
+
+    await db
+      .update(libraryTable)
+      .set({
+        tags,
+        detectionResults: {
+          ...prev,
+          detections,
+          model: "grounding_dino",
+          visionTags,
+        } as Record<string, unknown>,
+      })
+      .where(eq(libraryTable.id, id));
+
+    logger.info({ id, boxCount: detections.length, tags }, "admin/library: run-dino complete");
+    sendSuccess(res, { detections, tags });
+  } catch (err) {
+    logger.error({ err, id }, "admin/library: run-dino failed");
+    sendError(res, 502, err instanceof Error ? err.message : "DINO failed");
+  }
+});
+
+router.use("/admin", ...requireSuperAdminApiStack);
 router.use(adminLibraryCatalogRouter);
 router.use(adminAiUsageRouter);
+
+// ── GET /admin/session — validate bearer token + super_admin role ────────────
+router.get("/admin/session", async (req, res): Promise<void> => {
+  const auth = req.auth!;
+  const [user] = await db
+    .select({
+      id:    usersTable.id,
+      email: usersTable.email,
+      role:  usersTable.role,
+      name:  usersTable.name,
+    })
+    .from(usersTable)
+    .where(eq(usersTable.id, auth.userId))
+    .limit(1);
+
+  if (!user || user.role !== "super_admin") {
+    sendError(res, 403, "Super admin access required");
+    return;
+  }
+
+  sendSuccess(res, {
+    userId: auth.userId,
+    profileId: auth.id,
+    email:  user.email,
+    name:   user.name,
+    role:   user.role,
+  });
+});
 
 // ── GET /admin/stats ─────────────────────────────────────────────────────────
 router.get("/admin/stats", async (_req, res): Promise<void> => {
@@ -479,6 +581,8 @@ router.get("/admin/library", async (req, res): Promise<void> => {
         detectionResults: libraryTable.detectionResults,
         contexts:         libraryTable.contexts,
         imageConcept:     libraryTable.imageConcept,
+        ingestSource:     libraryTable.ingestSource,
+        generationBackend: libraryTable.generationBackend,
         uploaderId:       libraryTable.uploaderId,
         createdAt:        libraryTable.createdAt,
         uploaderEmail:    usersTable.email,
@@ -577,7 +681,6 @@ const DetectionBoxSchema = z.object({
 });
 
 const VALID_CONTEXTS = [
-  "general",
   "academic:math",
   "academic:science",
   "academic:social_studies",
@@ -714,6 +817,8 @@ router.post("/admin/library/upload", async (req, res): Promise<void> => {
         contexts:         userContexts ?? [],
         imageConcept:     userImageConcept ?? pipelineResult?.imageConcept ?? null,
         uploaderId,
+        ingestSource: "admin_upload",
+        generationBackend: null,
       })
       .returning();
 

@@ -1,8 +1,10 @@
-import { Router, type IRouter } from "express";
+import type { IRouter } from "express";
+import { createApiRouter } from "../lib/http/create-api-router";
 import healthRouter from "./health/health";
 import teachersRouter from "./teachers/teachers";
 import studentsRouter from "./students/students";
 import sessionsRouter from "./sessions/sessions";
+import libraryRouter from "./library/library";
 import authRouter from "./auth/auth";
 import invitationsRouter from "./auth/invitations";
 import billingRouter from "./billing/billing";
@@ -21,7 +23,7 @@ import detectRouter           from "./images/detect";
 import generateQuestionRouter from "./images/generate-question";
 import scanRouter             from "./images/scan";
 
-const router: IRouter = Router();
+const router: IRouter = createApiRouter();
 
 router.use(imagesRouter);
 router.use(detectRouter);
@@ -34,6 +36,7 @@ router.use(invitationsRouter);
 router.use(teachersRouter);
 router.use(studentsRouter);
 router.use(sessionsRouter);
+router.use(libraryRouter);
 router.use(billingRouter);
 router.use(storageRouter);
 router.use(contactRouter);

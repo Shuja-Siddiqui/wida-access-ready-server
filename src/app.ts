@@ -1,10 +1,14 @@
 import express, { type Express } from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
+import helmet from "helmet";
 import pinoHttp from "pino-http";
 import router from "./api";
 import { logger } from "./config/logger";
 import { WebhookHandlers } from "./lib/billing/webhookHandlers";
+import { buildCorsOptions } from "./lib/security/cors";
+import { resolveApiError, sendResolvedError } from "./lib/http/error-handler";
+import { sendError } from "./lib/http/api-response";
 
 const app: Express = express();
 
@@ -56,15 +60,25 @@ app.post(
   },
 );
 
-app.use(cors());
+app.use(
+  helmet({
+    // Presigned S3 URLs and inline images may be loaded cross-origin.
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+  }),
+);
+app.use(cors(buildCorsOptions()));
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true, limit: "20mb" }));
 app.use(cookieParser());
 
 app.use("/api", router);
 
-// Global error handler — catches any unhandled async throws and returns
-// a clean JSON error instead of Express's default HTML response.
+// Unknown routes under /api — JSON envelope (not Express HTML).
+app.use("/api", (_req, res) => {
+  sendError(res, 404, "Not found");
+});
+
+// Global error handler — typed AppError, Zod, Claude capacity, and fallbacks.
 app.use(
   (
     err: unknown,
@@ -73,10 +87,10 @@ app.use(
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _next: express.NextFunction,
   ) => {
-    const message = err instanceof Error ? err.message : "Internal server error";
-    req.log?.error({ err }, "Unhandled error");
+    const resolved = resolveApiError(err);
+    req.log?.error({ err, status: resolved.status, code: resolved.details?.code }, "API error");
     if (!res.headersSent) {
-      res.status(500).json({ success: false, error: message });
+      sendResolvedError(res, resolved);
     }
   },
 );

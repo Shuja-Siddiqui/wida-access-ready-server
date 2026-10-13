@@ -1,6 +1,6 @@
 /**
  * LISTENING_CORE prompt block — academic listening (no WIDA year).
- * 2016 Can Do rules for academic listening live in standards/2016/prompts/listening.ts
+ * WIDA 2020 framework rules for academic listening live in standards/2020/prompts/listening.ts
  */
 
 export const LISTENING_CORE_BLOCK = `━━ WIDA ACADEMIC LISTENING ━━
