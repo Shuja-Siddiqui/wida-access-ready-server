@@ -2,6 +2,7 @@ import type { IRouter } from "express";
 import { createApiRouter } from "../../lib/http/create-api-router";
 import { SubmitContactMessageBody, SubmitContactMessageResponse } from "../../generated";
 import { sendHtmlEmail } from "../../lib/mail/mailer";
+import { contactFormNotificationEmail } from "../../lib/mail/email-templates";
 import { config } from "../../config/index";
 import { sendError, sendSuccess } from "../../lib/http/api-response";
 import { rateLimitContact } from "../../middlewares/rate-limit-public";
@@ -17,17 +18,13 @@ router.post("/contact", rateLimitContact(), async (req, res): Promise<void> => {
   }
 
   const { name, email, message } = parsed.data;
-  const recipient = config.email.from || "hello@fugeesfamily.org";
+  const recipient = config.email.support || config.email.from || "support@accessready.app";
 
   try {
     await sendHtmlEmail({
       to: recipient,
       subject: `ACCESS Ready contact form: ${name}`,
-      html: `
-        <p><strong>From:</strong> ${name} (${email})</p>
-        <p><strong>Message:</strong></p>
-        <p>${message.replace(/\n/g, "<br />")}</p>
-      `,
+      html: contactFormNotificationEmail({ name, email, message }),
     });
   } catch (err) {
     req.log.error({ err }, "Failed to send contact form email");

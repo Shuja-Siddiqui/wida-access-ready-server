@@ -2,6 +2,7 @@ import nodemailer from "nodemailer";
 import type { Transporter } from "nodemailer";
 import { logger } from "../../config/logger";
 import { config } from "../../config/index";
+import { emailLogoAttachment } from "./email-logo";
 
 let transporter: Transporter | null = null;
 
@@ -49,10 +50,12 @@ export async function sendHtmlEmail({
     return;
   }
 
+  const logo = emailLogoAttachment();
   await tx.sendMail({
     from: config.email.from,
     to: list,
     subject,
     html,
+    attachments: logo ? [logo] : undefined,
   });
 }

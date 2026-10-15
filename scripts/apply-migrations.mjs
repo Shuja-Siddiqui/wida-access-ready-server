@@ -145,8 +145,15 @@ export async function runAllMigrations(liveOverrides = {}) {
 
   await runLiveMigrations(liveOverrides);
 
-  const { syncLibraryCatalogFromLiveToDev } = await import("./sync-library-catalog.mjs");
-  await syncLibraryCatalogFromLiveToDev();
+  try {
+    const { syncLibraryCatalogFromLiveToDev } = await import("./sync-library-catalog.mjs");
+    await syncLibraryCatalogFromLiveToDev();
+  } catch (err) {
+    console.warn(
+      "\nWarning: library catalog sync (live → dev) failed — SQL migrations still applied.",
+      err instanceof Error ? err.message : err,
+    );
+  }
 
   console.log("\nAll configured databases migrated.");
 }
