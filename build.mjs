@@ -16,7 +16,11 @@ async function buildAll() {
 
   await esbuild({
     absWorkingDir: artifactDir,
-    entryPoints: [path.resolve(artifactDir, "src/index.ts")],
+    entryPoints: [
+      path.resolve(artifactDir, "src/index.ts"),
+      // Standalone bundle for scripts/send-smtp-test.mjs (full HTML templates).
+      path.resolve(artifactDir, "src/lib/mail/email-templates.ts"),
+    ],
     nodePaths: [path.resolve(artifactDir, "node_modules")],
     platform: "node",
     bundle: true,

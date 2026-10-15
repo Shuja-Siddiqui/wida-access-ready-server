@@ -167,6 +167,78 @@ export function isHfInferenceConfigured(): boolean {
   return Boolean(imageFactoryConfig.huggingface.inferenceToken);
 }
 
+const HF_PROBE_CACHE_MS_OK = 30 * 60 * 1000;
+const HF_PROBE_CACHE_MS_FAIL = 10 * 60 * 1000;
+let hfProbeCache: { expires: number; ok: boolean; reason?: string } | null = null;
+
+/**
+ * Lightweight POST to the configured inference route (cached).
+ * Skips cron/work when HF returns billing/auth errors (e.g. 402 no credits).
+ */
+export async function checkHfInferenceAvailable(force = false): Promise<{ ok: boolean; reason?: string }> {
+  if (!isHfInferenceConfigured()) {
+    return { ok: false, reason: "HF_TOKEN is not configured" };
+  }
+
+  const now = Date.now();
+  if (!force && hfProbeCache && hfProbeCache.expires > now) {
+    return { ok: hfProbeCache.ok, reason: hfProbeCache.reason };
+  }
+
+  const token = imageFactoryConfig.huggingface.inferenceToken!;
+  const { huggingface: hf } = imageFactoryConfig;
+  const routes = resolveRoutes(hf.imageModel, hf.imageProvider);
+  if (routes.length === 0) {
+    return { ok: false, reason: `No inference route for model ${hf.imageModel}` };
+  }
+
+  const route = routes[0]!;
+  const body = route.buildBody("availability probe", {
+    width: 64,
+    height: 64,
+    numInferenceSteps: 1,
+    guidanceScale: 1,
+  });
+
+  try {
+    const res = await fetch(route.url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(90_000),
+    });
+
+    if (res.ok) {
+      hfProbeCache = { expires: now + HF_PROBE_CACHE_MS_OK, ok: true };
+      return { ok: true };
+    }
+
+    const errText = await parseErrorBody(res);
+    if (res.status === 402 || res.status === 401 || res.status === 403) {
+      const reason = `HF Inference unavailable (${res.status}): ${errText}`;
+      hfProbeCache = { expires: now + HF_PROBE_CACHE_MS_FAIL, ok: false, reason };
+      logger.warn({ status: res.status, errText }, "image-factory: HF inference probe failed");
+      return { ok: false, reason };
+    }
+
+    if (res.status === 503) {
+      hfProbeCache = { expires: now + 5 * 60 * 1000, ok: true };
+      return { ok: true };
+    }
+
+    const reason = `HF Inference probe failed (${res.status}): ${errText}`;
+    hfProbeCache = { expires: now + HF_PROBE_CACHE_MS_FAIL, ok: false, reason };
+    return { ok: false, reason };
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    hfProbeCache = { expires: now + HF_PROBE_CACHE_MS_FAIL, ok: false, reason };
+    return { ok: false, reason };
+  }
+}
+
 export async function generateViaHfInference(
   prompt: string,
   options: HfGenerateOptions = {},

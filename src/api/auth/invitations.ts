@@ -18,6 +18,7 @@ import { invitationEmail, educatorInvitationEmail } from "../../lib/mail/email-t
 import { config } from "../../config/index";
 import type { Assessment } from "../../lib/assessments";
 import { sendError, sendSuccess } from "../../lib/http/api-response";
+import { getFrontendAppUrl } from "../../lib/http/request-origin";
 import {
   createSessionPair as createAuthSessionPair,
   sessionContextFromRequest,
@@ -34,11 +35,6 @@ function sha256(raw: string): string {
 }
 function generateToken(): string {
   return crypto.randomBytes(32).toString("hex");
-}
-function appUrl(req: Request): string {
-  const proto = (req.headers["x-forwarded-proto"] as string)?.split(",")[0]?.trim() ?? req.protocol;
-  const host = (req.headers["x-forwarded-host"] as string)?.split(",")[0]?.trim() ?? req.get("host") ?? "";
-  return `${proto}://${host}`;
 }
 function extractBearer(req: Request): string | null {
   const auth = req.headers.authorization;
@@ -136,7 +132,7 @@ router.post("/auth/invite", async (req: Request, res: Response): Promise<void> =
     expiresAt,
   });
 
-  const inviteUrl = `${appUrl(req)}/accept-invite?token=${token}`;
+  const inviteUrl = `${getFrontendAppUrl(req)}/accept-invite?token=${token}`;
 
   // Email delivery failure is non-fatal — the invitation record is still created
   try {
@@ -256,7 +252,7 @@ router.post("/auth/invite/educator", async (req: Request, res: Response): Promis
     expiresAt,
   });
 
-  const inviteUrl = `${appUrl(req)}/accept-invite?token=${token}`;
+  const inviteUrl = `${getFrontendAppUrl(req)}/accept-invite?token=${token}`;
 
   try {
     await sendHtmlEmail({

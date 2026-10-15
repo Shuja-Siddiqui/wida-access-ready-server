@@ -1,51 +1,138 @@
 /**
  * Branded HTML email templates for ACCESS Ready.
- * All templates share the hot-pink (#FF4D8D) header and Fugees Family footer.
+ * Colors align with access-ready/client/styles/theme.css (Blossom pink primary).
  */
 
 import { config } from "../../config/index";
+import { emailLogoSrc } from "./email-logo";
+
+/** Brand palette (email-safe hex; gradients approximated for clients). */
+const BRAND = {
+  pink: "#FF4D8D",
+  pinkHover: "#FF77A9",
+  pinkSoft: "#FFF5F8",
+  trustBlue: "#0F7AE5",
+  growthGreen: "#33CC00",
+  logoGold: "#FFB800",
+  logoTeal: "#00B8B8",
+  text: "#18181b",
+  textMuted: "#52525b",
+  textSubtle: "#71717a",
+  border: "#f0f0f0",
+  canvas: "#f4f4f5",
+  card: "#ffffff",
+} as const;
+
+const TAGLINE = "Adaptive ELL exit prep for K–12";
+const PRODUCT_NAME = "ACCESS Ready";
 
 const support = config.email.support || "support@accessready.app";
+const appUrl = (config.appUrl || "https://accessready.app").replace(/\/$/, "");
+const logoSrc = emailLogoSrc();
+const year = new Date().getFullYear();
 
-function base(title: string, body: string): string {
+function escapeHtml(raw: string): string {
+  return raw
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function escapeAttr(raw: string): string {
+  return escapeHtml(raw).replace(/'/g, "&#39;");
+}
+
+function preheader(text: string): string {
+  const t = escapeHtml(text);
+  return `<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;mso-hide:all;">${t}&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;</div>`;
+}
+
+function brandStripe(): string {
+  return `
+  <tr>
+    <td style="padding:0;line-height:0;font-size:0;">
+      <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+        <tr>
+          <td width="25%" height="4" style="background:${BRAND.trustBlue};font-size:0;line-height:0;">&nbsp;</td>
+          <td width="25%" height="4" style="background:${BRAND.growthGreen};font-size:0;line-height:0;">&nbsp;</td>
+          <td width="25%" height="4" style="background:${BRAND.logoGold};font-size:0;line-height:0;">&nbsp;</td>
+          <td width="25%" height="4" style="background:${BRAND.pink};font-size:0;line-height:0;">&nbsp;</td>
+        </tr>
+      </table>
+    </td>
+  </tr>`;
+}
+
+function emailHeader(): string {
+  return `
+  ${brandStripe()}
+  <tr>
+    <td style="background:${BRAND.pink};padding:32px 40px 28px;text-align:center;">
+      <table cellpadding="0" cellspacing="0" role="presentation" style="margin:0 auto;">
+        <tr>
+          <td style="padding-bottom:12px;">
+            <img src="${escapeAttr(logoSrc)}" alt="${PRODUCT_NAME}" width="180" height="auto"
+              style="display:block;margin:0 auto;max-width:180px;height:auto;border:0;background:#ffffff;border-radius:10px;padding:8px 14px;" />
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <p style="margin:0;font-size:11px;font-weight:700;color:rgba(255,255,255,0.92);letter-spacing:0.12em;text-transform:uppercase;">
+              ${PRODUCT_NAME}
+            </p>
+            <p style="margin:6px 0 0;font-size:13px;color:rgba(255,255,255,0.85);line-height:1.4;">
+              ${TAGLINE}
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>`;
+}
+
+function emailFooter(): string {
+  return `
+  <tr>
+    <td style="background:#fafafa;border-top:1px solid ${BRAND.border};padding:24px 40px;text-align:center;">
+      <p style="margin:0 0 8px;font-size:13px;color:${BRAND.textMuted};line-height:1.5;">
+        Questions? Email
+        <a href="mailto:${escapeAttr(support)}" style="color:${BRAND.pink};font-weight:600;text-decoration:none;">${escapeHtml(support)}</a>
+      </p>
+      <p style="margin:0 0 12px;font-size:12px;color:${BRAND.textSubtle};line-height:1.5;">
+        <a href="${escapeAttr(appUrl)}" style="color:${BRAND.textSubtle};text-decoration:underline;">${escapeHtml(appUrl.replace(/^https?:\/\//, ""))}</a>
+      </p>
+      <p style="margin:0;font-size:11px;color:#a1a1aa;">
+        © ${year} ${PRODUCT_NAME}. All rights reserved.
+      </p>
+    </td>
+  </tr>`;
+}
+
+function base(title: string, body: string, previewText?: string): string {
+  const preview = previewText ? preheader(previewText) : "";
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>${title}</title>
+  <meta name="color-scheme" content="light" />
+  <meta name="supported-color-schemes" content="light" />
+  <title>${escapeHtml(title)}</title>
 </head>
-<body style="margin:0;padding:0;background:#f5f5f5;font-family:Arial,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5;padding:40px 0;">
+<body style="margin:0;padding:0;background:${BRAND.canvas};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;">
+  ${preview}
+  <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background:${BRAND.canvas};padding:32px 16px;">
     <tr><td align="center">
-      <table width="560" cellpadding="0" cellspacing="0"
-        style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
-        <!-- Header -->
+      <table width="100%" cellpadding="0" cellspacing="0" role="presentation"
+        style="max-width:560px;background:${BRAND.card};border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(24,24,27,0.08);border:1px solid ${BRAND.border};">
+        ${emailHeader()}
         <tr>
-          <td style="background:#FF4D8D;padding:28px 40px;text-align:center;">
-            <p style="margin:0;font-size:26px;font-weight:900;color:#ffffff;letter-spacing:-0.5px;">
-              ACCESS Ready
-            </p>
-            <p style="margin:4px 0 0;font-size:12px;color:rgba(255,255,255,0.8);">
-              by Fugees Family, Inc.
-            </p>
-          </td>
-        </tr>
-        <!-- Body -->
-        <tr>
-          <td style="padding:40px 48px 32px;">
+          <td style="padding:36px 40px 32px;">
             ${body}
           </td>
         </tr>
-        <!-- Footer -->
-        <tr>
-          <td style="background:#fafafa;border-top:1px solid #f0f0f0;padding:20px 48px;text-align:center;">
-            <p style="margin:0;font-size:12px;color:#a1a1aa;line-height:1.6;">
-              Need help? Email us at
-              <a href="mailto:${support}" style="color:#FF4D8D;text-decoration:none;">${support}</a>
-            </p>
-          </td>
-        </tr>
+        ${emailFooter()}
       </table>
     </td></tr>
   </table>
@@ -53,14 +140,28 @@ function base(title: string, body: string): string {
 </html>`;
 }
 
-function btn(label: string, url: string): string {
+function h1(text: string): string {
+  return `<p style="margin:0 0 8px;font-size:22px;font-weight:800;color:${BRAND.text};letter-spacing:-0.02em;line-height:1.25;">${text}</p>`;
+}
+
+function lead(html: string): string {
+  return `<p style="margin:0 0 24px;font-size:15px;color:${BRAND.textMuted};line-height:1.65;">${html}</p>`;
+}
+
+function finePrint(html: string): string {
+  return `<p style="margin:0;font-size:13px;color:${BRAND.textSubtle};line-height:1.6;">${html}</p>`;
+}
+
+function primaryBtn(label: string, url: string): string {
+  const safeUrl = escapeAttr(url);
+  const safeLabel = escapeHtml(label);
   return `
-  <table cellpadding="0" cellspacing="0" style="margin:0 auto 28px;">
+  <table cellpadding="0" cellspacing="0" role="presentation" style="margin:0 auto 20px;">
     <tr>
-      <td style="background:#FF4D8D;border-radius:8px;">
-        <a href="${url}"
-          style="display:inline-block;padding:14px 36px;font-size:15px;font-weight:700;color:#ffffff;text-decoration:none;">
-          ${label}
+      <td align="center" style="border-radius:10px;background:${BRAND.pink};">
+        <a href="${safeUrl}" target="_blank"
+          style="display:inline-block;padding:14px 32px;font-size:15px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:10px;mso-padding-alt:0;">
+          ${safeLabel}
         </a>
       </td>
     </tr>
@@ -69,30 +170,57 @@ function btn(label: string, url: string): string {
 
 function fallbackLink(url: string): string {
   return `
-  <p style="margin:0 0 6px;font-size:13px;color:#71717a;">
-    If the button doesn't work, copy and paste this link:
-  </p>
-  <p style="margin:0 0 28px;font-size:12px;color:#a1a1aa;word-break:break-all;">${url}</p>`;
+  <p style="margin:0 0 6px;font-size:13px;color:${BRAND.textSubtle};">If the button doesn't work, copy and paste this link:</p>
+  <p style="margin:0 0 24px;font-size:12px;color:#a1a1aa;word-break:break-all;line-height:1.5;">
+    <a href="${escapeAttr(url)}" style="color:${BRAND.pink};text-decoration:none;">${escapeHtml(url)}</a>
+  </p>`;
 }
 
-// ── 1. Email Verification ───────────────────────────────────────────────────
+function quoteBlock(message: string): string {
+  const safe = escapeHtml(message);
+  return `
+  <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin:0 0 24px;">
+    <tr>
+      <td style="padding:14px 18px;background:${BRAND.pinkSoft};border-left:4px solid ${BRAND.pink};border-radius:0 8px 8px 0;">
+        <p style="margin:0;font-size:14px;color:${BRAND.textMuted};font-style:italic;line-height:1.55;">"${safe}"</p>
+      </td>
+    </tr>
+  </table>`;
+}
+
+function keyValueTable(rows: { label: string; value: string; last?: boolean }[]): string {
+  const trs = rows
+    .map((row, i) => {
+      const border = row.last || i === rows.length - 1 ? "" : `border-bottom:1px solid ${BRAND.border};`;
+      return `
+      <tr>
+        <td style="padding:12px 0;font-size:14px;color:${BRAND.textSubtle};${border}">${escapeHtml(row.label)}</td>
+        <td style="padding:12px 0;font-size:14px;color:${BRAND.text};text-align:right;font-weight:700;${border}">${row.value}</td>
+      </tr>`;
+    })
+    .join("");
+  return `
+  <table width="100%" cellpadding="0" cellspacing="0" role="presentation"
+    style="margin:0 0 28px;border:1px solid ${BRAND.border};border-radius:12px;padding:4px 20px;background:#fafafa;">
+    ${trs}
+  </table>`;
+}
+
+// ── 1. Email verification ───────────────────────────────────────────────────
 export function verificationEmail(name: string, verificationUrl: string): string {
+  const safeName = escapeHtml(name);
   return base(
     "Verify your ACCESS Ready email",
     `
-    <p style="margin:0 0 6px;font-size:22px;font-weight:700;color:#18181b;">
-      Welcome, ${name}! 👋
-    </p>
-    <p style="margin:0 0 28px;font-size:15px;color:#52525b;line-height:1.6;">
-      You're one step away from starting your ELL exit prep journey.
-      Please verify your email address to activate your account.
-      This link expires in <strong>24 hours</strong>.
-    </p>
-    ${btn("Verify my email", verificationUrl)}
+    ${h1(`Welcome, ${safeName}!`)}
+    ${lead(
+      `You're one step away from starting your ELL exit prep journey. Verify your email to activate your <strong>${PRODUCT_NAME}</strong> account. This link expires in <strong>24 hours</strong>.`,
+    )}
+    ${primaryBtn("Verify my email", verificationUrl)}
     ${fallbackLink(verificationUrl)}
-    <p style="margin:0;font-size:13px;color:#71717a;line-height:1.6;">
-      If you didn't create an ACCESS Ready account, you can safely ignore this email.
-    </p>`,
+    ${finePrint(`If you didn't create a ${PRODUCT_NAME} account, you can safely ignore this email.`)}
+    `,
+    "Verify your email to activate your ACCESS Ready account.",
   );
 }
 
@@ -107,7 +235,7 @@ export function invitationEmail({
 }: {
   inviteeName: string;
   inviterName: string;
-  inviterRole: string; // 'teacher' | 'parent' | 'district_admin'
+  inviterRole: string;
   assessment?: string;
   message?: string;
   inviteUrl: string;
@@ -119,40 +247,27 @@ export function invitationEmail({
         ? "district administrator"
         : "teacher";
 
-  const assessmentLine = assessment
-    ? `<p style="margin:0 0 20px;font-size:14px;color:#52525b;">
-        You'll be preparing for the <strong>${assessment}</strong> assessment.
-       </p>`
+  const assessmentBlock = assessment
+    ? lead(`You'll be preparing for the <strong>${escapeHtml(assessment)}</strong> assessment.`)
     : "";
 
-  const messageLine = message
-    ? `<blockquote style="margin:0 0 24px;padding:12px 16px;background:#FFF5F8;border-left:3px solid #FF4D8D;border-radius:4px;">
-        <p style="margin:0;font-size:14px;color:#52525b;font-style:italic;">"${message}"</p>
-       </blockquote>`
-    : "";
+  const messageBlock = message ? quoteBlock(message) : "";
 
   return base(
-    `You're invited to ACCESS Ready`,
+    "You're invited to ACCESS Ready",
     `
-    <p style="margin:0 0 6px;font-size:22px;font-weight:700;color:#18181b;">
-      Hi ${inviteeName}! 🎉
-    </p>
-    <p style="margin:0 0 20px;font-size:15px;color:#52525b;line-height:1.6;">
-      Your ${roleLabel} <strong>${inviterName}</strong> has invited you to join
-      <strong>ACCESS Ready</strong> — an adaptive ELL exit prep platform that
-      helps you reach your language goals faster.
-    </p>
-    ${messageLine}
-    ${assessmentLine}
-    <p style="margin:0 0 28px;font-size:15px;color:#52525b;line-height:1.6;">
-      Click below to set up your account. This invitation expires in
-      <strong>7 days</strong>.
-    </p>
-    ${btn("Accept invitation", inviteUrl)}
+    ${h1(`Hi ${escapeHtml(inviteeName)}!`)}
+    ${lead(
+      `Your ${roleLabel} <strong>${escapeHtml(inviterName)}</strong> invited you to <strong>${PRODUCT_NAME}</strong> — ${TAGLINE.toLowerCase()}.`,
+    )}
+    ${messageBlock}
+    ${assessmentBlock}
+    ${lead(`Accept below to set up your account. This invitation expires in <strong>7 days</strong>.`)}
+    ${primaryBtn("Accept invitation", inviteUrl)}
     ${fallbackLink(inviteUrl)}
-    <p style="margin:0;font-size:13px;color:#71717a;line-height:1.6;">
-      If you weren't expecting this invitation, you can safely ignore this email.
-    </p>`,
+    ${finePrint("If you weren't expecting this invitation, you can safely ignore this email.")}
+    `,
+    `${inviterName} invited you to ACCESS Ready.`,
   );
 }
 
@@ -167,29 +282,22 @@ export function educatorInvitationEmail({
   inviteUrl: string;
 }): string {
   return base(
-    `You're invited to join ACCESS Ready`,
+    "You're invited to join ACCESS Ready",
     `
-    <p style="margin:0 0 6px;font-size:22px;font-weight:700;color:#18181b;">
-      Hi ${inviteeName}! 👋
-    </p>
-    <p style="margin:0 0 20px;font-size:15px;color:#52525b;line-height:1.6;">
-      <strong>${inviterName}</strong> (Principal) has invited you to join
-      <strong>ACCESS Ready</strong> as a teacher. ACCESS Ready is an adaptive
-      ELL exit prep platform that helps your students reach their language goals faster.
-    </p>
-    <p style="margin:0 0 28px;font-size:15px;color:#52525b;line-height:1.6;">
-      Click below to set up your password and activate your account.
-      This invitation expires in <strong>7 days</strong>.
-    </p>
-    ${btn("Accept invitation & set password", inviteUrl)}
+    ${h1(`Hi ${escapeHtml(inviteeName)}!`)}
+    ${lead(
+      `<strong>${escapeHtml(inviterName)}</strong> (Principal) invited you to join <strong>${PRODUCT_NAME}</strong> as a teacher. Help your students reach exit readiness with adaptive practice across listening, reading, speaking, and writing.`,
+    )}
+    ${lead(`Set your password below. This invitation expires in <strong>7 days</strong>.`)}
+    ${primaryBtn("Accept invitation & set password", inviteUrl)}
     ${fallbackLink(inviteUrl)}
-    <p style="margin:0;font-size:13px;color:#71717a;line-height:1.6;">
-      If you weren't expecting this invitation, you can safely ignore this email.
-    </p>`,
+    ${finePrint("If you weren't expecting this invitation, you can safely ignore this email.")}
+    `,
+    "Set up your ACCESS Ready teacher account.",
   );
 }
 
-// ── 4. Billing confirmation (receipt after a successful Stripe payment) ────
+// ── 4. Billing confirmation ───────────────────────────────────────────────────
 export function billingConfirmationEmail({
   planName,
   amountDisplay,
@@ -203,61 +311,96 @@ export function billingConfirmationEmail({
   nextBillingDateDisplay: string | null;
   billingUrl: string;
 }): string {
-  const nextBillingRow = nextBillingDateDisplay
-    ? `
-    <tr>
-      <td style="padding:10px 0;font-size:14px;color:#71717a;">Next billing date</td>
-      <td style="padding:10px 0;font-size:14px;color:#18181b;text-align:right;font-weight:700;">${nextBillingDateDisplay}</td>
-    </tr>`
-    : "";
+  const rows: { label: string; value: string; last?: boolean }[] = [
+    { label: "Plan", value: escapeHtml(planName) },
+    { label: "Amount charged", value: `${escapeHtml(amountDisplay)} ${escapeHtml(periodDisplay)}` },
+  ];
+  if (nextBillingDateDisplay) {
+    rows.push({ label: "Next billing date", value: escapeHtml(nextBillingDateDisplay), last: true });
+  } else {
+    rows[rows.length - 1]!.last = true;
+  }
 
   return base(
     "Your ACCESS Ready payment receipt",
     `
-    <p style="margin:0 0 6px;font-size:22px;font-weight:700;color:#18181b;">
-      Payment received ✅
-    </p>
-    <p style="margin:0 0 24px;font-size:15px;color:#52525b;line-height:1.6;">
-      Thanks! We've received your payment and your subscription is active.
-      Here's a summary for your records:
-    </p>
-    <table width="100%" cellpadding="0" cellspacing="0"
-      style="margin:0 0 28px;border:1px solid #f0f0f0;border-radius:8px;padding:4px 20px;">
-      <tr>
-        <td style="padding:10px 0;font-size:14px;color:#71717a;border-bottom:1px solid #f5f5f5;">Plan</td>
-        <td style="padding:10px 0;font-size:14px;color:#18181b;text-align:right;font-weight:700;border-bottom:1px solid #f5f5f5;">${planName}</td>
-      </tr>
-      <tr>
-        <td style="padding:10px 0;font-size:14px;color:#71717a;${nextBillingRow ? "border-bottom:1px solid #f5f5f5;" : ""}">Amount charged</td>
-        <td style="padding:10px 0;font-size:14px;color:#18181b;text-align:right;font-weight:700;${nextBillingRow ? "border-bottom:1px solid #f5f5f5;" : ""}">${amountDisplay} ${periodDisplay}</td>
-      </tr>
-      ${nextBillingRow}
-    </table>
-    ${btn("View billing details", billingUrl)}
+    ${h1("Payment received")}
+    ${lead("Thanks! We've received your payment and your subscription is active. Here's a summary for your records:")}
+    ${keyValueTable(rows)}
+    ${primaryBtn("View billing details", billingUrl)}
     ${fallbackLink(billingUrl)}
-    <p style="margin:0;font-size:13px;color:#71717a;line-height:1.6;">
-      Questions about this charge? Reach out any time — we're happy to help.
-    </p>`,
+    ${finePrint("Questions about this charge? Reply to this email or contact support — we're happy to help.")}
+    `,
+    `Receipt for your ${planName} subscription.`,
   );
 }
 
-// ── 4. Password Reset (moved from auth.ts inline HTML) ─────────────────────
+// ── 5. Password reset ───────────────────────────────────────────────────────
 export function passwordResetEmail(resetUrl: string): string {
   return base(
     "Reset your ACCESS Ready password",
     `
-    <p style="margin:0 0 8px;font-size:22px;font-weight:700;color:#18181b;">
-      Reset your password
-    </p>
-    <p style="margin:0 0 28px;font-size:15px;color:#52525b;line-height:1.6;">
-      We received a request to reset the password for your ACCESS Ready account.
-      Click the button below — this link expires in <strong>1 hour</strong>.
-    </p>
-    ${btn("Reset password", resetUrl)}
+    ${h1("Reset your password")}
+    ${lead(
+      `We received a request to reset the password for your <strong>${PRODUCT_NAME}</strong> account. Use the button below — this link expires in <strong>1 hour</strong>.`,
+    )}
+    ${primaryBtn("Reset password", resetUrl)}
     ${fallbackLink(resetUrl)}
-    <p style="margin:0;font-size:13px;color:#71717a;line-height:1.6;">
-      If you didn't request a password reset, you can safely ignore this
-      email — your password won't change.
-    </p>`,
+    ${finePrint("If you didn't request a password reset, ignore this email — your password won't change.")}
+    `,
+    "Reset your ACCESS Ready password (expires in 1 hour).",
+  );
+}
+
+// ── 6. Contact form (to support / admin inbox) ──────────────────────────────
+export function contactFormNotificationEmail({
+  name,
+  email,
+  message,
+}: {
+  name: string;
+  email: string;
+  message: string;
+}): string {
+  const bodyHtml = escapeHtml(message).replace(/\n/g, "<br />");
+  return base(
+    "New contact form message",
+    `
+    ${h1("New contact message")}
+    ${lead("Someone submitted the public contact form on ACCESS Ready:")}
+    ${keyValueTable([
+      { label: "Name", value: escapeHtml(name) },
+      { label: "Email", value: `<a href="mailto:${escapeAttr(email)}" style="color:${BRAND.pink};text-decoration:none;">${escapeHtml(email)}</a>` },
+      { label: "Received", value: escapeHtml(new Date().toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })), last: true },
+    ])}
+    <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin:0 0 8px;">
+      <tr>
+        <td style="padding:16px 18px;background:#fafafa;border:1px solid ${BRAND.border};border-radius:12px;">
+          <p style="margin:0 0 8px;font-size:12px;font-weight:700;color:${BRAND.textSubtle};text-transform:uppercase;letter-spacing:0.06em;">Message</p>
+          <p style="margin:0;font-size:15px;color:${BRAND.text};line-height:1.65;">${bodyHtml}</p>
+        </td>
+      </tr>
+    </table>
+    `,
+    `Contact form from ${name}`,
+  );
+}
+
+/** Branded SMTP connectivity test (scripts/send-smtp-test.mjs). */
+export { emailLogoAttachment } from "./email-logo";
+
+export function smtpTestEmail(fromDisplay: string): string {
+  return base(
+    "ACCESS Ready SMTP test",
+    `
+    ${h1("SMTP test successful")}
+    ${lead(`This message confirms your mail server settings for <strong>${PRODUCT_NAME}</strong> are working.`)}
+    ${keyValueTable([
+      { label: "From", value: escapeHtml(fromDisplay) },
+      { label: "Sent at", value: escapeHtml(new Date().toISOString()), last: true },
+    ])}
+    ${finePrint("You can delete this email.")}
+    `,
+    "ACCESS Ready SMTP configuration test.",
   );
 }

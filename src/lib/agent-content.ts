@@ -251,7 +251,7 @@ async function callListeningAgent(
   }
 
   // ── Fallback: standard messages API with lean system prompt ───────────────
-  const LEAN_SYSTEM = `You are the content engine for ACCESS Ready, an adaptive ELL exit-prep app for K-12 students by Fugees Family, Inc.
+  const LEAN_SYSTEM = `You are the content engine for ACCESS Ready, an adaptive ELL exit-prep app for K-12 students.
 
 Your job: generate a single LISTENING practice question as a JSON object.
 

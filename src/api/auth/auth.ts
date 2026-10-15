@@ -21,7 +21,7 @@ import { sendHtmlEmail } from "../../lib/mail/mailer";
 import { verificationEmail, passwordResetEmail } from "../../lib/mail/email-templates";
 import { config } from "../../config/index";
 import { sendError, sendSuccess } from "../../lib/http/api-response";
-import { getRequestOrigin } from "../../lib/http/request-origin";
+import { getFrontendAppUrl, getRequestOrigin } from "../../lib/http/request-origin";
 import { rateLimitAuth } from "../../middlewares/rate-limit-public";
 import {
   createSessionPair as createAuthSessionPair,
@@ -81,12 +81,6 @@ function generateToken(): string {
   return crypto.randomBytes(32).toString("hex");
 }
 
-function getAppUrl(req: Request): string {
-  const proto = (req.headers["x-forwarded-proto"] as string)?.split(",")[0]?.trim() ?? req.protocol;
-  const host = (req.headers["x-forwarded-host"] as string)?.split(",")[0]?.trim() ?? req.get("host") ?? "";
-  return `${proto}://${host}`;
-}
-
 async function sendVerificationEmailTo(
   req: Request,
   email: string,
@@ -110,7 +104,7 @@ async function sendVerificationEmailTo(
 
   await db.insert(emailVerificationTokensTable).values({ email, userType, tokenHash, expiresAt });
 
-  const verifyUrl = `${getAppUrl(req)}/verify-email?token=${token}`;
+  const verifyUrl = `${getFrontendAppUrl(req)}/verify-email?token=${token}`;
   // In development, log the full URL so developers and automated tests can complete verification
   // without a working SMTP relay.  Never logged in production to prevent token leakage.
   if (process.env.NODE_ENV !== "production") {
@@ -900,7 +894,7 @@ router.post("/auth/forgot-password", rateLimitAuth(), async (req: Request, res: 
       expiresAt,
     });
 
-    const resetUrl = `${getAppUrl(req)}/reset-password?token=${token}`;
+    const resetUrl = `${getFrontendAppUrl(req)}/reset-password?token=${token}`;
 
     req.log.info({ email: normalizedEmail }, "Password reset link generated");
 

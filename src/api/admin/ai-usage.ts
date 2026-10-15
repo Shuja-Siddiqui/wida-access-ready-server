@@ -80,6 +80,14 @@ function roundUsd(n: number): number {
   return Math.round(n * 1_000_000) / 1_000_000;
 }
 
+/** SQL aggregates and pg sometimes return timestamps as strings, not Date. */
+function toIso(value: Date | string | null | undefined): string | null {
+  if (value == null) return null;
+  if (value instanceof Date) return value.toISOString();
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
+
 function formatCallRow(
   row: {
     id: string;
@@ -126,7 +134,7 @@ function formatCallRow(
     totalCostUsd:   roundUsd(cost.totalCostUsd),
     pricingModel:   cost.pricingDisplayName,
     priced:         cost.priced,
-    createdAt:      row.createdAt.toISOString(),
+    createdAt:      toIso(row.createdAt) ?? "",
   };
 }
 
@@ -225,7 +233,8 @@ router.get("/admin/ai-usage/sessions", async (req, res): Promise<void> => {
     db
       .select({
         sessionId:    aiTokenCallsTable.sessionId,
-        studentId:    sql<string>`min(${aiTokenCallsTable.studentId})`,
+        // Postgres has no min(uuid) on some versions — take student from joined session row.
+        studentId:    sql<string>`max(${sessionsTable.studentId}::text)::uuid`,
         callCount:    sql<number>`count(*)::int`,
         inputTokens:  sql<number>`coalesce(sum(${aiTokenCallsTable.inputTokens}), 0)::int`,
         outputTokens: sql<number>`coalesce(sum(${aiTokenCallsTable.outputTokens}), 0)::int`,
@@ -312,8 +321,8 @@ router.get("/admin/ai-usage/sessions", async (req, res): Promise<void> => {
         studentName:  meta?.studentName ?? null,
         domain:       meta?.domain ?? null,
         completed:    meta?.completed ?? false,
-        sessionStartedAt: meta?.createdAt.toISOString() ?? null,
-        lastCallAt:   row.lastCallAt.toISOString(),
+        sessionStartedAt: toIso(meta?.createdAt),
+        lastCallAt:   toIso(row.lastCallAt) ?? "",
         callCount:    row.callCount,
         inputTokens:  row.inputTokens,
         outputTokens: row.outputTokens,
@@ -478,7 +487,7 @@ router.get("/admin/ai-usage/image-factory", async (req, res): Promise<void> => {
       keyUse:         job.keyUse,
       imageConcept:   job.imageConcept,
       status:         job.status,
-      createdAt:      job.createdAt.toISOString(),
+      createdAt:      toIso(job.createdAt) ?? "",
       createdByName:  job.createdByName,
       createdByEmail: job.createdByEmail,
       tokenTracked:   Boolean(job.tokenId),

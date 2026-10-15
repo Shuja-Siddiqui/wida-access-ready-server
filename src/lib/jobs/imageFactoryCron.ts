@@ -15,6 +15,7 @@ import {
   runImageFactoryBatch,
 } from "./imageFactoryPipeline";
 import { getGenerationBackendStatus } from "../../image-factory/services/generation-service";
+import { checkHfInferenceAvailable } from "../../image-factory/providers/hf-inference";
 
 let tickInProgress = false;
 
@@ -39,6 +40,17 @@ async function runImageFactoryCronTick(): Promise<void> {
       "image-factory-cron: no generation backend — skipping tick",
     );
     return;
+  }
+
+  if (backend.activeSource === "hf-inference") {
+    const hf = await checkHfInferenceAvailable();
+    if (!hf.ok) {
+      logger.warn(
+        { reason: hf.reason },
+        "image-factory-cron: HF inference not available — skipping tick (no Claude prompt / image)",
+      );
+      return;
+    }
   }
 
   tickInProgress = true;

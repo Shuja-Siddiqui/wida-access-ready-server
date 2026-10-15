@@ -52,6 +52,7 @@ import {
   generateNudgeMessage,
 } from "../../lib/adaptive-engine";
 import { sendError, sendSuccess } from "../../lib/http/api-response";
+import { getFrontendAppUrl } from "../../lib/http/request-origin";
 import {
   resolveDistrictSchoolTeacherForAssign,
   resolveSchoolTeacherForAssign,
@@ -80,12 +81,6 @@ function sha256(raw: string): string {
 function generateToken(): string {
   return crypto.randomBytes(32).toString("hex");
 }
-function getAppUrl(req: Request): string {
-  const proto = (req.headers["x-forwarded-proto"] as string)?.split(",")[0]?.trim() ?? req.protocol;
-  const host = (req.headers["x-forwarded-host"] as string)?.split(",")[0]?.trim() ?? req.get("host") ?? "";
-  return `${proto}://${host}`;
-}
-
 export async function ensureStudentLevels(
   studentId: string,
   assessment: Assessment,
@@ -303,7 +298,7 @@ router.post("/students", async (req, res): Promise<void> => {
         expiresAt,
       });
 
-      const inviteUrl = `${getAppUrl(req)}/accept-invite?token=${token}`;
+      const inviteUrl = `${getFrontendAppUrl(req)}/accept-invite?token=${token}`;
       await sendHtmlEmail({
         to: normalizedEmail,
         subject: `${teacherName} invited you to ACCESS Ready`,
@@ -673,7 +668,7 @@ router.post("/students/bulk-import", async (req, res): Promise<void> => {
             tokenHash,
             expiresAt,
           });
-          const inviteUrl = `${getAppUrl(req)}/accept-invite?token=${token}`;
+          const inviteUrl = `${getFrontendAppUrl(req)}/accept-invite?token=${token}`;
           await sendHtmlEmail({
             to: normalizedEmail,
             subject: `${inviterName} invited you to ACCESS Ready`,
