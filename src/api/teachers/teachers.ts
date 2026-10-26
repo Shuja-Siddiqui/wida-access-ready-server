@@ -19,6 +19,22 @@ import { assertTeacherBulkAssignAccess, sendAccessDenied } from "../../lib/auth/
 
 const router: IRouter = createApiRouter();
 
+const teacherProfileSelect = {
+  id: profilesTable.id,
+  userId: profilesTable.userId,
+  school: profilesTable.school,
+  schoolId: profilesTable.schoolId,
+  schoolName: schoolsTable.name,
+  schoolCode: schoolsTable.schoolCode,
+  schoolState: schoolsTable.state,
+  districtId: schoolsTable.districtId,
+  avatarUrl: profilesTable.avatarUrl,
+  createdAt: profilesTable.createdAt,
+  name: usersTable.name,
+  email: usersTable.email,
+  role: usersTable.role,
+} as const;
+
 router.use("/teachers", requireAuth);
 
 // Get teacher by ID (joined with users for name/email)
@@ -30,18 +46,7 @@ router.get("/teachers/:teacherId", requireTeacherAccess("teacherId"), async (req
   }
 
   const [row] = await db
-    .select({
-      id: profilesTable.id,
-      userId: profilesTable.userId,
-      school: profilesTable.school,
-      schoolId: profilesTable.schoolId,
-      schoolName: schoolsTable.name,
-      districtId: schoolsTable.districtId,
-      avatarUrl: profilesTable.avatarUrl,
-      createdAt: profilesTable.createdAt,
-      name: usersTable.name,
-      email: usersTable.email,
-    })
+    .select(teacherProfileSelect)
     .from(profilesTable)
     .innerJoin(usersTable, eq(profilesTable.userId, usersTable.id))
     .leftJoin(schoolsTable, eq(profilesTable.schoolId, schoolsTable.id))
@@ -100,18 +105,7 @@ router.patch("/teachers/:teacherId", requireTeacherAccess("teacherId"), async (r
   }
 
   const [row] = await db
-    .select({
-      id: profilesTable.id,
-      userId: profilesTable.userId,
-      school: profilesTable.school,
-      schoolId: profilesTable.schoolId,
-      schoolName: schoolsTable.name,
-      districtId: schoolsTable.districtId,
-      avatarUrl: profilesTable.avatarUrl,
-      createdAt: profilesTable.createdAt,
-      name: usersTable.name,
-      email: usersTable.email,
-    })
+    .select(teacherProfileSelect)
     .from(profilesTable)
     .innerJoin(usersTable, eq(profilesTable.userId, usersTable.id))
     .leftJoin(schoolsTable, eq(profilesTable.schoolId, schoolsTable.id))
@@ -123,7 +117,7 @@ router.patch("/teachers/:teacherId", requireTeacherAccess("teacherId"), async (r
     return;
   }
 
-  sendSuccess(res, row);
+  sendSuccess(res, { ...row, isSolo: !row.schoolId });
 });
 
 // Helper to build domain info for a student

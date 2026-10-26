@@ -117,6 +117,8 @@ export const config = {
   // ── Email / SMTP ─────────────────────────────────────────────────────────
   email: {
     from: process.env.EMAIL_FROM ?? "ACCESS Ready <noreply@accessready.app>",
+    /** Reply-To for transactional mail (avoid noreply-only — reduces spam scoring). */
+    replyTo: process.env.EMAIL_REPLY_TO ?? "",
     support: process.env.SUPPORT_EMAIL ?? "",
     smtpHost: process.env.SMTP_HOST ?? "",
     smtpPort: Number(process.env.SMTP_PORT ?? 587),

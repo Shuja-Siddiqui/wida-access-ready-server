@@ -242,6 +242,9 @@ export function requireTeacherAccess(paramName = "teacherId") {
       const teacherId = req.params[paramName] as string | undefined;
       if (!teacherId) { sendError(res, 403, "You do not have access to this teacher's data"); return; }
 
+      // Own profile (teacher, principal, parent) — must run before org-staff checks.
+      if (auth.userType !== "student" && auth.id === teacherId) { next(); return; }
+
       if (auth.userType === "principal" || auth.userType === "district_admin") {
         const denied = await assertTeacherProfileOrgAccess(auth, teacherId);
         if (denied) {
@@ -251,8 +254,6 @@ export function requireTeacherAccess(paramName = "teacherId") {
         next();
         return;
       }
-
-      if (auth.userType !== "student" && auth.id === teacherId) { next(); return; }
 
       if (auth.userType === "student") {
         const [row] = await db

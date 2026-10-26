@@ -1,16 +1,18 @@
 import type { IRouter } from "express";
 import { createApiRouter } from "../../lib/http/create-api-router";
-import { eq, count, countDistinct, sql, and, or } from "drizzle-orm";
+import { eq, count, sql, and, or } from "drizzle-orm";
 import { z } from "zod/v4";
 import { db, schoolsTable, districtsTable, profilesTable, usersTable, studentsTable } from "../../../db";
 import { sendError, sendSuccess } from "../../lib/http/api-response";
 import { requireAuth } from "../../middlewares/auth";
 import {
   assertSchoolAccess,
+  assertTeacherProfileOrgAccess,
   requireOrgStaff,
   resolveOrgScope,
   sendAccessDenied,
 } from "../../lib/auth/org-access";
+import { revokeStaffSessions, setUserActive } from "../../lib/auth/account-active";
 
 const router: IRouter = createApiRouter();
 
@@ -35,13 +37,19 @@ const schoolListQuery = db
     districtId: schoolsTable.districtId,
     districtName: districtsTable.name,
     createdAt: schoolsTable.createdAt,
-    teacherCount: countDistinct(profilesTable.id),
-    studentCount: countDistinct(studentsTable.id),
+    teacherCount: sql<number>`count(distinct case when ${usersTable.role} = 'teacher' then ${profilesTable.id} end)::int`,
+    studentCount: sql<number>`(
+      select count(distinct s.id)::int
+      from ${studentsTable} s
+      left join ${profilesTable} p on p.id = s.guardian_id
+      where s.school_id = ${schoolsTable.id}
+         or p.school_id = ${schoolsTable.id}
+    )`.mapWith(Number),
   })
   .from(schoolsTable)
   .leftJoin(districtsTable, eq(schoolsTable.districtId, districtsTable.id))
   .leftJoin(profilesTable, eq(profilesTable.schoolId, schoolsTable.id))
-  .leftJoin(studentsTable, eq(studentsTable.guardianId, profilesTable.id))
+  .leftJoin(usersTable, eq(profilesTable.userId, usersTable.id))
   .groupBy(schoolsTable.id, districtsTable.name)
   .orderBy(schoolsTable.name);
 
@@ -141,11 +149,12 @@ router.get("/schools/:schoolId", async (req, res): Promise<void> => {
       districtId: schoolsTable.districtId,
       districtName: districtsTable.name,
       createdAt: schoolsTable.createdAt,
-      teacherCount: count(profilesTable.id),
+      teacherCount: sql<number>`count(distinct case when ${usersTable.role} = 'teacher' then ${profilesTable.id} end)::int`,
     })
     .from(schoolsTable)
     .leftJoin(districtsTable, eq(schoolsTable.districtId, districtsTable.id))
     .leftJoin(profilesTable, eq(profilesTable.schoolId, schoolsTable.id))
+    .leftJoin(usersTable, eq(profilesTable.userId, usersTable.id))
     .where(eq(schoolsTable.id, params.data.schoolId))
     .groupBy(schoolsTable.id, districtsTable.name)
     .limit(1);
@@ -234,6 +243,8 @@ router.get("/schools/:schoolId/teachers", async (req, res): Promise<void> => {
       name: usersTable.name,
       email: usersTable.email,
       role: usersTable.role,
+      isActive: usersTable.isActive,
+      invitePending: sql<boolean>`(${usersTable.passwordHash} is null)`,
     })
     .from(profilesTable)
     .innerJoin(usersTable, eq(profilesTable.userId, usersTable.id))
@@ -241,6 +252,73 @@ router.get("/schools/:schoolId/teachers", async (req, res): Promise<void> => {
     .orderBy(usersTable.name);
 
   sendSuccess(res, teachers);
+});
+
+const ActiveBody = z.object({ isActive: z.boolean() });
+
+// District admin: activate / deactivate teacher or principal at a school
+router.patch("/schools/:schoolId/teachers/:teacherId/active", async (req, res): Promise<void> => {
+  const params = TeacherIdParam.safeParse(req.params);
+  if (!params.success) {
+    sendError(res, 400, "Invalid school or teacher ID");
+    return;
+  }
+
+  const scope = await resolveOrgScope(req.auth!);
+  if (scope?.role !== "district_admin") {
+    sendError(res, 403, "Only district admins can change staff active status");
+    return;
+  }
+
+  const denied = await assertSchoolAccess(req.auth!, params.data.schoolId);
+  if (denied) {
+    sendAccessDenied(res, denied);
+    return;
+  }
+
+  const body = ActiveBody.safeParse(req.body);
+  if (!body.success) {
+    sendError(res, 400, body.error.message);
+    return;
+  }
+
+  const orgDenied = await assertTeacherProfileOrgAccess(req.auth!, params.data.teacherId);
+  if (orgDenied) {
+    sendAccessDenied(res, orgDenied);
+    return;
+  }
+
+  const [staff] = await db
+    .select({
+      profileId: profilesTable.id,
+      userId: profilesTable.userId,
+      schoolId: profilesTable.schoolId,
+      role: usersTable.role,
+    })
+    .from(profilesTable)
+    .innerJoin(usersTable, eq(profilesTable.userId, usersTable.id))
+    .where(eq(profilesTable.id, params.data.teacherId))
+    .limit(1);
+
+  if (!staff || staff.schoolId !== params.data.schoolId) {
+    sendError(res, 404, "Staff member not found in this school");
+    return;
+  }
+
+  if (staff.role !== "teacher" && staff.role !== "principal") {
+    sendError(res, 422, "Only teachers and principals can be updated here");
+    return;
+  }
+
+  await setUserActive(staff.userId, body.data.isActive);
+  if (!body.data.isActive) {
+    await revokeStaffSessions(staff.profileId, staff.role as "teacher" | "principal");
+  }
+
+  sendSuccess(res, {
+    profileId: staff.profileId,
+    isActive: body.data.isActive,
+  });
 });
 
 // List students in a school (via their guardian's school link)
@@ -263,6 +341,7 @@ router.get("/schools/:schoolId/students", async (req, res): Promise<void> => {
       guardianId: studentsTable.guardianId,
       currentStreak: studentsTable.currentStreak,
       totalXp: studentsTable.totalXp,
+      isActive: studentsTable.isActive,
     })
     .from(studentsTable)
     .leftJoin(profilesTable, eq(studentsTable.guardianId, profilesTable.id))
@@ -344,8 +423,13 @@ router.get("/schools/:schoolId/seat-allocation", async (req, res): Promise<void>
   const [countRow] = await db
     .select({ n: count(studentsTable.id) })
     .from(studentsTable)
-    .innerJoin(profilesTable, eq(studentsTable.guardianId, profilesTable.id))
-    .where(eq(profilesTable.schoolId, schoolId));
+    .leftJoin(profilesTable, eq(studentsTable.guardianId, profilesTable.id))
+    .where(
+      or(
+        eq(studentsTable.schoolId, schoolId),
+        eq(profilesTable.schoolId, schoolId),
+      ),
+    );
 
   const seatsUsed = Number(countRow?.n ?? 0);
   const seatsRemaining = seatsAllocated > 0 ? Math.max(0, seatsAllocated - seatsUsed) : null;

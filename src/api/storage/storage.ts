@@ -37,7 +37,10 @@ router.post("/storage/uploads/request-url", requireAuth, async (req: Request, re
     const auth = req.auth!;
     const { name, size, contentType } = parsed.data;
 
-    const uploadURL = await objectStorageService.getObjectEntityUploadURL(auth.userId);
+    const uploadURL = await objectStorageService.getObjectEntityUploadURL(
+      auth.userId,
+      contentType,
+    );
     const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
 
     sendSuccess(

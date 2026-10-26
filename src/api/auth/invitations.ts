@@ -11,10 +11,16 @@ import {
   usersTable,
   userSessionsTable,
   schoolsTable,
+  districtsTable,
+  districtAdminsTable,
 } from "../../../db";
 import { ensureStudentLevels } from "../students/students";
-import { sendHtmlEmail } from "../../lib/mail/mailer";
-import { invitationEmail, educatorInvitationEmail } from "../../lib/mail/email-templates";
+import { deliverTransactionalEmail } from "../../lib/mail/deliver-email";
+import {
+  educatorInvitationEmail,
+  invitationEmail,
+  userInvitationSubject,
+} from "../../lib/mail/email-templates";
 import { config } from "../../config/index";
 import type { Assessment } from "../../lib/assessments";
 import { sendError, sendSuccess } from "../../lib/http/api-response";
@@ -24,6 +30,10 @@ import {
   sessionContextFromRequest,
   sha256Token,
 } from "../../lib/auth/session";
+import {
+  assertEmailAvailableForRole,
+  findUserByEmailAndRole,
+} from "../../lib/auth/email-role-uniqueness";
 
 const router: IRouter = createApiRouter();
 
@@ -96,21 +106,11 @@ router.post("/auth/invite", async (req: Request, res: Response): Promise<void> =
 
   const normalizedEmail = email.trim().toLowerCase();
 
-  // Check for existing non-expired invite
-  const [existing] = await db
-    .select({ id: invitationsTable.id })
-    .from(invitationsTable)
-    .where(
-      and(
-        eq(invitationsTable.inviteeEmail, normalizedEmail),
-        isNull(invitationsTable.acceptedAt),
-        gt(invitationsTable.expiresAt, new Date()),
-      ),
-    )
-    .limit(1);
-
-  if (existing) {
-    sendError(res, 409, "An active invitation has already been sent to this email");
+  const emailCheck = await assertEmailAvailableForRole(normalizedEmail, "student", {
+    inviteeRole: "student",
+  });
+  if (!emailCheck.ok) {
+    sendError(res, emailCheck.status, emailCheck.message);
     return;
   }
 
@@ -134,11 +134,10 @@ router.post("/auth/invite", async (req: Request, res: Response): Promise<void> =
 
   const inviteUrl = `${getFrontendAppUrl(req)}/accept-invite?token=${token}`;
 
-  // Email delivery failure is non-fatal — the invitation record is still created
-  try {
-    await sendHtmlEmail({
+  const invitationEmailDelivery = await deliverTransactionalEmail(
+    {
       to: normalizedEmail,
-      subject: `${inviter.name} invited you to ACCESS Ready`,
+      subject: userInvitationSubject(inviter.name),
       html: invitationEmail({
         inviteeName: name.trim(),
         inviterName: inviter.name,
@@ -147,13 +146,13 @@ router.post("/auth/invite", async (req: Request, res: Response): Promise<void> =
         message: message?.trim(),
         inviteUrl,
       }),
-    });
-  } catch (err) {
-    req.log.warn({ err, to: normalizedEmail }, "Failed to deliver invitation email");
-  }
+    },
+    req.log,
+    { to: normalizedEmail, inviterId: inviter.id, kind: "student_invite" },
+  );
 
-  req.log.info({ to: normalizedEmail, inviterId: inviter.id }, "Invitation sent");
-  sendSuccess(res, { ok: true }, 201);
+  req.log.info({ to: normalizedEmail, inviterId: inviter.id, invitationEmailSent: invitationEmailDelivery.sent }, "Invitation created");
+  sendSuccess(res, { ok: true, invitationEmailSent: invitationEmailDelivery.sent }, 201);
 });
 
 // ── GET /auth/invite/check?token=xxx — validate token before showing form ──
@@ -184,6 +183,16 @@ router.get("/auth/invite/check", async (req: Request, res: Response): Promise<vo
     return;
   }
 
+  let districtName: string | undefined;
+  if (invite.inviteeRole === "district_admin" && invite.metadata) {
+    try {
+      const meta = JSON.parse(invite.metadata) as { districtName?: string };
+      districtName = meta.districtName;
+    } catch {
+      /* ignore */
+    }
+  }
+
   sendSuccess(res, {
     inviteeName: invite.inviteeName,
     inviteeEmail: invite.inviteeEmail,
@@ -193,6 +202,7 @@ router.get("/auth/invite/check", async (req: Request, res: Response): Promise<vo
     gradeBand: invite.gradeBand,
     stateAssessment: invite.stateAssessment,
     homeLanguage: invite.homeLanguage,
+    districtName,
   });
 });
 
@@ -204,10 +214,12 @@ router.post("/auth/invite/educator", async (req: Request, res: Response): Promis
     return;
   }
 
-  const { firstName, lastName, email } = req.body as {
+  const { firstName, lastName, email, emailVerified: markEmailVerified } = req.body as {
     firstName?: string;
     lastName?: string;
     email?: string;
+    /** Principal attests the email is correct; teacher still sets password via invite link. */
+    emailVerified?: boolean;
   };
 
   if (!firstName?.trim() || !lastName?.trim() || !email?.trim()) {
@@ -218,24 +230,40 @@ router.post("/auth/invite/educator", async (req: Request, res: Response): Promis
   const name = `${firstName.trim()} ${lastName.trim()}`;
   const normalizedEmail = email.trim().toLowerCase();
 
-  // Block if active educator invite already sent to this address
-  const [existing] = await db
-    .select({ id: invitationsTable.id })
-    .from(invitationsTable)
-    .where(
-      and(
-        eq(invitationsTable.inviteeEmail, normalizedEmail),
-        eq(invitationsTable.inviteeRole, "teacher"),
-        isNull(invitationsTable.acceptedAt),
-        gt(invitationsTable.expiresAt, new Date()),
-      ),
-    )
-    .limit(1);
-
-  if (existing) {
-    sendError(res, 409, "An active invitation has already been sent to this email");
+  const emailCheck = await assertEmailAvailableForRole(normalizedEmail, "teacher", {
+    inviteeRole: "teacher",
+  });
+  if (!emailCheck.ok) {
+    sendError(res, emailCheck.status, emailCheck.message);
     return;
   }
+
+  const [inviterGuardian] = await db
+    .select({ schoolId: profilesTable.schoolId })
+    .from(profilesTable)
+    .where(eq(profilesTable.id, inviter.id))
+    .limit(1);
+
+  const emailVerified = markEmailVerified === true;
+
+  const [user] = await db
+    .insert(usersTable)
+    .values({
+      email: normalizedEmail,
+      name,
+      passwordHash: null,
+      role: "teacher",
+      emailVerified,
+    })
+    .returning();
+
+  const [guardian] = await db
+    .insert(profilesTable)
+    .values({
+      userId: user.id,
+      schoolId: inviterGuardian?.schoolId ?? null,
+    })
+    .returning();
 
   const token = generateToken();
   const tokenHash = sha256(token);
@@ -250,22 +278,27 @@ router.post("/auth/invite/educator", async (req: Request, res: Response): Promis
     inviteeRole: "teacher",
     tokenHash,
     expiresAt,
+    metadata: JSON.stringify({
+      userId: user.id,
+      profileId: guardian.id,
+      emailVerified,
+    }),
   });
 
   const inviteUrl = `${getFrontendAppUrl(req)}/accept-invite?token=${token}`;
 
-  try {
-    await sendHtmlEmail({
+  const invitationEmailDelivery = await deliverTransactionalEmail(
+    {
       to: normalizedEmail,
-      subject: `${inviter.name} invited you to ACCESS Ready`,
+      subject: userInvitationSubject(inviter.name),
       html: educatorInvitationEmail({ inviteeName: name, inviterName: inviter.name, inviteUrl }),
-    });
-  } catch (err) {
-    req.log.warn({ err, to: normalizedEmail }, "Failed to deliver educator invitation email");
-  }
+    },
+    req.log,
+    { to: normalizedEmail, inviterId: inviter.id, kind: "teacher_invite" },
+  );
 
-  req.log.info({ to: normalizedEmail, inviterId: inviter.id }, "Educator invitation sent");
-  sendSuccess(res, { ok: true }, 201);
+  req.log.info({ to: normalizedEmail, inviterId: inviter.id, invitationEmailSent: invitationEmailDelivery.sent }, "Educator invitation created");
+  sendSuccess(res, { ok: true, invitationEmailSent: invitationEmailDelivery.sent }, 201);
 });
 
 // ── POST /auth/invite/accept — student OR teacher sets password and activates ──
@@ -306,21 +339,19 @@ router.post("/auth/invite/accept", async (req: Request, res: Response): Promise<
   // ── Principal invite path ────────────────────────────────────────────────────
   // Creates school + principal user + guardian in one transaction on acceptance.
   if (invite.inviteeRole === "principal") {
-    const [existingUser] = await db
-      .select({ id: usersTable.id })
-      .from(usersTable)
-      .where(eq(usersTable.email, invite.inviteeEmail))
-      .limit(1);
+    type PrincipalInviteMeta = {
+      schoolId?: string;
+      schoolName: string;
+      state?: string | null;
+      schoolCode?: string | null;
+      districtId: string;
+      userId?: string;
+      profileId?: string;
+    };
 
-    if (existingUser) {
-      sendError(res, 409, "An account already exists with this email. Please log in instead.");
-      return;
-    }
-
-    // Parse school details that were stored when the invitation was created
-    let schoolMeta: { schoolName: string; state?: string | null; schoolCode?: string | null; districtId: string };
+    let schoolMeta: PrincipalInviteMeta;
     try {
-      schoolMeta = JSON.parse(invite.metadata ?? "{}") as typeof schoolMeta;
+      schoolMeta = JSON.parse(invite.metadata ?? "{}") as PrincipalInviteMeta;
     } catch {
       sendError(res, 400, "Invitation data is corrupt — ask your district admin to re-send.");
       return;
@@ -332,12 +363,74 @@ router.post("/auth/invite/accept", async (req: Request, res: Response): Promise<
     }
 
     const result = await db.transaction(async (tx) => {
+      if (schoolMeta.schoolId && schoolMeta.userId && schoolMeta.profileId) {
+        const [school] = await tx
+          .select()
+          .from(schoolsTable)
+          .where(eq(schoolsTable.id, schoolMeta.schoolId))
+          .limit(1);
+        if (!school) {
+          throw new Error("School not found for this invitation");
+        }
+
+        const [existingUser] = await tx
+          .select({
+            id: usersTable.id,
+            isActive: usersTable.isActive,
+            passwordHash: usersTable.passwordHash,
+          })
+          .from(usersTable)
+          .where(eq(usersTable.id, schoolMeta.userId))
+          .limit(1);
+
+        if (!existingUser) {
+          throw new Error("Principal account not found for this invitation");
+        }
+        if (existingUser.isActive === false) {
+          throw new Error("ACCOUNT_INACTIVE");
+        }
+        if (existingUser.passwordHash) {
+          throw new Error("PASSWORD_ALREADY_SET");
+        }
+
+        const [user] = await tx
+          .update(usersTable)
+          .set({
+            passwordHash,
+            emailVerified: true,
+            name: invite.inviteeName,
+          })
+          .where(eq(usersTable.id, schoolMeta.userId))
+          .returning();
+
+        if (!user) {
+          throw new Error("Principal account not found for this invitation");
+        }
+
+        const [guardian] = await tx
+          .select()
+          .from(profilesTable)
+          .where(eq(profilesTable.id, schoolMeta.profileId))
+          .limit(1);
+
+        if (!guardian || guardian.schoolId !== school.id) {
+          throw new Error("Principal profile not found for this invitation");
+        }
+
+        return { school, user, guardian };
+      }
+
+      const existingUser = await findUserByEmailAndRole(invite.inviteeEmail, "principal");
+      if (existingUser) {
+        throw new Error("ACCOUNT_EXISTS");
+      }
+
       const [school] = await tx
         .insert(schoolsTable)
         .values({
-          name:       schoolMeta.schoolName,
+          name: schoolMeta.schoolName,
           districtId: schoolMeta.districtId,
-          state:      schoolMeta.state ?? null,
+          state: schoolMeta.state ?? null,
           schoolCode: schoolMeta.schoolCode ?? null,
         })
         .returning();
@@ -345,10 +438,10 @@ router.post("/auth/invite/accept", async (req: Request, res: Response): Promise<
       const [user] = await tx
         .insert(usersTable)
         .values({
-          email:        invite.inviteeEmail,
-          name:         invite.inviteeName,
+          email: invite.inviteeEmail,
+          name: invite.inviteeName,
           passwordHash,
-          role:         "principal",
+          role: "principal",
           emailVerified: true,
         })
         .returning();
@@ -359,7 +452,33 @@ router.post("/auth/invite/accept", async (req: Request, res: Response): Promise<
         .returning();
 
       return { school, user, guardian };
+    }).catch((err: unknown) => {
+      if (err instanceof Error) {
+        if (err.message === "ACCOUNT_EXISTS") return null;
+        if (err.message === "ACCOUNT_INACTIVE") return { inactive: true as const };
+        if (err.message === "PASSWORD_ALREADY_SET") return { passwordSet: true as const };
+      }
+      throw err;
     });
+
+    if (result && "inactive" in result && result.inactive) {
+      sendError(
+        res,
+        403,
+        "This account has been deactivated. Contact your district administrator before accepting the invitation.",
+        { accountInactive: true },
+      );
+      return;
+    }
+    if (result && "passwordSet" in result && result.passwordSet) {
+      sendError(res, 409, "A password is already set for this account. Please log in instead.");
+      return;
+    }
+
+    if (!result || !("school" in result)) {
+      sendError(res, 409, "An account with this email already exists as a principal. Please log in instead.");
+      return;
+    }
 
     await db
       .update(invitationsTable)
@@ -368,7 +487,7 @@ router.post("/auth/invite/accept", async (req: Request, res: Response): Promise<
 
     const { token: sessionToken } = await createAuthSessionPair({
       userId:   result.guardian.id,
-      userType: "teacher",
+      userType: "principal",
       context:  sessionContextFromRequest(req),
       enforceSingleSession: false,
     });
@@ -377,24 +496,106 @@ router.post("/auth/invite/accept", async (req: Request, res: Response): Promise<
       { guardianId: result.guardian.id, schoolId: result.school.id },
       "Principal invitation accepted — school + account created",
     );
-    sendSuccess(res, { token: sessionToken, teacherId: result.guardian.id, userType: "teacher" }, 201);
+    sendSuccess(
+      res,
+      {
+        token: sessionToken,
+        teacherId: result.guardian.id,
+        userType: "principal",
+        role: "principal",
+      },
+      201,
+    );
     return;
   }
 
   // ── Educator (teacher) invite path ──────────────────────────────────────────
   if (invite.inviteeRole === "teacher") {
-    const [existingUser] = await db
-      .select({ id: usersTable.id })
-      .from(usersTable)
-      .where(eq(usersTable.email, invite.inviteeEmail))
-      .limit(1);
+    type TeacherInviteMeta = {
+      userId?: string;
+      profileId?: string;
+      emailVerified?: boolean;
+    };
 
-    if (existingUser) {
-      sendError(res, 409, "An account already exists with this email. Please log in instead.");
+    let teacherMeta: TeacherInviteMeta = {};
+    try {
+      teacherMeta = JSON.parse(invite.metadata ?? "{}") as TeacherInviteMeta;
+    } catch {
+      teacherMeta = {};
+    }
+
+    if (teacherMeta.userId && teacherMeta.profileId) {
+      const [existingUser] = await db
+        .select({
+          id: usersTable.id,
+          isActive: usersTable.isActive,
+          passwordHash: usersTable.passwordHash,
+        })
+        .from(usersTable)
+        .where(eq(usersTable.id, teacherMeta.userId))
+        .limit(1);
+
+      if (!existingUser) {
+        sendError(res, 400, "Teacher account not found for this invitation");
+        return;
+      }
+      if (existingUser.isActive === false) {
+        sendError(
+          res,
+          403,
+          "This account has been deactivated. Contact your district administrator before accepting the invitation.",
+          { accountInactive: true },
+        );
+        return;
+      }
+      if (existingUser.passwordHash) {
+        sendError(res, 409, "A password is already set for this account. Please log in instead.");
+        return;
+      }
+
+      const [guardian] = await db
+        .select()
+        .from(profilesTable)
+        .where(eq(profilesTable.id, teacherMeta.profileId))
+        .limit(1);
+
+      if (!guardian || guardian.userId !== teacherMeta.userId) {
+        sendError(res, 400, "Teacher profile not found for this invitation");
+        return;
+      }
+
+      await db
+        .update(usersTable)
+        .set({
+          passwordHash,
+          name: invite.inviteeName,
+          emailVerified: true,
+        })
+        .where(eq(usersTable.id, teacherMeta.userId));
+
+      await db
+        .update(invitationsTable)
+        .set({ acceptedAt: now })
+        .where(eq(invitationsTable.id, invite.id));
+
+      const { token: sessionToken } = await createAuthSessionPair({
+        userId: guardian.id,
+        userType: "teacher",
+        context: sessionContextFromRequest(req),
+        enforceSingleSession: false,
+      });
+
+      req.log.info({ guardianId: guardian.id }, "Educator invitation accepted — password set");
+      sendSuccess(res, { token: sessionToken, teacherId: guardian.id, userType: "teacher" }, 201);
       return;
     }
 
-    // Resolve the inviter's school so the new teacher is linked automatically
+    const existingUser = await findUserByEmailAndRole(invite.inviteeEmail, "teacher");
+    if (existingUser) {
+      sendError(res, 409, "An account with this email already exists as a teacher. Please log in instead.");
+      return;
+    }
+
     const [inviterGuardian] = await db
       .select({ schoolId: profilesTable.schoolId })
       .from(profilesTable)
@@ -426,14 +627,112 @@ router.post("/auth/invite/accept", async (req: Request, res: Response): Promise<
       .where(eq(invitationsTable.id, invite.id));
 
     const { token: sessionToken } = await createAuthSessionPair({
-      userId:   guardian.id,
+      userId: guardian.id,
       userType: "teacher",
-      context:  sessionContextFromRequest(req),
+      context: sessionContextFromRequest(req),
       enforceSingleSession: false,
     });
 
     req.log.info({ guardianId: guardian.id }, "Educator invitation accepted — account created");
     sendSuccess(res, { token: sessionToken, teacherId: guardian.id, userType: "teacher" }, 201);
+    return;
+  }
+
+  // ── District admin invite path (super admin created district) ───────────────
+  if (invite.inviteeRole === "district_admin") {
+    const existingUser = await findUserByEmailAndRole(invite.inviteeEmail, "district_admin");
+    if (existingUser) {
+      sendError(
+        res,
+        409,
+        "An account with this email already exists as a district administrator. Please log in instead.",
+      );
+      return;
+    }
+
+    let districtMeta: { districtId: string; districtName?: string };
+    try {
+      districtMeta = JSON.parse(invite.metadata ?? "{}") as typeof districtMeta;
+    } catch {
+      sendError(res, 400, "Invitation data is corrupt — ask your platform admin to re-send.");
+      return;
+    }
+
+    if (!districtMeta.districtId) {
+      sendError(res, 400, "Invitation is missing district details — ask your platform admin to re-send.");
+      return;
+    }
+
+    const [districtRow] = await db
+      .select({ id: districtsTable.id, adminId: districtsTable.adminId })
+      .from(districtsTable)
+      .where(eq(districtsTable.id, districtMeta.districtId))
+      .limit(1);
+
+    if (!districtRow) {
+      sendError(res, 400, "This district no longer exists.");
+      return;
+    }
+    if (districtRow.adminId) {
+      sendError(res, 409, "This district already has an administrator.");
+      return;
+    }
+
+    const result = await db.transaction(async (tx) => {
+      const [user] = await tx
+        .insert(usersTable)
+        .values({
+          email: invite.inviteeEmail,
+          name: invite.inviteeName,
+          passwordHash,
+          role: "district_admin",
+          emailVerified: true,
+        })
+        .returning();
+
+      const [da] = await tx
+        .insert(districtAdminsTable)
+        .values({
+          userId: user.id,
+          districtId: districtMeta.districtId,
+        })
+        .returning();
+
+      await tx
+        .update(districtsTable)
+        .set({ adminId: user.id })
+        .where(eq(districtsTable.id, districtMeta.districtId));
+
+      return { user, da };
+    });
+
+    await db
+      .update(invitationsTable)
+      .set({ acceptedAt: now })
+      .where(eq(invitationsTable.id, invite.id));
+
+    const { token: sessionToken } = await createAuthSessionPair({
+      userId: result.da.id,
+      userType: "district_admin",
+      context: sessionContextFromRequest(req),
+      enforceSingleSession: false,
+    });
+
+    req.log.info(
+      { districtAdminId: result.da.id, districtId: districtMeta.districtId },
+      "District admin invitation accepted",
+    );
+    sendSuccess(
+      res,
+      {
+        token: sessionToken,
+        teacherId: result.da.id,
+        districtId: result.da.districtId,
+        userType: "district_admin",
+        role: "district_admin",
+      },
+      201,
+    );
     return;
   }
 
@@ -475,6 +774,12 @@ router.post("/auth/invite/accept", async (req: Request, res: Response): Promise<
     student = updated;
     await ensureStudentLevels(student.id, (invite.stateAssessment ?? "WIDA") as Assessment);
   } else {
+    const existingStudentUser = await findUserByEmailAndRole(invite.inviteeEmail, "student");
+    if (existingStudentUser) {
+      sendError(res, 409, "An account with this email already exists as a student. Please log in instead.");
+      return;
+    }
+
     // No pre-existing student — create user + student from scratch
     const [user] = await db
       .insert(usersTable)

@@ -3,6 +3,8 @@ import type { Transporter } from "nodemailer";
 import { logger } from "../../config/logger";
 import { config } from "../../config/index";
 import { emailLogoAttachment } from "./email-logo";
+import { htmlToPlainText } from "./html-to-text";
+import { resolveReplyTo, transactionalMailHeaders } from "./deliverability";
 
 let transporter: Transporter | null = null;
 
@@ -36,10 +38,13 @@ export async function sendHtmlEmail({
   to,
   subject,
   html,
+  text,
 }: {
   to: string | string[];
   subject: string;
   html: string;
+  /** Plain-text body; auto-generated from HTML when omitted. */
+  text?: string;
 }): Promise<void> {
   const list = (Array.isArray(to) ? to : [to]).filter(Boolean);
   if (!list.length) return;
@@ -50,12 +55,29 @@ export async function sendHtmlEmail({
     return;
   }
 
+  const from = config.email.from;
+  const smtpUser = config.email.smtpUser?.trim().toLowerCase();
+  const fromMatch = from.match(/<([^>]+)>/);
+  const fromAddr = (fromMatch?.[1] ?? from).trim().toLowerCase();
+  if (smtpUser && fromAddr && fromAddr !== smtpUser) {
+    logger.warn(
+      { fromAddr, smtpUser },
+      "EMAIL_FROM address does not match SMTP_USER — providers often mark this as spam",
+    );
+  }
+
+  const plain = text?.trim() || htmlToPlainText(html);
+  const replyTo = resolveReplyTo();
   const logo = emailLogoAttachment();
+
   await tx.sendMail({
-    from: config.email.from,
+    from,
     to: list,
-    subject,
+    replyTo: replyTo || undefined,
+    subject: subject.trim(),
+    text: plain,
     html,
+    headers: transactionalMailHeaders(),
     attachments: logo ? [logo] : undefined,
   });
 }

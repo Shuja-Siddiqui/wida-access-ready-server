@@ -8,6 +8,10 @@ import {
 } from "../speech/azureSpeech";
 import { AppError, isAppError } from "./app-error";
 import { sendError } from "./api-response";
+import {
+  messageForEmailRoleConflict,
+  parseRoleFromEmailRoleUniqueDetail,
+} from "../auth/email-role-uniqueness";
 
 const isProduction = config.nodeEnv === "production";
 
@@ -41,6 +45,14 @@ function resolvePgError(err: unknown): ResolvedApiError | null {
 
   switch (pg.code) {
     case "23505":
+      if (pg.constraint === "users_email_role_unique") {
+        const role = parseRoleFromEmailRoleUniqueDetail(pg.detail);
+        return {
+          status: 409,
+          message: messageForEmailRoleConflict(role),
+          details: { code: "email_role_conflict" },
+        };
+      }
       return {
         status: 409,
         message: "Resource already exists",

@@ -1,3 +1,6 @@
+/**
+ * District org plan + seat allocation (Stripe-backed; mock checkout when BILLING_MOCK_SUCCESS).
+ */
 import type { IRouter } from "express";
 import { createApiRouter } from "../../lib/http/create-api-router";
 import { and, eq, sql } from "drizzle-orm";
@@ -12,6 +15,11 @@ import {
 } from "../../../db";
 import { sendError, sendSuccess } from "../../lib/http/api-response";
 import { requireAuth } from "../../middlewares/auth";
+import {
+  grantOrganizationSubscription,
+  isBillingMockSuccess,
+  type GrantSeatMode,
+} from "../../lib/billing/grant-organization-subscription";
 
 const router: IRouter = createApiRouter();
 
@@ -34,29 +42,14 @@ async function resolveDistrictAdmin(
   return row ?? null;
 }
 
-// ── GET /api/district/plan ────────────────────────────────────────────────
-// Returns the active subscription for the district admin (seat count purchased,
-// total seats allocated to schools, and remaining available seats).
-router.get("/district/plan", async (req, res): Promise<void> => {
-  const adminId = req.auth?.id;
-  if (!adminId) {
-    sendError(res, 401, "Not authenticated");
-    return;
-  }
-
-  const admin = await resolveDistrictAdmin(adminId);
-  if (!admin) {
-    sendError(res, 403, "District admin not found");
-    return;
-  }
-
-  // Look up their Stripe customer
+async function loadDistrictPlanSummary(admin: { id: string; districtId: string | null }) {
+  const adminId = admin.id;
   const [customerRow] = await db
     .select({ stripeCustomerId: ownerStripeCustomersTable.stripeCustomerId })
     .from(ownerStripeCustomersTable)
     .where(
       and(
-        eq(ownerStripeCustomersTable.ownerId, admin.id),
+        eq(ownerStripeCustomersTable.ownerId, adminId),
         eq(ownerStripeCustomersTable.ownerType, "organization"),
       ),
     )
@@ -96,25 +89,130 @@ router.get("/district/plan", async (req, res): Promise<void> => {
     }
   }
 
-  // Compute allocated seats (sum across all school allocations)
   const allocResult = await db.execute(sql`
     select coalesce(sum(seats_allocated), 0) as total_allocated
     from district_seat_allocations
-    where district_admin_id = ${admin.id}
+    where district_admin_id = ${adminId}
   `);
   const totalAllocated = Number(
     (allocResult.rows as Record<string, unknown>[])[0]?.total_allocated ?? 0,
   );
 
   const seatsPurchased = subscription?.seatCount ?? 0;
-  const seatsRemaining = Math.max(0, seatsPurchased - totalAllocated);
+  const seatsUnassignedToSchools = Math.max(0, seatsPurchased - totalAllocated);
 
-  sendSuccess(res, {
+  let seatsEnrolled = 0;
+  if (admin.districtId) {
+    const enrolledResult = await db.execute(sql`
+      select count(distinct s.id)::int as n
+      from students s
+      left join schools sch on sch.id = s.school_id
+      where s.district_id = ${admin.districtId}
+         or sch.district_id = ${admin.districtId}
+    `);
+    seatsEnrolled = Number((enrolledResult.rows as Record<string, unknown>[])[0]?.n ?? 0);
+  }
+
+  const seatsAvailableToEnroll = Math.max(0, seatsPurchased - seatsEnrolled);
+
+  return {
     hasActivePlan: subscription?.status === "active",
     subscription,
     seatsPurchased,
     seatsAllocated: totalAllocated,
-    seatsRemaining,
+    /** @deprecated use seatsUnassignedToSchools — pool not yet assigned to schools */
+    seatsRemaining: seatsUnassignedToSchools,
+    seatsUnassignedToSchools,
+    seatsEnrolled,
+    seatsAvailableToEnroll,
+  };
+}
+
+// ── GET /api/district/plan ────────────────────────────────────────────────
+router.get("/district/plan", async (req, res): Promise<void> => {
+  const adminId = req.auth?.id;
+  if (!adminId) {
+    sendError(res, 401, "Not authenticated");
+    return;
+  }
+
+  const admin = await resolveDistrictAdmin(adminId);
+  if (!admin) {
+    sendError(res, 403, "District admin not found");
+    return;
+  }
+
+  sendSuccess(res, await loadDistrictPlanSummary(admin));
+});
+
+const PurchaseBody = z.object({
+  seatCount: z.number().int().min(1),
+  mode: z.enum(["set", "add"]).optional(),
+});
+
+// ── POST /api/district/plan/purchase ──────────────────────────────────────
+// Mock-success checkout for district org seats (no Stripe charge while BILLING_MOCK_SUCCESS).
+router.post("/district/plan/purchase", async (req, res): Promise<void> => {
+  const adminId = req.auth?.id;
+  if (!adminId) {
+    sendError(res, 401, "Not authenticated");
+    return;
+  }
+
+  if (req.auth?.userType !== "district_admin") {
+    sendError(res, 403, "Only district admins can purchase district seats");
+    return;
+  }
+
+  const body = PurchaseBody.safeParse(req.body);
+  if (!body.success) {
+    sendError(res, 400, body.error.message);
+    return;
+  }
+
+  const admin = await resolveDistrictAdmin(adminId);
+  if (!admin) {
+    sendError(res, 403, "District admin not found");
+    return;
+  }
+
+  // TODO: when live Stripe is ready, branch on isBillingMockSuccess() vs real checkout here.
+  if (!isBillingMockSuccess()) {
+    req.log?.warn(
+      "BILLING_MOCK_SUCCESS is false — district purchase still uses mock grant until Stripe is wired.",
+    );
+  }
+
+  const [identity] = await db
+    .select({ email: usersTable.email, name: usersTable.name })
+    .from(districtAdminsTable)
+    .innerJoin(usersTable, eq(districtAdminsTable.userId, usersTable.id))
+    .where(eq(districtAdminsTable.id, admin.id))
+    .limit(1);
+
+  if (!identity) {
+    sendError(res, 404, "District admin account not found");
+    return;
+  }
+
+  const planBefore = await loadDistrictPlanSummary(admin);
+  const mode: GrantSeatMode =
+    body.data.mode ?? (planBefore.hasActivePlan ? "add" : "set");
+
+  const granted = await grantOrganizationSubscription({
+    ownerId: admin.id,
+    email: identity.email,
+    name: identity.name ?? identity.email,
+    seatCount: body.data.seatCount,
+    mode,
+  });
+
+  const plan = await loadDistrictPlanSummary(admin);
+
+  sendSuccess(res, {
+    mockCheckout: true,
+    seatsPurchased: granted.seatCount,
+    plan,
   });
 });
 
@@ -139,6 +237,10 @@ router.get("/district/allocations", async (req, res): Promise<void> => {
       schoolId: districtSeatAllocationsTable.schoolId,
       schoolName: schoolsTable.name,
       seatsAllocated: districtSeatAllocationsTable.seatsAllocated,
+      seatsEnrolled: sql<number>`(
+        select count(*)::int from students st
+        where st.school_id = ${districtSeatAllocationsTable.schoolId}
+      )`.mapWith(Number),
       updatedAt: districtSeatAllocationsTable.updatedAt,
     })
     .from(districtSeatAllocationsTable)
