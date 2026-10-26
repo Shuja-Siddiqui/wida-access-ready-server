@@ -1472,6 +1472,15 @@ components:
         schoolName:
           type: ["string", "null"]
           description: Resolved school name from the schools table (joined).
+        schoolCode:
+          type: ["string", "null"]
+          description: School code from the schools table (when linked).
+        schoolState:
+          type: ["string", "null"]
+          description: US state abbreviation for the linked school.
+        role:
+          type: string
+          description: users.role for this profile (teacher, principal, parent, etc.).
         districtId:
           type: ["string", "null"]
           description: District ID via the linked school. Null if no school linked.
@@ -1525,8 +1534,22 @@ components:
           type: string
         districtCode:
           type: string
+        districtAdmin:
+          type: object
+          description: District administrator invited by email when the district is created (super admin only).
+          properties:
+            name:
+              type: string
+              minLength: 1
+            email:
+              type: string
+              format: email
+          required:
+            - name
+            - email
       required:
         - name
+        - districtAdmin
 
     School:
       type: object

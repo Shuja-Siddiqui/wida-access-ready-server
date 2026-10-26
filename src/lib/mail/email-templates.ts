@@ -43,9 +43,10 @@ function escapeAttr(raw: string): string {
   return escapeHtml(raw).replace(/'/g, "&#39;");
 }
 
+/** Inbox preview line only — avoid long hidden blocks (spam filters treat that as cloaking). */
 function preheader(text: string): string {
-  const t = escapeHtml(text);
-  return `<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;mso-hide:all;">${t}&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;</div>`;
+  const t = escapeHtml(text.slice(0, 140));
+  return `<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;line-height:1px;color:#f4f4f5;">${t}</div>`;
 }
 
 function brandStripe(): string {
@@ -78,7 +79,7 @@ function emailHeader(): string {
         </tr>
         <tr>
           <td>
-            <p style="margin:0;font-size:11px;font-weight:700;color:rgba(255,255,255,0.92);letter-spacing:0.12em;text-transform:uppercase;">
+            <p style="margin:0;font-size:12px;font-weight:600;color:rgba(255,255,255,0.95);letter-spacing:0.04em;">
               ${PRODUCT_NAME}
             </p>
             <p style="margin:6px 0 0;font-size:13px;color:rgba(255,255,255,0.85);line-height:1.4;">
@@ -101,6 +102,9 @@ function emailFooter(): string {
       </p>
       <p style="margin:0 0 12px;font-size:12px;color:${BRAND.textSubtle};line-height:1.5;">
         <a href="${escapeAttr(appUrl)}" style="color:${BRAND.textSubtle};text-decoration:underline;">${escapeHtml(appUrl.replace(/^https?:\/\//, ""))}</a>
+      </p>
+      <p style="margin:0 0 8px;font-size:11px;color:#a1a1aa;line-height:1.5;">
+        This is a transactional message about your ${PRODUCT_NAME} account. You received it because someone used your email on our platform.
       </p>
       <p style="margin:0;font-size:11px;color:#a1a1aa;">
         © ${year} ${PRODUCT_NAME}. All rights reserved.
@@ -282,19 +286,88 @@ export function educatorInvitationEmail({
   inviteUrl: string;
 }): string {
   return base(
-    "You're invited to join ACCESS Ready",
+    "Your ACCESS Ready teacher invitation",
     `
-    ${h1(`Hi ${escapeHtml(inviteeName)}!`)}
+    ${h1(`Hi ${escapeHtml(inviteeName)},`)}
     ${lead(
-      `<strong>${escapeHtml(inviterName)}</strong> (Principal) invited you to join <strong>${PRODUCT_NAME}</strong> as a teacher. Help your students reach exit readiness with adaptive practice across listening, reading, speaking, and writing.`,
+      `<strong>${escapeHtml(inviterName)}</strong>, your school principal, invited you to join <strong>${PRODUCT_NAME}</strong> as a teacher.`,
     )}
-    ${lead(`Set your password below. This invitation expires in <strong>7 days</strong>.`)}
-    ${primaryBtn("Accept invitation & set password", inviteUrl)}
+    ${lead(`Use the link below to accept and choose a password. The link expires in <strong>7 days</strong>.`)}
+    ${primaryBtn("Accept invitation", inviteUrl)}
     ${fallbackLink(inviteUrl)}
-    ${finePrint("If you weren't expecting this invitation, you can safely ignore this email.")}
+    ${finePrint("If you were not expecting this, you can ignore this email. No account will be created unless you use the link.")}
     `,
-    "Set up your ACCESS Ready teacher account.",
+    `${inviterName} invited you to ACCESS Ready as a teacher.`,
   );
+}
+
+// ── 3b. Principal invitation (district admin → principal) ───────────────────
+export function principalInvitationEmail({
+  inviteeName,
+  inviterName,
+  schoolName,
+  inviteUrl,
+}: {
+  inviteeName: string;
+  inviterName: string;
+  schoolName: string;
+  inviteUrl: string;
+}): string {
+  return base(
+    "Your ACCESS Ready principal invitation",
+    `
+    ${h1(`Hi ${escapeHtml(inviteeName)},`)}
+    ${lead(
+      `<strong>${escapeHtml(inviterName)}</strong> invited you to be the principal for <strong>${escapeHtml(schoolName)}</strong> on <strong>${PRODUCT_NAME}</strong>.`,
+    )}
+    ${lead(`Use the link below to accept, set your password, and finish setting up the school. The link expires in <strong>7 days</strong>.`)}
+    ${primaryBtn("Accept invitation", inviteUrl)}
+    ${fallbackLink(inviteUrl)}
+    ${finePrint("If you were not expecting this, you can ignore this email. The school will not be created unless you accept.")}
+    `,
+    `Principal invitation for ${schoolName} on ACCESS Ready.`,
+  );
+}
+
+/** Subject lines — specific, no shouty marketing phrasing (spam filters). */
+export function principalInvitationSubject(schoolName: string): string {
+  return `Principal setup for ${schoolName} — ACCESS Ready`;
+}
+
+// ── 3c. District admin invitation (super admin → district admin) ─────────────
+export function districtAdminInvitationEmail({
+  inviteeName,
+  inviterName,
+  districtName,
+  inviteUrl,
+}: {
+  inviteeName: string;
+  inviterName: string;
+  districtName: string;
+  inviteUrl: string;
+}): string {
+  return base(
+    "Your ACCESS Ready district administrator invitation",
+    `
+    ${h1(`Hi ${escapeHtml(inviteeName)},`)}
+    ${lead(
+      `<strong>${escapeHtml(inviterName)}</strong> invited you to be the district administrator for <strong>${escapeHtml(districtName)}</strong> on <strong>${PRODUCT_NAME}</strong>.`,
+    )}
+    ${lead(`Use the link below to accept, set your password, and access your district dashboard. The link expires in <strong>7 days</strong>.`)}
+    ${primaryBtn("Accept invitation", inviteUrl)}
+    ${fallbackLink(inviteUrl)}
+    ${finePrint("If you were not expecting this, you can ignore this email. No account will be created unless you accept.")}
+    `,
+    `District admin invitation for ${districtName} on ACCESS Ready.`,
+  );
+}
+
+export function districtAdminInvitationSubject(districtName: string): string {
+  return `District admin setup for ${districtName} — ACCESS Ready`;
+}
+
+export function userInvitationSubject(inviterName: string): string {
+  return `${inviterName} — your ACCESS Ready invitation`;
 }
 
 // ── 4. Billing confirmation ───────────────────────────────────────────────────

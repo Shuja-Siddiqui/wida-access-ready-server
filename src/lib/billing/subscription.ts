@@ -5,7 +5,8 @@ export type AccessReason =
   | "solo_active"
   | "guardian_active"
   | "no_plan"
-  | "plan_inactive";
+  | "plan_inactive"
+  | "account_inactive";
 
 export interface StudentAccessResult {
   canPractice: boolean;
@@ -149,12 +150,16 @@ export async function resolveStudentAccess(
       guardianId: studentsTable.guardianId,
       schoolId: studentsTable.schoolId,
       districtId: studentsTable.districtId,
+      isActive: studentsTable.isActive,
     })
     .from(studentsTable)
     .where(eq(studentsTable.id, studentId))
     .limit(1);
 
   if (!student) return { canPractice: false, accessReason: "no_plan" };
+  if (student.isActive === false) {
+    return { canPractice: false, accessReason: "account_inactive" };
+  }
 
   // 1. Student's own solo plan
   if (await hasActiveStripeSubscription(studentId, "solo")) {

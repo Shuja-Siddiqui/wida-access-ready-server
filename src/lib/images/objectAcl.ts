@@ -61,6 +61,8 @@ function getS3(): S3Client {
   if (!_s3) {
     _s3 = new S3Client({
       region: process.env.AWS_REGION ?? "us-east-1",
+      requestChecksumCalculation: "WHEN_REQUIRED",
+      responseChecksumValidation: "WHEN_REQUIRED",
       ...(process.env.AWS_ACCESS_KEY_ID
         ? {
             credentials: {

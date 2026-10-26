@@ -28,6 +28,9 @@ function getS3(): S3Client {
   if (!_s3) {
     _s3 = new S3Client({
       region: process.env.AWS_REGION ?? "us-east-1",
+      // Avoid default CRC32 query params on presigned PUTs — browsers cannot match them → 403.
+      requestChecksumCalculation: "WHEN_REQUIRED",
+      responseChecksumValidation: "WHEN_REQUIRED",
       ...(process.env.AWS_ACCESS_KEY_ID
         ? {
             credentials: {
@@ -78,12 +81,22 @@ export class ObjectStorageService {
    * Returns the full S3 presigned URL; call normalizeObjectEntityPath() on it
    * to get the canonical /objects/<key> internal path.
    */
-  async getObjectEntityUploadURL(ownerUserId: string): Promise<string> {
+  async getObjectEntityUploadURL(
+    ownerUserId: string,
+    contentType = "application/octet-stream",
+  ): Promise<string> {
     const s3 = getS3();
     const bucket = requireBucket();
     const key = `${UPLOADS_PREFIX}/${ownerUserId}/${randomUUID()}`;
-    const command = new PutObjectCommand({ Bucket: bucket, Key: key });
-    return getSignedUrl(s3, command, { expiresIn: 900 }); // 15 min
+    const command = new PutObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      ContentType: contentType,
+    });
+    return getSignedUrl(s3, command, {
+      expiresIn: 900,
+      unhoistableHeaders: new Set(["content-type"]),
+    });
   }
 
   /**

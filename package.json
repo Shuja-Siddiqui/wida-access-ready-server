@@ -11,7 +11,7 @@
     "build": "node ./build.mjs",
     "start": "node --env-file=.env --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "codegen": "orval --config ./api-spec/orval.config.ts",
+    "codegen": "orval --config ./api-spec/orval.config.ts && node ./scripts/ensure-generated-index.mjs",
     "db:push": "drizzle-kit push --config=db/drizzle.config.ts",
     "db:push:aws": "drizzle-kit push --config=db/drizzle.aws.config.ts",
     "db:migrate:dev": "node scripts/apply-local.mjs",

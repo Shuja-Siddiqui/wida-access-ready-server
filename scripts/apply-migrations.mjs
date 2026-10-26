@@ -381,6 +381,33 @@ async function applySqlMigrations(client) {
     console.log("  Skip 0020 (ai_token_calls table missing)");
   }
 
+  const usersEmailRoleUniqueExists = async () => indexExists(client, "users_email_role_unique");
+
+  if (await tableExists(client, "users") && !(await usersEmailRoleUniqueExists())) {
+    await applyFile(client, "0021_users_email_role_unique.sql", { continueOnMissing: true });
+  } else if (await usersEmailRoleUniqueExists()) {
+    console.log("  Skip 0021 (users_email_role_unique already exists)");
+  } else {
+    console.log("  Skip 0021 (users table missing)");
+  }
+
+  const usersIsActiveExists = async () => {
+    const { rows } = await client.query(`
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'is_active'
+      LIMIT 1
+    `);
+    return rows.length > 0;
+  };
+
+  if (await tableExists(client, "users") && !(await usersIsActiveExists())) {
+    await applyFile(client, "0022_user_student_is_active.sql", { continueOnMissing: true });
+  } else if (await usersIsActiveExists()) {
+    console.log("  Skip 0022 (users/students is_active already exists)");
+  } else {
+    console.log("  Skip 0022 (users table missing)");
+  }
+
   console.log("  After:", {
     themes: await tableExists(client, "themes"),
     content_categories: await tableExists(client, "content_categories"),
@@ -395,6 +422,8 @@ async function applySqlMigrations(client) {
     ai_token_calls: await aiTokenCallsExists(),
     session_ai_total_tokens: await sessionAiTokensExists(),
     ai_token_calls_user_id: await aiTokenUserIdExists(),
+    users_email_role_unique: await usersEmailRoleUniqueExists(),
+    users_is_active: await usersIsActiveExists(),
   });
 }
 

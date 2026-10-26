@@ -11,7 +11,12 @@ type RouteHandler = RequestHandler | IRouter;
 
 const HTTP_METHODS = ["get", "post", "put", "patch", "delete", "all"] as const;
 
-/** Forward async rejections and sync throws to Express error middleware. */
+function forwardRouteError(err: unknown, req: Request, next: NextFunction): void {
+  req.log?.error({ err }, "Unhandled route error");
+  next(err);
+}
+
+/** Forward async rejections and sync throws to Express error middleware (try/catch on every route). */
 function wrapHandler(handler: RouteHandler): RouteHandler {
   if (typeof handler !== "function") {
     return handler;
@@ -24,10 +29,10 @@ function wrapHandler(handler: RouteHandler): RouteHandler {
     try {
       const result = handler(req, res, next);
       if (result instanceof Promise) {
-        result.catch(next);
+        result.catch((err: unknown) => forwardRouteError(err, req, next));
       }
     } catch (err) {
-      next(err);
+      forwardRouteError(err, req, next);
     }
   };
   return wrapped;

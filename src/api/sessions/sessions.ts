@@ -552,6 +552,10 @@ router.post("/students/:studentId/sessions/start", requireStudentAccess("student
 
   const access = await resolveStudentAccess(student.id);
   if (!access.canPractice) {
+    if (access.accessReason === "account_inactive") {
+      sendError(res, 403, "Your account has been deactivated. Please contact your school or district.");
+      return;
+    }
     sendError(
       res,
       403,

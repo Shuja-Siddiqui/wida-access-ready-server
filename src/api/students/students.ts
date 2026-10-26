@@ -1,6 +1,7 @@
 import type { IRouter, Request } from "express";
 import { createApiRouter } from "../../lib/http/create-api-router";
 import { eq, and, or, sql, count, desc } from "drizzle-orm";
+import bcrypt from "bcryptjs";
 import crypto from "node:crypto";
 import { z } from "zod/v4";
 import {
@@ -17,7 +18,7 @@ import {
   type AccountType,
 } from "../../../db";
 import { sendHtmlEmail } from "../../lib/mail/mailer";
-import { invitationEmail } from "../../lib/mail/email-templates";
+import { invitationEmail, userInvitationSubject } from "../../lib/mail/email-templates";
 import {
   CreateStudentBody,
   GetStudentParams,
@@ -59,6 +60,21 @@ import {
 } from "../../lib/auth/org-access";
 import { requireAuth, requireStudentAccess } from "../../middlewares/auth";
 import { resolveStudentAccess } from "../../lib/billing/subscription";
+import { assertEmailAvailableForRole } from "../../lib/auth/email-role-uniqueness";
+import { markUserEmailVerified } from "../../lib/auth/mark-user-email-verified";
+import { revokeStudentSessions, setUserActive } from "../../lib/auth/account-active";
+import type { AuthContext } from "../../middlewares/auth";
+import {
+  completeBulkImportJob,
+  createBulkImportJob,
+  failBulkImportJob,
+  getBulkImportJob,
+  updateBulkImportJobProgress,
+  type BulkImportRowResult,
+} from "../../lib/students/bulk-import-jobs";
+import { ensureSchoolSeatAllocationsForImport } from "../../lib/district/ensure-school-seat-allocations";
+
+const BCRYPT_ROUNDS = 12;
 import { getStudentAiUsage } from "../../lib/rate-limit/usage";
 
 const router: IRouter = createApiRouter();
@@ -301,7 +317,7 @@ router.post("/students", async (req, res): Promise<void> => {
       const inviteUrl = `${getFrontendAppUrl(req)}/accept-invite?token=${token}`;
       await sendHtmlEmail({
         to: normalizedEmail,
-        subject: `${teacherName} invited you to ACCESS Ready`,
+        subject: userInvitationSubject(teacherName),
         html: invitationEmail({
           inviteeName: name,
           inviterName: teacherName,
@@ -333,6 +349,8 @@ router.post("/students", async (req, res): Promise<void> => {
 const BulkImportRowSchema = z.object({
   name: z.string().min(1),
   email: z.string().optional(),
+  emailVerified: z.boolean().optional(),
+  password: z.string().min(8).optional(),
   gradeBand: z.string(),
   stateAssessment: z.string(),
   homeLanguage: z.string().optional(),
@@ -350,6 +368,8 @@ const BulkImportRowSchema = z.object({
 
 const BulkImportBodySchema = z.object({
   students: z.array(BulkImportRowSchema).min(1).max(300),
+  /** District admin: applied to rows with no schoolId in the spreadsheet. */
+  defaultSchoolId: z.string().uuid().optional(),
 });
 
 type BulkImportContext =
@@ -420,6 +440,7 @@ async function resolveSchoolInDistrict(
 async function resolveBulkImportRow(
   row: z.infer<typeof BulkImportRowSchema>,
   ctx: BulkImportContext,
+  options?: { defaultSchoolId?: string },
 ): Promise<
   | { ok: true; guardianId: string | null; schoolId: string | null; districtId: string | null; accountType: AccountType }
   | { ok: false; error: string }
@@ -452,11 +473,14 @@ async function resolveBulkImportRow(
   }
 
   if (ctx.kind === "district_admin") {
-    let schoolId: string | null = null;
-    if (row.schoolId) {
-      const valid = await resolveSchoolInDistrict(row.schoolId, ctx.districtId);
+    let schoolId: string | null = row.schoolId ?? null;
+    if (schoolId) {
+      const valid = await resolveSchoolInDistrict(schoolId, ctx.districtId);
       if (!valid) return { ok: false, error: "School ID not found in your district" };
-      schoolId = row.schoolId;
+    } else if (options?.defaultSchoolId) {
+      const valid = await resolveSchoolInDistrict(options.defaultSchoolId, ctx.districtId);
+      if (!valid) return { ok: false, error: "Default school not found in your district" };
+      schoolId = options.defaultSchoolId;
     }
 
     let guardianId: string | null = null;
@@ -539,63 +563,78 @@ async function getSchoolSeatsRemaining(schoolId: string): Promise<number | null>
   return Math.max(0, seatsAllocated - seatsUsed);
 }
 
-// Bulk-import students from a pre-parsed list (frontend sends JSON, not a file)
-router.post("/students/bulk-import", async (req, res): Promise<void> => {
-  const parsed = BulkImportBodySchema.safeParse(req.body);
-  if (!parsed.success) {
-    sendError(res, 400, parsed.error.message);
-    return;
-  }
+type BulkImportStudentRow = z.infer<typeof BulkImportRowSchema>;
 
-  const auth = req.auth!;
-  const ctxOrError = await resolveBulkImportContext(auth);
-  if (typeof ctxOrError === "string") {
-    sendError(res, 403, ctxOrError);
-    return;
-  }
-  const ctx = ctxOrError;
-  const { students } = parsed.data;
+async function executeBulkImportStudents(params: {
+  jobId: string;
+  students: BulkImportStudentRow[];
+  ctx: BulkImportContext;
+  rowResolveOptions?: { defaultSchoolId?: string };
+  auth: AuthContext;
+  importerName: string;
+  inviteBaseUrl: string;
+  log: Request["log"];
+}): Promise<{ results: BulkImportRowResult[]; created: number; failed: number }> {
+  const { jobId, students, ctx, rowResolveOptions, auth, importerName, inviteBaseUrl, log } = params;
 
-  const [importerRow] = await db
-    .select({ name: usersTable.name })
-    .from(usersTable)
-    .where(eq(usersTable.id, auth.userId))
-    .limit(1);
-  const importerName = importerRow?.name ?? "ACCESS Ready";
+  const schoolSeatsRemaining = new Map<string, number | null>();
 
-  let seatsRemaining: number | null = null;
-  if (ctx.kind === "principal") {
-    seatsRemaining = await getSchoolSeatsRemaining(ctx.schoolId);
-  }
-
-  const results: Array<{
-    row: number;
-    name: string;
-    status: "created" | "failed";
-    inviteSent?: boolean;
-    error?: string;
-  }> = [];
+  const results: BulkImportRowResult[] = [];
 
   for (let i = 0; i < students.length; i++) {
     const s = students[i];
     try {
-      if (seatsRemaining !== null && seatsRemaining <= 0) {
-        results.push({
-          row: i + 1,
-          name: s.name,
-          status: "failed",
-          error: "Seat limit reached for this school",
-        });
-        continue;
-      }
-
-      const resolved = await resolveBulkImportRow(s, ctx);
+      const resolved = await resolveBulkImportRow(s, ctx, rowResolveOptions);
       if (!resolved.ok) {
         results.push({ row: i + 1, name: s.name, status: "failed", error: resolved.error });
         continue;
       }
 
+      const schoolForSeats =
+        ctx.kind === "principal" ? ctx.schoolId : resolved.schoolId;
+      if (
+        schoolForSeats &&
+        (ctx.kind === "principal" || ctx.kind === "district_admin")
+      ) {
+        if (!schoolSeatsRemaining.has(schoolForSeats)) {
+          schoolSeatsRemaining.set(
+            schoolForSeats,
+            await getSchoolSeatsRemaining(schoolForSeats),
+          );
+        }
+        const left = schoolSeatsRemaining.get(schoolForSeats)!;
+        if (left !== null && left <= 0) {
+          results.push({
+            row: i + 1,
+            name: s.name,
+            status: "failed",
+            error: "Seat limit reached for this school",
+          });
+          continue;
+        }
+      }
+
       const normalizedEmail = s.email?.trim().toLowerCase() || null;
+      const importEmailVerified = s.emailVerified === true;
+      const importPassword = s.password?.trim() || null;
+
+      if (importPassword && !normalizedEmail) {
+        results.push({
+          row: i + 1,
+          name: s.name,
+          status: "failed",
+          error: "Password requires an email address",
+        });
+        continue;
+      }
+
+      if (importPassword) {
+        const emailCheck = await assertEmailAvailableForRole(normalizedEmail!, "student");
+        if (!emailCheck.ok) {
+          results.push({ row: i + 1, name: s.name, status: "failed", error: emailCheck.message });
+          continue;
+        }
+      }
 
       const [student] = await db
         .insert(studentsTable)
@@ -609,10 +648,16 @@ router.post("/students/bulk-import", async (req, res): Promise<void> => {
           stateAssessment: s.stateAssessment,
           homeLanguage: s.homeLanguage?.trim() || null,
           email: normalizedEmail,
+          emailVerified: importEmailVerified,
         })
         .returning();
 
-      if (seatsRemaining !== null) seatsRemaining--;
+      if (schoolForSeats && (ctx.kind === "principal" || ctx.kind === "district_admin")) {
+        const left = schoolSeatsRemaining.get(schoolForSeats);
+        if (left !== null && left !== undefined) {
+          schoolSeatsRemaining.set(schoolForSeats, left - 1);
+        }
+      }
 
       const hasScores =
         s.listening != null || s.speaking != null ||
@@ -636,7 +681,29 @@ router.post("/students/bulk-import", async (req, res): Promise<void> => {
       }
 
       let inviteSent = false;
-      if (normalizedEmail) {
+
+      if (normalizedEmail && importPassword) {
+        const passwordHash = await bcrypt.hash(importPassword, BCRYPT_ROUNDS);
+        const [user] = await db
+          .insert(usersTable)
+          .values({
+            email: normalizedEmail,
+            name: s.name.trim(),
+            passwordHash,
+            role: "student",
+            emailVerified: importEmailVerified,
+          })
+          .returning();
+
+        await db
+          .update(studentsTable)
+          .set({
+            userId: user.id,
+            passwordHash,
+            emailVerified: importEmailVerified,
+          })
+          .where(eq(studentsTable.id, student.id));
+      } else if (normalizedEmail) {
         const inviterId = resolved.guardianId ?? auth.id;
         const inviterType =
           auth.userType === "district_admin" ? "district_admin" as const : "teacher" as const;
@@ -668,10 +735,10 @@ router.post("/students/bulk-import", async (req, res): Promise<void> => {
             tokenHash,
             expiresAt,
           });
-          const inviteUrl = `${getFrontendAppUrl(req)}/accept-invite?token=${token}`;
+          const inviteUrl = `${inviteBaseUrl}/accept-invite?token=${token}`;
           await sendHtmlEmail({
             to: normalizedEmail,
-            subject: `${inviterName} invited you to ACCESS Ready`,
+            subject: userInvitationSubject(inviterName),
             html: invitationEmail({
               inviteeName: s.name.trim(),
               inviterName,
@@ -682,7 +749,7 @@ router.post("/students/bulk-import", async (req, res): Promise<void> => {
           });
           inviteSent = true;
         } catch (emailErr) {
-          req.log.warn({ emailErr, email: normalizedEmail }, "Bulk import: failed to send invite email");
+          log.warn({ emailErr, email: normalizedEmail }, "Bulk import: failed to send invite email");
         }
       }
 
@@ -690,13 +757,258 @@ router.post("/students/bulk-import", async (req, res): Promise<void> => {
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
       results.push({ row: i + 1, name: s.name || `Row ${i + 1}`, status: "failed", error: message });
-      req.log.warn({ err, row: i + 1 }, "Bulk import: failed to create student");
+      log.warn({ err, row: i + 1 }, "Bulk import: failed to create student");
     }
+
+    const createdSoFar = results.filter((r) => r.status === "created").length;
+    const failedSoFar = results.filter((r) => r.status === "failed").length;
+    updateBulkImportJobProgress(jobId, {
+      processed: i + 1,
+      created: createdSoFar,
+      failed: failedSoFar,
+      results: [...results],
+    });
   }
 
   const created = results.filter((r) => r.status === "created").length;
   const failed = results.filter((r) => r.status === "failed").length;
-  sendSuccess(res, { results, created, failed });
+  return { results, created, failed };
+}
+
+const BulkImportJobIdParam = z.object({ jobId: z.string().uuid() });
+
+router.get("/students/bulk-import/jobs/:jobId", async (req, res): Promise<void> => {
+  const params = BulkImportJobIdParam.safeParse(req.params);
+  if (!params.success) {
+    sendError(res, 400, "Invalid job ID");
+    return;
+  }
+
+  const auth = req.auth!;
+  const job = getBulkImportJob(params.data.jobId);
+  if (!job || job.ownerUserId !== auth.userId) {
+    sendError(res, 404, "Import job not found");
+    return;
+  }
+
+  sendSuccess(res, job);
+});
+
+// Bulk-import students from a pre-parsed list (runs in background; poll job status)
+router.post("/students/bulk-import", async (req, res): Promise<void> => {
+  const parsed = BulkImportBodySchema.safeParse(req.body);
+  if (!parsed.success) {
+    sendError(res, 400, parsed.error.message);
+    return;
+  }
+
+  const auth = req.auth!;
+  const ctxOrError = await resolveBulkImportContext(auth);
+  if (typeof ctxOrError === "string") {
+    sendError(res, 403, ctxOrError);
+    return;
+  }
+  const ctx = ctxOrError;
+  const { students, defaultSchoolId } = parsed.data;
+
+  if (ctx.kind === "district_admin" && defaultSchoolId) {
+    const valid = await resolveSchoolInDistrict(defaultSchoolId, ctx.districtId);
+    if (!valid) {
+      sendError(res, 400, "Default school not found in your district");
+      return;
+    }
+  }
+
+  const rowResolveOptions =
+    ctx.kind === "district_admin" && defaultSchoolId ? { defaultSchoolId } : undefined;
+
+  if (ctx.kind === "district_admin") {
+    const incomingBySchool = new Map<string, number>();
+    for (const s of students) {
+      const resolved = await resolveBulkImportRow(s, ctx, rowResolveOptions);
+      if (resolved.ok && resolved.schoolId) {
+        incomingBySchool.set(
+          resolved.schoolId,
+          (incomingBySchool.get(resolved.schoolId) ?? 0) + 1,
+        );
+      }
+    }
+    const ensured = await ensureSchoolSeatAllocationsForImport(auth.id, incomingBySchool);
+    if (!ensured.ok) {
+      sendError(res, 422, ensured.error);
+      return;
+    }
+    if (ensured.adjusted.length > 0) {
+      req.log?.info({ adjusted: ensured.adjusted }, "Auto-assigned school seats for bulk import");
+    }
+  }
+
+  const [importerRow] = await db
+    .select({ name: usersTable.name })
+    .from(usersTable)
+    .where(eq(usersTable.id, auth.userId))
+    .limit(1);
+  const importerName = importerRow?.name ?? "ACCESS Ready";
+
+  const jobId = createBulkImportJob(auth.userId, students.length);
+  const inviteBaseUrl = getFrontendAppUrl(req);
+
+  sendSuccess(
+    res,
+    {
+      jobId,
+      status: "running" as const,
+      total: students.length,
+      message: "Import started. You can leave this page; processing continues on the server.",
+    },
+    202,
+  );
+
+  void executeBulkImportStudents({
+    jobId,
+    students,
+    ctx,
+    rowResolveOptions,
+    auth,
+    importerName,
+    inviteBaseUrl,
+    log: req.log,
+  })
+    .then((summary) => completeBulkImportJob(jobId, summary))
+    .catch((err: unknown) => {
+      const message = err instanceof Error ? err.message : "Import failed";
+      req.log.error({ err, jobId }, "Bulk import job failed");
+      failBulkImportJob(jobId, message);
+    });
+});
+
+const ActiveBody = z.object({ isActive: z.boolean() });
+
+// District admin: activate / deactivate a student in their district
+router.patch("/students/:studentId/active", requireStudentAccess("studentId"), async (req, res): Promise<void> => {
+  const auth = req.auth!;
+  if (auth.userType !== "district_admin") {
+    sendError(res, 403, "Only district admins can change student active status");
+    return;
+  }
+
+  const params = GetStudentParams.safeParse(req.params);
+  if (!params.success) {
+    sendError(res, 400, params.error.message);
+    return;
+  }
+
+  const body = ActiveBody.safeParse(req.body);
+  if (!body.success) {
+    sendError(res, 400, body.error.message);
+    return;
+  }
+
+  const [student] = await db
+    .select({ id: studentsTable.id, userId: studentsTable.userId })
+    .from(studentsTable)
+    .where(eq(studentsTable.id, params.data.studentId))
+    .limit(1);
+
+  if (!student) {
+    sendError(res, 404, "Student not found");
+    return;
+  }
+
+  await db
+    .update(studentsTable)
+    .set({ isActive: body.data.isActive })
+    .where(eq(studentsTable.id, student.id));
+
+  if (student.userId) {
+    await setUserActive(student.userId, body.data.isActive);
+  }
+
+  if (!body.data.isActive) {
+    await revokeStudentSessions(student.id);
+  }
+
+  sendSuccess(res, { studentId: student.id, isActive: body.data.isActive });
+});
+
+// District admin / super admin: mark student login email verified (users + students rows)
+router.post("/students/:studentId/verify-email", requireStudentAccess("studentId"), async (req, res): Promise<void> => {
+  const auth = req.auth!;
+  if (auth.userType !== "district_admin" && auth.role !== "super_admin") {
+    sendError(res, 403, "Only district admins can verify student emails");
+    return;
+  }
+
+  const params = GetStudentParams.safeParse(req.params);
+  if (!params.success) {
+    sendError(res, 400, params.error.message);
+    return;
+  }
+
+  const [student] = await db
+    .select()
+    .from(studentsTable)
+    .where(eq(studentsTable.id, params.data.studentId))
+    .limit(1);
+
+  if (!student) {
+    sendError(res, 404, "Student not found");
+    return;
+  }
+
+  const studentEmail = student.email?.trim().toLowerCase();
+  if (!studentEmail) {
+    sendError(res, 422, "This student has no email on file");
+    return;
+  }
+
+  let userId = student.userId;
+
+  if (!userId) {
+    const emailCheck = await assertEmailAvailableForRole(studentEmail, "student");
+    if (!emailCheck.ok) {
+      const existing = await db
+        .select({ id: usersTable.id })
+        .from(usersTable)
+        .where(and(eq(usersTable.email, studentEmail), eq(usersTable.role, "student")))
+        .limit(1);
+      if (!existing[0]) {
+        sendError(res, emailCheck.status, emailCheck.message);
+        return;
+      }
+      userId = existing[0].id;
+    } else {
+      const [user] = await db
+        .insert(usersTable)
+        .values({
+          email: studentEmail,
+          name: student.name,
+          role: "student",
+          emailVerified: true,
+          passwordHash: null,
+        })
+        .returning({ id: usersTable.id });
+      userId = user.id;
+    }
+  }
+
+  await db
+    .update(studentsTable)
+    .set({ userId, email: studentEmail })
+    .where(eq(studentsTable.id, student.id));
+
+  const verified = await markUserEmailVerified(userId);
+  if (!verified.ok) {
+    sendError(res, verified.status, verified.message);
+    return;
+  }
+
+  sendSuccess(res, {
+    studentId: student.id,
+    email: verified.email,
+    emailVerified: true,
+    hasPassword: verified.hasPassword,
+  });
 });
 
 // Get student detail
@@ -731,6 +1043,23 @@ router.get("/students/:studentId", requireStudentAccess("studentId"), async (req
 
   const access = await resolveStudentAccess(student.id);
 
+  let loginEmailVerified = student.emailVerified;
+  let hasPassword = Boolean(student.passwordHash);
+  if (student.userId) {
+    const [userRow] = await db
+      .select({
+        emailVerified: usersTable.emailVerified,
+        passwordHash: usersTable.passwordHash,
+      })
+      .from(usersTable)
+      .where(eq(usersTable.id, student.userId))
+      .limit(1);
+    if (userRow) {
+      loginEmailVerified = userRow.emailVerified;
+      hasPassword = Boolean(userRow.passwordHash);
+    }
+  }
+
   sendSuccess(res, {
     student: {
       id: student.id,
@@ -740,6 +1069,9 @@ router.get("/students/:studentId", requireStudentAccess("studentId"), async (req
       stateAssessment: student.stateAssessment,
       homeLanguage: student.homeLanguage,
       email: student.email,
+      emailVerified: loginEmailVerified,
+      hasPassword,
+      isActive: student.isActive,
       avatarUrl: student.avatarUrl,
       currentStreak: student.currentStreak,
       totalXp: student.totalXp,

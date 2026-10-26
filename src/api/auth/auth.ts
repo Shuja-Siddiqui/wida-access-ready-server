@@ -2,22 +2,26 @@ import type { IRouter, Request, Response } from "express";
 import { createApiRouter } from "../../lib/http/create-api-router";
 import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
-import { eq, and, gt, isNull } from "drizzle-orm";
+import { eq, and, gt, isNull, sql } from "drizzle-orm";
 import {
   db,
   studentsTable,
   profilesTable,
   districtAdminsTable,
+  districtsTable,
   usersTable,
   userSessionsTable,
   refreshTokensTable,
   studentLevelsTable,
   passwordResetTokensTable,
   emailVerificationTokensTable,
+  invitationsTable,
 } from "../../../db";
 import { ensureStudentLevels } from "../students/students";
 import { getAssessmentConfig, getExitThreshold, getExitThresholdForTrack, type Assessment, type Domain, type StudentTrack } from "../../lib/assessments";
 import { sendHtmlEmail } from "../../lib/mail/mailer";
+import { deliverTransactionalEmail } from "../../lib/mail/deliver-email";
+import { conflict } from "../../lib/http/app-error";
 import { verificationEmail, passwordResetEmail } from "../../lib/mail/email-templates";
 import { config } from "../../config/index";
 import { sendError, sendSuccess } from "../../lib/http/api-response";
@@ -31,6 +35,16 @@ import {
   REFRESH_TTL_MS,
   type SessionUserType,
 } from "../../lib/auth/session";
+import {
+  accountRoleForAuthUserType,
+  assertEmailAvailableForRole,
+  findAuthenticatedUserForLogin,
+  findUserByEmailAndRole,
+  findUsersForLoginApiRole,
+  pickUserNeedingPasswordSetup,
+  userRolesForLoginApiRole,
+  type AccountRole,
+} from "../../lib/auth/email-role-uniqueness";
 
 const router: IRouter = createApiRouter();
 
@@ -86,7 +100,7 @@ async function sendVerificationEmailTo(
   email: string,
   name: string,
   userType: "student" | "teacher" | "parent",
-): Promise<void> {
+): Promise<boolean> {
   const token = generateToken();
   const tokenHash = sha256(token);
   const expiresAt = new Date(Date.now() + VERIFY_TTL_MS);
@@ -110,16 +124,16 @@ async function sendVerificationEmailTo(
   if (process.env.NODE_ENV !== "production") {
     req.log.info({ verifyUrl, email, userType }, "Email verification link generated");
   }
-  // Email delivery failure is non-fatal — account is created, user can request a resend
-  try {
-    await sendHtmlEmail({
+  const delivery = await deliverTransactionalEmail(
+    {
       to: email,
       subject: "Verify your ACCESS Ready email",
       html: verificationEmail(name, verifyUrl),
-    });
-  } catch (err) {
-    req.log.warn({ err, email }, "Failed to deliver verification email — user can resend");
-  }
+    },
+    req.log,
+    { email, userType, kind: "verification" },
+  );
+  return delivery.sent;
 }
 
 async function createSessionPair(
@@ -206,14 +220,9 @@ router.post("/auth/register", rateLimitAuth(), async (req: Request, res: Respons
   const normalizedEmail = email.trim().toLowerCase();
   const normalizedName = name.trim();
 
-  // Check email not already taken
-  const [existingUser] = await db
-    .select({ id: usersTable.id })
-    .from(usersTable)
-    .where(eq(usersTable.email, normalizedEmail))
-    .limit(1);
-  if (existingUser) {
-    sendError(res, 409, "An account with this email already exists");
+  const emailCheck = await assertEmailAvailableForRole(normalizedEmail, "student");
+  if (!emailCheck.ok) {
+    sendError(res, emailCheck.status, emailCheck.message);
     return;
   }
 
@@ -267,9 +276,9 @@ router.post("/auth/register", rateLimitAuth(), async (req: Request, res: Respons
   await ensureStudentLevels(student.id, stateAssessment as Assessment, resolvedTrack);
 
   // Send verification email — account is inactive until verified
-  await sendVerificationEmailTo(req, normalizedEmail, normalizedName, "student");
+  const verificationEmailSent = await sendVerificationEmailTo(req, normalizedEmail, normalizedName, "student");
 
-  sendSuccess(res, { ok: true, requiresVerification: true, studentId: student.id }, 201);
+  sendSuccess(res, { ok: true, requiresVerification: true, studentId: student.id, verificationEmailSent }, 201);
 });
 
 // ── Email / Password: Login ────────────────────────────────────────────────
@@ -287,23 +296,34 @@ router.post("/auth/login", rateLimitAuth(), async (req: Request, res: Response):
 
   const normalizedEmail = email.trim().toLowerCase();
 
-  // Check unified users table first (new accounts)
-  const [user] = await db
-    .select()
-    .from(usersTable)
-    .where(eq(usersTable.email, normalizedEmail))
-    .limit(1);
+  const loginCandidates = await findUsersForLoginApiRole(normalizedEmail, role);
+  const pendingPasswordUser = pickUserNeedingPasswordSetup(loginCandidates, role);
+  if (pendingPasswordUser) {
+    if (pendingPasswordUser.isActive === false) {
+      sendError(res, 403, "This account has been deactivated. Contact your district administrator.", {
+        accountInactive: true,
+      });
+      return;
+    }
+    sendError(res, 403, "Create a password before you can log in", { requiresPasswordSetup: true });
+    return;
+  }
+
+  const allowedRoles = userRolesForLoginApiRole(role);
+  for (const row of loginCandidates) {
+    if (row.isActive !== false || !row.passwordHash) continue;
+    if (!allowedRoles.includes(row.role as AccountRole)) continue;
+    if (await bcrypt.compare(password, row.passwordHash)) {
+      sendError(res, 403, "This account has been deactivated. Contact your district administrator.", {
+        accountInactive: true,
+      });
+      return;
+    }
+  }
+
+  const user = await findAuthenticatedUserForLogin(normalizedEmail, password, role);
 
   if (user) {
-    if (!user.passwordHash) {
-      sendError(res, 401, "Invalid email or password");
-      return;
-    }
-    const valid = await bcrypt.compare(password, user.passwordHash);
-    if (!valid) {
-      sendError(res, 401, "Invalid email or password");
-      return;
-    }
     if (!user.emailVerified) {
       sendError(res, 403, "Please verify your email before logging in", { requiresVerification: true });
       return;
@@ -445,6 +465,76 @@ router.post("/auth/login", rateLimitAuth(), async (req: Request, res: Response):
   sendError(res, 401, "Invalid email or password");
 });
 
+// ── Set initial password (account exists, email verified, no password yet) ─
+router.post("/auth/set-initial-password", rateLimitAuth(), async (req: Request, res: Response): Promise<void> => {
+  const { email, password, role } = req.body as {
+    email?: string;
+    password?: string;
+    role?: string;
+  };
+
+  if (!email?.trim() || !password || !role) {
+    sendError(res, 400, "email, password, and role are required");
+    return;
+  }
+  if (password.length < 8) {
+    sendError(res, 400, "Password must be at least 8 characters");
+    return;
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+  const candidates = await findUsersForLoginApiRole(normalizedEmail, role);
+  const user = pickUserNeedingPasswordSetup(candidates, role);
+
+  if (!user) {
+    sendError(res, 404, "No account found that needs a password, or a password is already set");
+    return;
+  }
+  if (user.isActive === false) {
+    sendError(res, 403, "This account has been deactivated. Contact your district administrator.", {
+      accountInactive: true,
+    });
+    return;
+  }
+
+  const staffRoles = new Set(["teacher", "principal", "district_admin", "parent"]);
+  if (!user.emailVerified && !staffRoles.has(user.role)) {
+    sendError(res, 403, "Please verify your email before setting a password", { requiresVerification: true });
+    return;
+  }
+
+  const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+  await db
+    .update(usersTable)
+    .set({
+      passwordHash,
+      ...(staffRoles.has(user.role) ? { emailVerified: true } : {}),
+    })
+    .where(eq(usersTable.id, user.id));
+
+  if (user.role === "student") {
+    await db
+      .update(studentsTable)
+      .set({ passwordHash })
+      .where(eq(studentsTable.userId, user.id));
+  }
+
+  if (staffRoles.has(user.role)) {
+    await db
+      .update(invitationsTable)
+      .set({ acceptedAt: new Date() })
+      .where(
+        and(
+          eq(invitationsTable.inviteeEmail, normalizedEmail),
+          eq(invitationsTable.inviteeRole, user.role),
+          isNull(invitationsTable.acceptedAt),
+        ),
+      );
+  }
+
+  sendSuccess(res, { ok: true });
+});
+
 // ── Super-admin portal login (super_admin role only) ───────────────────────
 router.post("/auth/admin/login", rateLimitAuth(), async (req: Request, res: Response): Promise<void> => {
   const { email, password } = req.body as { email?: string; password?: string };
@@ -458,7 +548,7 @@ router.post("/auth/admin/login", rateLimitAuth(), async (req: Request, res: Resp
   const [user] = await db
     .select()
     .from(usersTable)
-    .where(eq(usersTable.email, normalizedEmail))
+    .where(and(eq(usersTable.email, normalizedEmail), eq(usersTable.role, "super_admin")))
     .limit(1);
 
   if (!user?.passwordHash) {
@@ -690,13 +780,9 @@ router.post("/auth/register/educator", rateLimitAuth(), async (req: Request, res
   const normalizedEmail = email.trim().toLowerCase();
   const normalizedName = name.trim();
 
-  const [existingUser] = await db
-    .select({ id: usersTable.id })
-    .from(usersTable)
-    .where(eq(usersTable.email, normalizedEmail))
-    .limit(1);
-  if (existingUser) {
-    sendError(res, 409, "An account with this email already exists");
+  const emailCheck = await assertEmailAvailableForRole(normalizedEmail, "teacher");
+  if (!emailCheck.ok) {
+    sendError(res, emailCheck.status, emailCheck.message);
     return;
   }
 
@@ -724,9 +810,9 @@ router.post("/auth/register/educator", rateLimitAuth(), async (req: Request, res
     })
     .returning();
 
-  await sendVerificationEmailTo(req, normalizedEmail, normalizedName, "teacher");
+  const verificationEmailSent = await sendVerificationEmailTo(req, normalizedEmail, normalizedName, "teacher");
 
-  sendSuccess(res, { ok: true, requiresVerification: true, teacherId: guardian.id }, 201);
+  sendSuccess(res, { ok: true, requiresVerification: true, teacherId: guardian.id, verificationEmailSent }, 201);
 });
 
 // ── Verify Email ───────────────────────────────────────────────────────────
@@ -763,11 +849,13 @@ router.get("/auth/verify-email", async (req: Request, res: Response): Promise<vo
     .set({ usedAt: now })
     .where(eq(emailVerificationTokensTable.id, record.id));
 
-  // Mark emailVerified on users table (source of truth)
+  const verifiedRole = accountRoleForAuthUserType(record.userType);
+
+  // Mark emailVerified on the matching role row only (same email may exist for other roles).
   await db
     .update(usersTable)
     .set({ emailVerified: true })
-    .where(eq(usersTable.email, record.email));
+    .where(and(eq(usersTable.email, record.email), eq(usersTable.role, verifiedRole)));
 
   if (record.userType === "student") {
     await db
@@ -791,7 +879,7 @@ router.get("/auth/verify-email", async (req: Request, res: Response): Promise<vo
     const [user] = await db
       .select()
       .from(usersTable)
-      .where(eq(usersTable.email, record.email))
+      .where(and(eq(usersTable.email, record.email), eq(usersTable.role, "parent")))
       .limit(1);
 
     if (user) {
@@ -813,7 +901,7 @@ router.get("/auth/verify-email", async (req: Request, res: Response): Promise<vo
     const [verifiedUser] = await db
       .select({ id: usersTable.id })
       .from(usersTable)
-      .where(eq(usersTable.email, record.email))
+      .where(and(eq(usersTable.email, record.email), eq(usersTable.role, "teacher")))
       .limit(1);
 
     if (verifiedUser) {
@@ -873,13 +961,10 @@ router.post("/auth/forgot-password", rateLimitAuth(), async (req: Request, res: 
   }
 
   const normalizedEmail = email.trim().toLowerCase();
-  const userType = role === "teacher" ? "teacher" : "student";
+  const userType = role === "teacher" ? "teacher" : role === "parent" ? "parent" : "student";
+  const accountRole = accountRoleForAuthUserType(userType);
 
-  const [userRecord] = await db
-    .select({ id: usersTable.id })
-    .from(usersTable)
-    .where(eq(usersTable.email, normalizedEmail))
-    .limit(1);
+  const userRecord = await findUserByEmailAndRole(normalizedEmail, accountRole);
   const userFound = !!userRecord;
 
   if (userFound) {
@@ -942,12 +1027,13 @@ router.post("/auth/reset-password", rateLimitAuth(), async (req: Request, res: R
   }
 
   const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+  const accountRole = accountRoleForAuthUserType(record.userType);
 
-  // Update users table (source of truth)
+  // Update the account for this role only (same email may exist for other roles).
   await db
     .update(usersTable)
     .set({ passwordHash })
-    .where(eq(usersTable.email, record.email));
+    .where(and(eq(usersTable.email, record.email), eq(usersTable.role, accountRole)));
 
   await db
     .update(passwordResetTokensTable)
@@ -1263,13 +1349,9 @@ router.post("/auth/register/district", rateLimitAuth(), async (req: Request, res
   const normalizedEmail = email.trim().toLowerCase();
   const normalizedName = name.trim();
 
-  const [existingUser] = await db
-    .select({ id: usersTable.id })
-    .from(usersTable)
-    .where(eq(usersTable.email, normalizedEmail))
-    .limit(1);
-  if (existingUser) {
-    sendError(res, 409, "An account with this email already exists");
+  const emailCheck = await assertEmailAvailableForRole(normalizedEmail, "district_admin");
+  if (!emailCheck.ok) {
+    sendError(res, emailCheck.status, emailCheck.message);
     return;
   }
 
@@ -1295,9 +1377,34 @@ router.post("/auth/register/district", rateLimitAuth(), async (req: Request, res
     })
     .returning();
 
-  await sendVerificationEmailTo(req, normalizedEmail, normalizedName, "teacher");
+  const districtLabel = district?.trim();
+  if (districtLabel) {
+    const [openDistrict] = await db
+      .select({ id: districtsTable.id })
+      .from(districtsTable)
+      .where(
+        and(
+          sql`lower(${districtsTable.name}) = ${districtLabel.toLowerCase()}`,
+          isNull(districtsTable.adminId),
+        ),
+      )
+      .limit(1);
 
-  sendSuccess(res, { ok: true, requiresVerification: true, teacherId: guardian.id }, 201);
+    if (openDistrict) {
+      await db.insert(districtAdminsTable).values({
+        userId: user.id,
+        districtId: openDistrict.id,
+      });
+      await db
+        .update(districtsTable)
+        .set({ adminId: user.id })
+        .where(eq(districtsTable.id, openDistrict.id));
+    }
+  }
+
+  const verificationEmailSent = await sendVerificationEmailTo(req, normalizedEmail, normalizedName, "teacher");
+
+  sendSuccess(res, { ok: true, requiresVerification: true, teacherId: guardian.id, verificationEmailSent }, 201);
 });
 
 // ── Parent Register ────────────────────────────────────────────────────────
@@ -1320,13 +1427,9 @@ router.post("/auth/register/parent", rateLimitAuth(), async (req: Request, res: 
   const normalizedEmail = email.trim().toLowerCase();
   const normalizedName = name.trim();
 
-  const [existingUser] = await db
-    .select({ id: usersTable.id })
-    .from(usersTable)
-    .where(eq(usersTable.email, normalizedEmail))
-    .limit(1);
-  if (existingUser) {
-    sendError(res, 409, "An account with this email already exists");
+  const emailCheck = await assertEmailAvailableForRole(normalizedEmail, "parent");
+  if (!emailCheck.ok) {
+    sendError(res, emailCheck.status, emailCheck.message);
     return;
   }
 
@@ -1345,9 +1448,9 @@ router.post("/auth/register/parent", rateLimitAuth(), async (req: Request, res: 
 
   await db.insert(profilesTable).values({ userId: user.id });
 
-  await sendVerificationEmailTo(req, normalizedEmail, normalizedName, "parent");
+  const verificationEmailSent = await sendVerificationEmailTo(req, normalizedEmail, normalizedName, "parent");
 
-  sendSuccess(res, { ok: true, requiresVerification: true }, 201);
+  sendSuccess(res, { ok: true, requiresVerification: true, verificationEmailSent }, 201);
 });
 
 async function findOrCreateGoogleStudent(profile: {
@@ -1386,11 +1489,7 @@ async function findOrCreateGoogleStudent(profile: {
 
   // 3. Check by email (link Google to existing email/password account)
   if (email) {
-    const [userByEmail] = await db
-      .select()
-      .from(usersTable)
-      .where(eq(usersTable.email, email))
-      .limit(1);
+    const userByEmail = await findUserByEmailAndRole(email, "student");
     if (userByEmail) {
       await db.update(usersTable).set({ googleId, emailVerified: true }).where(eq(usersTable.id, userByEmail.id));
       const [student] = await db
@@ -1437,6 +1536,13 @@ async function findOrCreateGoogleStudent(profile: {
 
   // 4. Brand new Google user — create user + student with placeholder data.
   //    The frontend will redirect to onboarding so the user fills in their real grade/assessment/language.
+  if (email) {
+    const emailCheck = await assertEmailAvailableForRole(email, "student");
+    if (!emailCheck.ok) {
+      throw conflict(emailCheck.message, { code: "email_role_conflict" });
+    }
+  }
+
   const [user] = await db
     .insert(usersTable)
     .values({
@@ -1492,13 +1598,10 @@ async function findOrCreateGoogleEducator(
     if (teacher) return { teacherId: teacher.id, isNewUser: false };
   }
 
-  // 2. Check by email in users table
+  // 2. Check by email in users table (role-specific account)
   if (email) {
-    const [userByEmail] = await db
-      .select()
-      .from(usersTable)
-      .where(eq(usersTable.email, email))
-      .limit(1);
+    const roleForSignup = userRole as "teacher" | "district_admin";
+    const userByEmail = await findUserByEmailAndRole(email, roleForSignup);
     if (userByEmail) {
       await db.update(usersTable).set({ googleId, emailVerified: true }).where(eq(usersTable.id, userByEmail.id));
       const [teacher] = await db
@@ -1511,13 +1614,21 @@ async function findOrCreateGoogleEducator(
   }
 
   // 3. Brand new — create user + guardian rows
+  const roleForSignup = userRole as "teacher" | "district_admin";
+  if (email) {
+    const emailCheck = await assertEmailAvailableForRole(email, roleForSignup);
+    if (!emailCheck.ok) {
+      throw conflict(emailCheck.message, { code: "email_role_conflict" });
+    }
+  }
+
   const [user] = await db
     .insert(usersTable)
     .values({
       email: email ?? `google-${googleId}@access.local`,
       name: displayName,
       googleId,
-      role: userRole as "teacher" | "district_admin",
+      role: roleForSignup,
       emailVerified: true,
       school: null,
     })
@@ -1558,12 +1669,8 @@ async function findOrCreateGoogleParent(
 
   // 2. Check by email
   if (email) {
-    const [userByEmail] = await db
-      .select()
-      .from(usersTable)
-      .where(eq(usersTable.email, email))
-      .limit(1);
-    if (userByEmail && userByEmail.role === "parent") {
+    const userByEmail = await findUserByEmailAndRole(email, "parent");
+    if (userByEmail) {
       await db.update(usersTable).set({ googleId, emailVerified: true }).where(eq(usersTable.id, userByEmail.id));
       const [guardian] = await db
         .select()
@@ -1575,6 +1682,13 @@ async function findOrCreateGoogleParent(
   }
 
   // 3. Brand new parent
+  if (email) {
+    const emailCheck = await assertEmailAvailableForRole(email, "parent");
+    if (!emailCheck.ok) {
+      throw conflict(emailCheck.message, { code: "email_role_conflict" });
+    }
+  }
+
   const [user] = await db
     .insert(usersTable)
     .values({

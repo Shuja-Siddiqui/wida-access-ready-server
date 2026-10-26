@@ -16,6 +16,7 @@ import { libraryTable, libraryTopicsTable, topicsTable, contentCategoriesTable }
 import { asc } from "drizzle-orm";
 import { sendError, sendSuccess } from "../../lib/http/api-response";
 import { requireAuth, requireSuperAdmin } from "../../middlewares/auth";
+import { markUserEmailVerified } from "../../lib/auth/mark-user-email-verified";
 import { requireSuperAdminApiStack } from "../../middlewares/admin-guard";
 import { requireSuperAdminOrInternalJob } from "../../middlewares/internal-job";
 import { getUncachableStripeClient } from "../../lib/billing/stripeClient";
@@ -212,7 +213,14 @@ router.get("/admin/users", async (req, res): Promise<void> => {
 
   const [rows, totalRows] = await Promise.all([
     db.execute(sql`
-      select id, email, name, role, email_verified, created_at
+      select
+        id,
+        email,
+        name,
+        role,
+        email_verified,
+        (password_hash is not null) as has_password,
+        created_at
       from users
       ${whereClause}
       order by created_at desc
@@ -228,6 +236,31 @@ router.get("/admin/users", async (req, res): Promise<void> => {
   sendSuccess(res, {
     users: rows.rows,
     pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+  });
+});
+
+const AdminUserIdParam = z.object({ userId: z.string().uuid() });
+
+// ── POST /admin/users/:userId/verify-email ─────────────────────────────────
+router.post("/admin/users/:userId/verify-email", async (req, res): Promise<void> => {
+  const params = AdminUserIdParam.safeParse(req.params);
+  if (!params.success) {
+    sendError(res, 400, "Invalid user ID");
+    return;
+  }
+
+  const result = await markUserEmailVerified(params.data.userId);
+  if (!result.ok) {
+    sendError(res, result.status, result.message);
+    return;
+  }
+
+  sendSuccess(res, {
+    userId: params.data.userId,
+    email: result.email,
+    role: result.role,
+    emailVerified: true,
+    hasPassword: result.hasPassword,
   });
 });
 

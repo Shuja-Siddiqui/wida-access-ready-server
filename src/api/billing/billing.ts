@@ -23,6 +23,10 @@ import { sendError, sendSuccess } from "../../lib/http/api-response";
 import { requireAuth, requireOwnerAccess, requireTeacherAccess } from "../../middlewares/auth";
 import { getUncachableStripeClient, getStripePublishableKey } from "../../lib/billing/stripeClient";
 import { getRequestOrigin } from "../../lib/http/request-origin";
+import {
+  grantOrganizationSubscription,
+  isBillingMockSuccess,
+} from "../../lib/billing/grant-organization-subscription";
 
 const router: IRouter = createApiRouter();
 
@@ -303,6 +307,30 @@ router.post(
       return;
     }
     const { ownerId, ownerType, planId, seatCount } = parsed.data;
+    const quantity = planId === "organization" ? Math.max(1, seatCount ?? 1) : 1;
+
+    if (
+      isBillingMockSuccess() &&
+      planId === "organization" &&
+      ownerType === "organization"
+    ) {
+      const identity = await resolveOwnerIdentity(ownerId, ownerType as OwnerType);
+      if (!identity) {
+        sendError(res, 404, "Owner not found");
+        return;
+      }
+      const existing = await getOwnerSubscription(ownerId, ownerType as OwnerType);
+      await grantOrganizationSubscription({
+        ownerId,
+        email: identity.email,
+        name: identity.name,
+        seatCount: quantity,
+        mode: existing?.status === "active" ? "add" : "set",
+      });
+      const origin = getRequestOrigin(req);
+      sendSuccess(res, { url: `${origin}/billing?checkout=success`, mockSuccess: true });
+      return;
+    }
 
     const plan = await getPlanByPlanId(planId as PlanId);
     if (!plan) {
@@ -320,7 +348,6 @@ router.post(
 
     const stripe = await getUncachableStripeClient();
     const origin = getRequestOrigin(req);
-    const quantity = planId === "organization" ? Math.max(1, seatCount ?? 1) : 1;
 
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
@@ -368,6 +395,33 @@ router.post(
       return;
     }
     const { ownerId, ownerType, planId, seatCount } = parsed.data;
+    const quantity = planId === "organization" ? Math.max(1, seatCount ?? 1) : 1;
+
+    if (
+      isBillingMockSuccess() &&
+      planId === "organization" &&
+      ownerType === "organization"
+    ) {
+      const identity = await resolveOwnerIdentity(ownerId, ownerType as OwnerType);
+      if (!identity) {
+        sendError(res, 404, "Owner not found");
+        return;
+      }
+      const existing = await getOwnerSubscription(ownerId, ownerType as OwnerType);
+      const granted = await grantOrganizationSubscription({
+        ownerId,
+        email: identity.email,
+        name: identity.name,
+        seatCount: quantity,
+        mode: existing?.status === "active" ? "add" : "set",
+      });
+      sendSuccess(res, {
+        clientSecret: "mock_success",
+        subscriptionId: granted.subscriptionId,
+        mockSuccess: true,
+      });
+      return;
+    }
 
     const plan = await getPlanByPlanId(planId as PlanId);
     if (!plan) {
@@ -391,8 +445,6 @@ router.post(
       sendError(res, 404, "Owner not found");
       return;
     }
-
-    const quantity = planId === "organization" ? Math.max(1, seatCount ?? 1) : 1;
 
     const subscription = await stripe.subscriptions.create({
       customer: stripeCustomerId,
@@ -587,6 +639,29 @@ router.post(
       return;
     }
     const { ownerId, ownerType, planId, seatCount, paymentMethodId } = parsed.data;
+    const quantity = planId === "organization" ? Math.max(1, seatCount ?? 1) : 1;
+
+    if (
+      isBillingMockSuccess() &&
+      planId === "organization" &&
+      ownerType === "organization"
+    ) {
+      const identity = await resolveOwnerIdentity(ownerId, ownerType as OwnerType);
+      if (!identity) {
+        sendError(res, 404, "Owner not found");
+        return;
+      }
+      const existing = await getOwnerSubscription(ownerId, ownerType as OwnerType);
+      const granted = await grantOrganizationSubscription({
+        ownerId,
+        email: identity.email,
+        name: identity.name,
+        seatCount: quantity,
+        mode: existing?.status === "active" ? "add" : "set",
+      });
+      sendSuccess(res, { subscriptionId: granted.subscriptionId, mockSuccess: true });
+      return;
+    }
 
     const plan = await getPlanByPlanId(planId as PlanId);
     if (!plan) {
@@ -610,8 +685,6 @@ router.post(
       sendError(res, 404, "Owner not found");
       return;
     }
-
-    const quantity = planId === "organization" ? Math.max(1, seatCount ?? 1) : 1;
 
     // Attach and set as default before subscribing so Stripe uses it automatically
     try {

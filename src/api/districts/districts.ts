@@ -8,6 +8,7 @@ import {
   districtsTable,
   schoolsTable,
   usersTable,
+  profilesTable,
   invitationsTable,
 } from "../../../db";
 import { sendError, sendSuccess } from "../../lib/http/api-response";
@@ -18,8 +19,15 @@ import {
   resolveOrgScope,
   sendAccessDenied,
 } from "../../lib/auth/org-access";
-import { sendHtmlEmail } from "../../lib/mail/mailer";
-import { educatorInvitationEmail } from "../../lib/mail/email-templates";
+import { assertEmailAvailableForRole } from "../../lib/auth/email-role-uniqueness";
+import { deliverTransactionalEmail } from "../../lib/mail/deliver-email";
+import { getFrontendAppUrl } from "../../lib/http/request-origin";
+import {
+  districtAdminInvitationEmail,
+  districtAdminInvitationSubject,
+  principalInvitationEmail,
+  principalInvitationSubject,
+} from "../../lib/mail/email-templates";
 
 const router: IRouter = createApiRouter();
 
@@ -29,9 +37,15 @@ const CreateDistrictBody = z.object({
   name: z.string().min(1),
   state: z.string().optional(),
   districtCode: z.string().optional(),
+  districtAdmin: z.object({
+    name: z.string().min(1),
+    email: z.string().email(),
+  }),
 });
 
 const DistrictIdParam = z.object({ districtId: z.string().uuid() });
+
+const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 const districtListQuery = db
   .select({
@@ -84,17 +98,76 @@ router.post("/districts", async (req, res): Promise<void> => {
     return;
   }
 
+  const { name, state, districtCode, districtAdmin } = parsed.data;
+  const normalizedEmail = districtAdmin.email.toLowerCase();
+
+  const emailCheck = await assertEmailAvailableForRole(normalizedEmail, "district_admin", {
+    inviteeRole: "district_admin",
+  });
+  if (!emailCheck.ok) {
+    sendError(res, emailCheck.status, emailCheck.message);
+    return;
+  }
+
+  const [adminUser] = await db
+    .select({ name: usersTable.name })
+    .from(usersTable)
+    .where(eq(usersTable.id, req.auth!.userId))
+    .limit(1);
+  const inviterName = adminUser?.name ?? "ACCESS Ready";
+
   const [district] = await db
     .insert(districtsTable)
     .values({
-      name: parsed.data.name,
-      state: parsed.data.state ?? null,
-      districtCode: parsed.data.districtCode ?? null,
+      name,
+      state: state ?? null,
+      districtCode: districtCode ?? null,
       adminId: null,
     })
     .returning();
 
-  sendSuccess(res, district, 201);
+  const token = crypto.randomBytes(32).toString("hex");
+  const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+  const expiresAt = new Date(Date.now() + INVITE_TTL_MS);
+
+  const metadata = JSON.stringify({
+    districtId: district.id,
+    districtName: name,
+  });
+
+  await db.insert(invitationsTable).values({
+    inviterId: req.auth!.id,
+    inviterType: "super_admin",
+    inviterName,
+    inviteeEmail: normalizedEmail,
+    inviteeName: districtAdmin.name,
+    inviteeRole: "district_admin",
+    metadata,
+    tokenHash,
+    expiresAt,
+  });
+
+  const inviteUrl = `${getFrontendAppUrl(req)}/accept-invite?token=${token}`;
+
+  const invitationEmail = await deliverTransactionalEmail(
+    {
+      to: normalizedEmail,
+      subject: districtAdminInvitationSubject(name),
+      html: districtAdminInvitationEmail({
+        inviteeName: districtAdmin.name,
+        inviterName,
+        districtName: name,
+        inviteUrl,
+      }),
+    },
+    req.log,
+    { email: normalizedEmail, districtId: district.id, kind: "district_admin_invite" },
+  );
+  if (invitationEmail.sent) {
+    req.log.info({ email: normalizedEmail, districtId: district.id }, "District admin invitation email sent");
+  }
+
+  sendSuccess(res, { ...district, inviteeEmail: normalizedEmail, invitationEmailSent: invitationEmail.sent }, 201);
 });
 
 // Get a single district
@@ -194,8 +267,8 @@ router.patch("/districts/:districtId", async (req, res): Promise<void> => {
 });
 
 // ── POST /districts/:districtId/schools ──────────────────────────────────────
-// Sends a principal invitation — school + principal are only created in the DB
-// after the principal accepts the invite and sets their password.
+// Creates the school + principal profile immediately (district can manage active
+// status). Invitation email lets the principal set their password and sign in.
 const CreateDistrictSchoolBody = z.object({
   name:       z.string().min(1),
   state:      z.string().optional(),
@@ -205,8 +278,6 @@ const CreateDistrictSchoolBody = z.object({
     email: z.string().email(),
   }),
 });
-
-const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 router.post("/districts/:districtId/schools", async (req, res): Promise<void> => {
   const params = DistrictIdParam.safeParse(req.params);
@@ -245,30 +316,11 @@ router.post("/districts/:districtId/schools", async (req, res): Promise<void> =>
 
   const normalizedEmail = principal.email.toLowerCase();
 
-  const [existingUser] = await db
-    .select({ id: usersTable.id })
-    .from(usersTable)
-    .where(eq(usersTable.email, normalizedEmail))
-    .limit(1);
-  if (existingUser) {
-    sendError(res, 409, "A user with that email already exists.");
-    return;
-  }
-
-  const [existingInvite] = await db
-    .select({ id: invitationsTable.id })
-    .from(invitationsTable)
-    .where(
-      and(
-        eq(invitationsTable.inviteeEmail, normalizedEmail),
-        eq(invitationsTable.inviteeRole, "principal"),
-        isNull(invitationsTable.acceptedAt),
-        gt(invitationsTable.expiresAt, new Date()),
-      ),
-    )
-    .limit(1);
-  if (existingInvite) {
-    sendError(res, 409, "An active invitation has already been sent to this email.");
+  const emailCheck = await assertEmailAvailableForRole(normalizedEmail, "principal", {
+    inviteeRole: "principal",
+  });
+  if (!emailCheck.ok) {
+    sendError(res, emailCheck.status, emailCheck.message);
     return;
   }
 
@@ -284,45 +336,89 @@ router.post("/districts/:districtId/schools", async (req, res): Promise<void> =>
   const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
   const expiresAt = new Date(Date.now() + INVITE_TTL_MS);
 
-  const metadata = JSON.stringify({
-    schoolName: name,
-    state: state ?? null,
-    schoolCode: schoolCode ?? null,
-    districtId,
+  const provisioned = await db.transaction(async (tx) => {
+    const [school] = await tx
+      .insert(schoolsTable)
+      .values({
+        name,
+        districtId,
+        state: state ?? null,
+        schoolCode: schoolCode ?? null,
+      })
+      .returning();
+
+    const [user] = await tx
+      .insert(usersTable)
+      .values({
+        email: normalizedEmail,
+        name: principal.name,
+        role: "principal",
+        passwordHash: null,
+        emailVerified: false,
+        isActive: true,
+      })
+      .returning();
+
+    const [profile] = await tx
+      .insert(profilesTable)
+      .values({ userId: user.id, schoolId: school.id })
+      .returning();
+
+    const metadata = JSON.stringify({
+      schoolId: school.id,
+      schoolName: name,
+      state: state ?? null,
+      schoolCode: schoolCode ?? null,
+      districtId,
+      userId: user.id,
+      profileId: profile.id,
+    });
+
+    await tx.insert(invitationsTable).values({
+      inviterId: req.auth!.id,
+      inviterType: "district_admin",
+      inviterName,
+      inviteeEmail: normalizedEmail,
+      inviteeName: principal.name,
+      inviteeRole: "principal",
+      metadata,
+      tokenHash,
+      expiresAt,
+    });
+
+    return { school, profile };
   });
 
-  await db.insert(invitationsTable).values({
-    inviterId:    req.auth!.id,
-    inviterType:  "district_admin",
-    inviterName,
-    inviteeEmail: normalizedEmail,
-    inviteeName:  principal.name,
-    inviteeRole:  "principal",
-    metadata,
-    tokenHash,
-    expiresAt,
-  });
+  const inviteUrl = `${getFrontendAppUrl(req)}/accept-invite?token=${token}`;
 
-  const proto = (req.headers["x-forwarded-proto"] as string)?.split(",")[0]?.trim() ?? req.protocol;
-  const host  = (req.headers["x-forwarded-host"] as string)?.split(",")[0]?.trim() ?? req.get("host") ?? "";
-  const inviteUrl = `${proto}://${host}/accept-invite?token=${token}`;
-
-  try {
-    await sendHtmlEmail({
+  const invitationEmail = await deliverTransactionalEmail(
+    {
       to: normalizedEmail,
-      subject: `${inviterName} invited you to ACCESS Ready`,
-      html: educatorInvitationEmail({
+      subject: principalInvitationSubject(name),
+      html: principalInvitationEmail({
         inviteeName: principal.name,
         inviterName,
+        schoolName: name,
         inviteUrl,
       }),
-    });
+    },
+    req.log,
+    { email: normalizedEmail, districtId, kind: "principal_invite" },
+  );
+  if (invitationEmail.sent) {
     req.log.info({ email: normalizedEmail }, "Principal invitation email sent");
-  } catch (err) {
-    req.log.warn({ err, email: normalizedEmail }, "Failed to deliver principal invitation email");
   }
 
-  sendSuccess(res, { ok: true }, 201);
+  sendSuccess(
+    res,
+    {
+      ok: true,
+      invitationEmailSent: invitationEmail.sent,
+      schoolId: provisioned.school.id,
+      principalProfileId: provisioned.profile.id,
+    },
+    201,
+  );
 });
 
 export default router;

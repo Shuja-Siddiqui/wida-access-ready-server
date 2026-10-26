@@ -208,7 +208,7 @@ export async function assertTeacherProfileOrgAccess(
     .where(eq(profilesTable.id, teacherProfileId))
     .limit(1);
 
-  if (!teacher || teacher.role !== "teacher") {
+  if (!teacher || (teacher.role !== "teacher" && teacher.role !== "principal")) {
     return { ok: false, status: 404, message: "Teacher not found" };
   }
   if (!teacher.schoolId) {
