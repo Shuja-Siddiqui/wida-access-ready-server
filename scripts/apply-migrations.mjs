@@ -408,6 +408,22 @@ async function applySqlMigrations(client) {
     console.log("  Skip 0022 (users table missing)");
   }
 
+  const aiSuggestionsEnabledExists = async () => {
+    const rows = await client.query(`
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'students' AND column_name = 'ai_suggestions_enabled'
+    `);
+    return rows.rows.length > 0;
+  };
+
+  if (await tableExists(client, "students") && !(await aiSuggestionsEnabledExists())) {
+    await applyFile(client, "0023_students_ai_suggestions_enabled.sql", { continueOnMissing: true });
+  } else if (await aiSuggestionsEnabledExists()) {
+    console.log("  Skip 0023 (students.ai_suggestions_enabled already exists)");
+  } else {
+    console.log("  Skip 0023 (students table missing)");
+  }
+
   console.log("  After:", {
     themes: await tableExists(client, "themes"),
     content_categories: await tableExists(client, "content_categories"),
@@ -424,6 +440,7 @@ async function applySqlMigrations(client) {
     ai_token_calls_user_id: await aiTokenUserIdExists(),
     users_email_role_unique: await usersEmailRoleUniqueExists(),
     users_is_active: await usersIsActiveExists(),
+    students_ai_suggestions_enabled: await aiSuggestionsEnabledExists(),
   });
 }
 

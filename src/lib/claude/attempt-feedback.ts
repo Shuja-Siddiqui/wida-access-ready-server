@@ -52,6 +52,19 @@ const EMPTY_FEEDBACK: AttemptFeedback = {
   recommendedLevel: null,
 };
 
+/** Used when the student has turned off AI coach suggestions — no Claude call. */
+export function minimalAttemptFeedbackWithoutAi(): AttemptFeedback {
+  return {
+    summary: "You finished this practice. Great job showing up today.",
+    mistakes: [],
+    strengths: ["You completed the session."],
+    nextSteps: [],
+    coachForNextSession:
+      "Give another similar job at this same English level. Keep the WIDA factors. Practice clear, complete answers.",
+    recommendedLevel: null,
+  };
+}
+
 function clip(value: unknown, max = MAX_ANSWER_CHARS): string {
   const text = toDisplayText(value).trim();
   if (text.length <= max) return text;

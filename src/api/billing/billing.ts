@@ -25,7 +25,9 @@ import { getUncachableStripeClient, getStripePublishableKey } from "../../lib/bi
 import { getRequestOrigin } from "../../lib/http/request-origin";
 import {
   grantOrganizationSubscription,
+  grantSoloSubscription,
   isBillingMockSuccess,
+  type GrantOrganizationSubscriptionResult,
 } from "../../lib/billing/grant-organization-subscription";
 
 const router: IRouter = createApiRouter();
@@ -189,6 +191,41 @@ async function resolveOwnerIdentity(
   return undefined;
 }
 
+/** When mock billing is on, grant an active subscription without Stripe APIs. */
+async function grantSubscriptionViaMockCheckout(
+  ownerId: string,
+  ownerType: OwnerType,
+  planId: PlanId,
+  quantity: number,
+): Promise<GrantOrganizationSubscriptionResult | null | "not_found"> {
+  if (!isBillingMockSuccess()) return null;
+
+  if (planId === "solo" && ownerType === "solo") {
+    const identity = await resolveOwnerIdentity(ownerId, ownerType);
+    if (!identity) return "not_found";
+    return grantSoloSubscription({
+      ownerId,
+      email: identity.email,
+      name: identity.name,
+    });
+  }
+
+  if (planId === "organization" && ownerType === "organization") {
+    const identity = await resolveOwnerIdentity(ownerId, ownerType);
+    if (!identity) return "not_found";
+    const existing = await getOwnerSubscription(ownerId, ownerType);
+    return grantOrganizationSubscription({
+      ownerId,
+      email: identity.email,
+      name: identity.name,
+      seatCount: quantity,
+      mode: existing?.status === "active" ? "add" : "set",
+    });
+  }
+
+  return null;
+}
+
 async function findOrCreateStripeCustomer(ownerId: string, ownerType: OwnerType): Promise<string> {
   const existing = await getOwnerStripeCustomerId(ownerId, ownerType);
   if (existing) return existing;
@@ -309,24 +346,17 @@ router.post(
     const { ownerId, ownerType, planId, seatCount } = parsed.data;
     const quantity = planId === "organization" ? Math.max(1, seatCount ?? 1) : 1;
 
-    if (
-      isBillingMockSuccess() &&
-      planId === "organization" &&
-      ownerType === "organization"
-    ) {
-      const identity = await resolveOwnerIdentity(ownerId, ownerType as OwnerType);
-      if (!identity) {
-        sendError(res, 404, "Owner not found");
-        return;
-      }
-      const existing = await getOwnerSubscription(ownerId, ownerType as OwnerType);
-      await grantOrganizationSubscription({
-        ownerId,
-        email: identity.email,
-        name: identity.name,
-        seatCount: quantity,
-        mode: existing?.status === "active" ? "add" : "set",
-      });
+    const mockGranted = await grantSubscriptionViaMockCheckout(
+      ownerId,
+      ownerType as OwnerType,
+      planId as PlanId,
+      quantity,
+    );
+    if (mockGranted === "not_found") {
+      sendError(res, 404, "Owner not found");
+      return;
+    }
+    if (mockGranted) {
       const origin = getRequestOrigin(req);
       sendSuccess(res, { url: `${origin}/billing?checkout=success`, mockSuccess: true });
       return;
@@ -397,27 +427,20 @@ router.post(
     const { ownerId, ownerType, planId, seatCount } = parsed.data;
     const quantity = planId === "organization" ? Math.max(1, seatCount ?? 1) : 1;
 
-    if (
-      isBillingMockSuccess() &&
-      planId === "organization" &&
-      ownerType === "organization"
-    ) {
-      const identity = await resolveOwnerIdentity(ownerId, ownerType as OwnerType);
-      if (!identity) {
-        sendError(res, 404, "Owner not found");
-        return;
-      }
-      const existing = await getOwnerSubscription(ownerId, ownerType as OwnerType);
-      const granted = await grantOrganizationSubscription({
-        ownerId,
-        email: identity.email,
-        name: identity.name,
-        seatCount: quantity,
-        mode: existing?.status === "active" ? "add" : "set",
-      });
+    const mockGranted = await grantSubscriptionViaMockCheckout(
+      ownerId,
+      ownerType as OwnerType,
+      planId as PlanId,
+      quantity,
+    );
+    if (mockGranted === "not_found") {
+      sendError(res, 404, "Owner not found");
+      return;
+    }
+    if (mockGranted) {
       sendSuccess(res, {
         clientSecret: "mock_success",
-        subscriptionId: granted.subscriptionId,
+        subscriptionId: mockGranted.subscriptionId,
         mockSuccess: true,
       });
       return;
@@ -641,25 +664,18 @@ router.post(
     const { ownerId, ownerType, planId, seatCount, paymentMethodId } = parsed.data;
     const quantity = planId === "organization" ? Math.max(1, seatCount ?? 1) : 1;
 
-    if (
-      isBillingMockSuccess() &&
-      planId === "organization" &&
-      ownerType === "organization"
-    ) {
-      const identity = await resolveOwnerIdentity(ownerId, ownerType as OwnerType);
-      if (!identity) {
-        sendError(res, 404, "Owner not found");
-        return;
-      }
-      const existing = await getOwnerSubscription(ownerId, ownerType as OwnerType);
-      const granted = await grantOrganizationSubscription({
-        ownerId,
-        email: identity.email,
-        name: identity.name,
-        seatCount: quantity,
-        mode: existing?.status === "active" ? "add" : "set",
-      });
-      sendSuccess(res, { subscriptionId: granted.subscriptionId, mockSuccess: true });
+    const mockGranted = await grantSubscriptionViaMockCheckout(
+      ownerId,
+      ownerType as OwnerType,
+      planId as PlanId,
+      quantity,
+    );
+    if (mockGranted === "not_found") {
+      sendError(res, 404, "Owner not found");
+      return;
+    }
+    if (mockGranted) {
+      sendSuccess(res, { subscriptionId: mockGranted.subscriptionId, mockSuccess: true });
       return;
     }
 

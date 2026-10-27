@@ -63,6 +63,7 @@ import {
   generateWritingContent,
   getWritingFeedback,
   generateAttemptFeedback,
+  minimalAttemptFeedbackWithoutAi,
   generateItemFeedback,
   type ItemFeedbackInput,
   isClaudeCapacityError,
@@ -119,6 +120,7 @@ import {
   getSessionTokenUsage,
 } from "../../lib/ai-token-usage";
 import { buildPracticeReport, parsePracticeReport } from "../../lib/practice-report";
+import { normalizeCompleteSessionBody } from "../../lib/normalize-complete-session-body";
 import {
   computeInterpretiveScore,
   isInterpretiveDomain,
@@ -1484,7 +1486,9 @@ router.post("/students/:studentId/sessions/:sessionId/complete", requireStudentA
     return;
   }
 
-  const parsed = CompleteSessionBody.safeParse(req.body);
+  const parsed = CompleteSessionBody.safeParse(
+    normalizeCompleteSessionBody(req.body),
+  );
   if (!parsed.success) {
     sendError(res, 400, parsed.error.message);
     return;
@@ -1565,58 +1569,64 @@ router.post("/students/:studentId/sessions/:sessionId/complete", requireStudentA
     "session submit — end-of-session feedback",
   );
 
+  const aiSuggestionsEnabled = student.aiSuggestionsEnabled !== false;
+
   let attemptFeedback;
-  try {
-    const completionSubject = asAcademicSubject(session.subject);
-    let completionFramework: Record<string, unknown> | null = null;
-    if (completionSubject && session.keyUse) {
-      const mode = domain === "speaking" || domain === "writing" ? "expressive" : "interpretive";
-      completionFramework = serializeFrameworkForFeedback(selectFrameworkTask({
-        level: Math.floor(currentLevel),
-        keyUse: session.keyUse,
-        mode,
-        academicSubject: completionSubject,
-      }));
+  if (!aiSuggestionsEnabled) {
+    attemptFeedback = minimalAttemptFeedbackWithoutAi();
+  } else {
+    try {
+      const completionSubject = asAcademicSubject(session.subject);
+      let completionFramework: Record<string, unknown> | null = null;
+      if (completionSubject && session.keyUse) {
+        const mode = domain === "speaking" || domain === "writing" ? "expressive" : "interpretive";
+        completionFramework = serializeFrameworkForFeedback(selectFrameworkTask({
+          level: Math.floor(currentLevel),
+          keyUse: session.keyUse,
+          mode,
+          academicSubject: completionSubject,
+        }));
+      }
+      attemptFeedback = await withAiTokenContext(
+        {
+          studentId: student.id,
+          sessionId: session.id,
+          domain,
+          callKind: "attempt_feedback",
+        },
+        () => generateAttemptFeedback({
+          domain,
+          tier,
+          level: currentLevel,
+          scorePct,
+          topic: session.topic,
+          keyUse: session.keyUse,
+          framework: completionFramework,
+          interpretiveScore: interpretiveResult,
+          answers: parsed.data.answers ?? [],
+        }),
+      );
+    } catch (err) {
+      req.log.error(
+        {
+          err,
+          stage: "session-complete",
+          domain,
+          code: isClaudeCapacityError(err) ? err.code : "ATTEMPT_FEEDBACK_FAILED",
+          jobId: isClaudeCapacityError(err) ? err.jobId : null,
+          queue: getClaudeQueueSnapshot(),
+        },
+        "End-of-session coach failed — using fallback notes",
+      );
+      attemptFeedback = {
+        summary: "You finished this practice. Review missed items and try again soon.",
+        mistakes: [],
+        strengths: ["You completed the session."],
+        nextSteps: ["Practice the same skill again tomorrow."],
+        coachForNextSession: "Give another similar job at this same English level. Keep the WIDA factors. Practice clear, complete answers.",
+        recommendedLevel: null,
+      };
     }
-    attemptFeedback = await withAiTokenContext(
-      {
-        studentId: student.id,
-        sessionId: session.id,
-        domain,
-        callKind: "attempt_feedback",
-      },
-      () => generateAttemptFeedback({
-        domain,
-        tier,
-        level: currentLevel,
-        scorePct,
-        topic: session.topic,
-        keyUse: session.keyUse,
-        framework: completionFramework,
-        interpretiveScore: interpretiveResult,
-        answers: parsed.data.answers ?? [],
-      }),
-    );
-  } catch (err) {
-    req.log.error(
-      {
-        err,
-        stage: "session-complete",
-        domain,
-        code: isClaudeCapacityError(err) ? err.code : "ATTEMPT_FEEDBACK_FAILED",
-        jobId: isClaudeCapacityError(err) ? err.jobId : null,
-        queue: getClaudeQueueSnapshot(),
-      },
-      "End-of-session coach failed — using fallback notes",
-    );
-    attemptFeedback = {
-      summary: "You finished this practice. Review missed items and try again soon.",
-      mistakes: [],
-      strengths: ["You completed the session."],
-      nextSteps: ["Practice the same skill again tomorrow."],
-      coachForNextSession: "Give another similar job at this same English level. Keep the WIDA factors. Practice clear, complete answers.",
-      recommendedLevel: null,
-    };
   }
 
   const writingMeetsTask = domain === "writing"
@@ -1845,14 +1855,16 @@ router.post("/students/:studentId/sessions/:sessionId/complete", requireStudentA
     .set({ practiceReport })
     .where(eq(sessionsTable.id, session.id));
 
-  await upsertStudentPracticeSuggestion({
-    studentId: student.id,
-    domain,
-    sessionId: session.id,
-    feedback: attemptFeedback,
-  }).catch((err) => {
-    req.log.warn({ err, sessionId: session.id, domain }, "practice suggestion upsert failed");
-  });
+  if (aiSuggestionsEnabled) {
+    await upsertStudentPracticeSuggestion({
+      studentId: student.id,
+      domain,
+      sessionId: session.id,
+      feedback: attemptFeedback,
+    }).catch((err) => {
+      req.log.warn({ err, sessionId: session.id, domain }, "practice suggestion upsert failed");
+    });
+  }
 
   const aiTokenUsage = await getSessionTokenUsage(session.id);
 
@@ -1876,7 +1888,10 @@ router.post("/students/:studentId/sessions/:sessionId/complete", requireStudentA
       totalTokens:  aiTokenUsage.aiTotalTokens,
       callCount:    aiTokenUsage.aiCallCount,
     },
-    attemptFeedback: attemptFeedback ? filterAttemptFeedbackForStudent(attemptFeedback) : attemptFeedback,
+    attemptFeedback:
+      aiSuggestionsEnabled && attemptFeedback
+        ? filterAttemptFeedbackForStudent(attemptFeedback)
+        : undefined,
     interpretiveScore: interpretiveResult
       ? {
           scorePoint: interpretiveResult.scorePoint,
