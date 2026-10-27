@@ -4,6 +4,9 @@ import { db, ownerStripeCustomersTable } from "../../../db";
 
 export type GrantSeatMode = "set" | "add";
 
+export type MockPlanId = "solo" | "organization";
+export type MockOwnerType = "solo" | "organization";
+
 export interface GrantOrganizationSubscriptionInput {
   /** district_admins.id or profiles.id (organization owner) */
   ownerId: string;
@@ -14,6 +17,13 @@ export interface GrantOrganizationSubscriptionInput {
   mode?: GrantSeatMode;
 }
 
+export interface GrantSoloSubscriptionInput {
+  /** students.id */
+  ownerId: string;
+  email: string;
+  name: string;
+}
+
 export interface GrantOrganizationSubscriptionResult {
   stripeCustomerId: string;
   subscriptionId: string;
@@ -21,20 +31,22 @@ export interface GrantOrganizationSubscriptionResult {
   mockCheckout: true;
 }
 
-/** True when checkout should succeed locally without calling Stripe APIs. */
+/** True when checkout should succeed without live Stripe charge (dev, explicit flag, or test key). */
 export function isBillingMockSuccess(): boolean {
   if (process.env.BILLING_MOCK_SUCCESS === "false") return false;
   if (process.env.BILLING_MOCK_SUCCESS === "true") return true;
+  const secret = process.env.STRIPE_SECRET_KEY?.trim() ?? "";
+  if (secret.startsWith("sk_test_")) return true;
   return process.env.NODE_ENV !== "production";
 }
 
-async function resolveOrganizationPriceId(): Promise<string> {
+async function resolvePriceId(planId: "solo" | "organization"): Promise<string> {
   try {
     const result = await db.execute(sql`
       select pr.id as price_id
       from "stripe"."products" p
       join "stripe"."prices" pr on pr.product = p.id
-      where p.metadata->>'planId' = 'organization'
+      where p.metadata->>'planId' = ${planId}
       limit 1
     `);
     const priceId = (result.rows as Record<string, unknown>[])[0]?.price_id as string | undefined;
@@ -42,7 +54,7 @@ async function resolveOrganizationPriceId(): Promise<string> {
   } catch {
     /* stripe schema optional */
   }
-  return "price_mock_organization";
+  return planId === "organization" ? "price_mock_organization" : "price_mock_solo";
 }
 
 async function resolveStripeAccountId(): Promise<string> {
@@ -95,20 +107,54 @@ async function loadSubscriptionItemTemplate(): Promise<Record<string, unknown> |
  * Writes an active organization subscription into the synced Stripe tables
  * (same shape real webhooks use). Used for dev / mock checkout until live Stripe is enabled.
  */
+export async function grantSoloSubscription(
+  input: GrantSoloSubscriptionInput,
+): Promise<GrantOrganizationSubscriptionResult> {
+  return grantMockSubscription({
+    ownerId: input.ownerId,
+    ownerType: "solo",
+    planId: "solo",
+    email: input.email,
+    name: input.name,
+    seatCount: 1,
+    mode: "set",
+  });
+}
+
 export async function grantOrganizationSubscription(
   input: GrantOrganizationSubscriptionInput,
 ): Promise<GrantOrganizationSubscriptionResult> {
-  const mode = input.mode ?? "add";
+  return grantMockSubscription({
+    ownerId: input.ownerId,
+    ownerType: "organization",
+    planId: "organization",
+    email: input.email,
+    name: input.name,
+    seatCount: input.seatCount,
+    mode: input.mode,
+  });
+}
+
+async function grantMockSubscription(input: {
+  ownerId: string;
+  ownerType: MockOwnerType;
+  planId: MockPlanId;
+  email: string;
+  name: string;
+  seatCount: number;
+  mode?: GrantSeatMode;
+}): Promise<GrantOrganizationSubscriptionResult> {
+  const mode = input.mode ?? (input.planId === "organization" ? "add" : "set");
   const requested = Math.max(1, Math.floor(input.seatCount));
-  const priceId = await resolveOrganizationPriceId();
+  const priceId = await resolvePriceId(input.planId);
   const accountId = await resolveStripeAccountId();
   const nowSec = Math.floor(Date.now() / 1000);
   const periodEndSec = nowSec + 365 * 24 * 60 * 60;
 
   const metadata = {
-    planId: "organization",
+    planId: input.planId,
     ownerId: input.ownerId,
-    ownerType: "organization",
+    ownerType: input.ownerType,
     mockCheckout: "true",
   };
 
@@ -118,7 +164,7 @@ export async function grantOrganizationSubscription(
     .where(
       and(
         eq(ownerStripeCustomersTable.ownerId, input.ownerId),
-        eq(ownerStripeCustomersTable.ownerType, "organization"),
+        eq(ownerStripeCustomersTable.ownerType, input.ownerType),
       ),
     )
     .limit(1);
@@ -134,7 +180,11 @@ export async function grantOrganizationSubscription(
       name: input.name || input.email,
       created: nowSec,
       livemode: false,
-      metadata: { ownerId: input.ownerId, ownerType: "organization", mockCheckout: "true" },
+      metadata: {
+        ownerId: input.ownerId,
+        ownerType: input.ownerType,
+        mockCheckout: "true",
+      },
     };
     await db.execute(sql`
       insert into "stripe"."customers" (_raw_data, _account_id)
@@ -144,7 +194,7 @@ export async function grantOrganizationSubscription(
       .insert(ownerStripeCustomersTable)
       .values({
         ownerId: input.ownerId,
-        ownerType: "organization",
+        ownerType: input.ownerType,
         stripeCustomerId: customerId,
       })
       .onConflictDoUpdate({

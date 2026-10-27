@@ -454,12 +454,6 @@ router.delete("/schools/:schoolId/teachers/:teacherId", async (req, res): Promis
   const denied = await assertSchoolAccess(req.auth!, params.data.schoolId);
   if (denied) { sendAccessDenied(res, denied); return; }
 
-  const scope = await resolveOrgScope(req.auth!);
-  if (scope?.role === "district_admin") {
-    sendError(res, 403, "Only principals can remove teachers from a school");
-    return;
-  }
-
   const [guardian] = await db
     .update(profilesTable)
     .set({ schoolId: null })

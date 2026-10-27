@@ -482,6 +482,10 @@ paths:
       operationId: deleteStudent
       tags: [students]
       summary: Delete a student and all related records
+      description: |
+        Hard-deletes the student row and related session/level data. Allowed for the
+        student's guardian (teacher profile), principals for students in their school,
+        district admins for students in their district, and super admins. No request body.
       parameters:
         - name: studentId
           in: path
@@ -1153,7 +1157,11 @@ paths:
     delete:
       tags: [schools]
       operationId: unlinkTeacherFromSchool
-      summary: Remove a teacher from a school
+      summary: Remove a teacher or principal from a school
+      description: |
+        Clears the staff member's school link (profile.school_id). Allowed for the
+        principal of that school and for district admins whose district owns the school.
+        No request body. Use PATCH .../active to deactivate login (district admin).
       parameters:
         - name: schoolId
           in: path

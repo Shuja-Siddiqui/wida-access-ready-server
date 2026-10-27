@@ -58,6 +58,8 @@ export const studentsTable = pgTable("students", {
   lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
   emailVerified: boolean("email_verified").notNull().default(false),
   isActive: boolean("is_active").notNull().default(true),
+  /** When false, end-of-session coach AI and dashboard practice suggestions are skipped. */
+  aiSuggestionsEnabled: boolean("ai_suggestions_enabled").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

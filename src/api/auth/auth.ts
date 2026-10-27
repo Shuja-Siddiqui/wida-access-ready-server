@@ -27,6 +27,7 @@ import { config } from "../../config/index";
 import { sendError, sendSuccess } from "../../lib/http/api-response";
 import { getFrontendAppUrl, getRequestOrigin } from "../../lib/http/request-origin";
 import { rateLimitAuth } from "../../middlewares/rate-limit-public";
+import { requireAuth } from "../../middlewares/auth";
 import {
   createSessionPair as createAuthSessionPair,
   sessionContextFromRequest,
@@ -530,6 +531,70 @@ router.post("/auth/set-initial-password", rateLimitAuth(), async (req: Request, 
           isNull(invitationsTable.acceptedAt),
         ),
       );
+  }
+
+  sendSuccess(res, { ok: true });
+});
+
+// ── Change password (signed-in user) ───────────────────────────────────────
+router.post("/auth/change-password", requireAuth, rateLimitAuth(), async (req: Request, res: Response): Promise<void> => {
+  const { currentPassword, newPassword } = req.body as {
+    currentPassword?: string;
+    newPassword?: string;
+  };
+
+  if (!currentPassword || !newPassword) {
+    sendError(res, 400, "currentPassword and newPassword are required");
+    return;
+  }
+  if (newPassword.length < 8) {
+    sendError(res, 400, "Password must be at least 8 characters");
+    return;
+  }
+  if (currentPassword === newPassword) {
+    sendError(res, 400, "New password must be different from your current password");
+    return;
+  }
+
+  const userId = req.auth!.userId;
+  const [user] = await db
+    .select({
+      id: usersTable.id,
+      passwordHash: usersTable.passwordHash,
+      role: usersTable.role,
+      isActive: usersTable.isActive,
+    })
+    .from(usersTable)
+    .where(eq(usersTable.id, userId))
+    .limit(1);
+
+  if (!user) {
+    sendError(res, 404, "Account not found");
+    return;
+  }
+  if (user.isActive === false) {
+    sendError(res, 403, "This account has been deactivated");
+    return;
+  }
+  if (!user.passwordHash) {
+    sendError(res, 400, "This account uses Google sign-in or has no password yet. Use forgot password or set an initial password at login.");
+    return;
+  }
+
+  const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+  if (!valid) {
+    sendError(res, 401, "Current password is incorrect");
+    return;
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+  await db.update(usersTable).set({ passwordHash }).where(eq(usersTable.id, user.id));
+
+  if (user.role === "student") {
+    await db
+      .update(studentsTable)
+      .set({ passwordHash })
+      .where(eq(studentsTable.userId, user.id));
   }
 
   sendSuccess(res, { ok: true });

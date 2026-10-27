@@ -1076,6 +1076,7 @@ router.get("/students/:studentId", requireStudentAccess("studentId"), async (req
       currentStreak: student.currentStreak,
       totalXp: student.totalXp,
       streakShieldAvailable: student.streakShieldAvailable,
+      aiSuggestionsEnabled: student.aiSuggestionsEnabled,
       createdAt: student.createdAt.toISOString(),
     },
     canPractice: access.canPractice,
@@ -1538,7 +1539,7 @@ router.get("/students/:studentId/suggestions", requireStudentAccess("studentId")
   const studentId = req.params.studentId as string;
 
   const [student] = await db
-    .select({ id: studentsTable.id })
+    .select({ id: studentsTable.id, aiSuggestionsEnabled: studentsTable.aiSuggestionsEnabled })
     .from(studentsTable)
     .where(eq(studentsTable.id, studentId))
     .limit(1);
@@ -1548,8 +1549,14 @@ router.get("/students/:studentId/suggestions", requireStudentAccess("studentId")
     return;
   }
 
+  if (student.aiSuggestionsEnabled === false) {
+    sendSuccess(res, { suggestions: [], aiSuggestionsEnabled: false });
+    return;
+  }
+
   const suggestions = await listStudentPracticeSuggestions(student.id);
   sendSuccess(res, {
+    aiSuggestionsEnabled: true,
     suggestions: suggestions.map((row) => ({
       domain: row.domain,
       message: row.message,
@@ -1557,6 +1564,49 @@ router.get("/students/:studentId/suggestions", requireStudentAccess("studentId")
     })),
   });
 });
+
+const StudentPreferencesBody = z.object({
+  aiSuggestionsEnabled: z.boolean(),
+});
+
+router.patch(
+  "/students/:studentId/preferences",
+  requireAuth,
+  requireStudentAccess("studentId"),
+  async (req, res): Promise<void> => {
+    const studentId = req.params.studentId as string;
+    const auth = req.auth!;
+
+    if (auth.userType !== "student" || auth.id !== studentId) {
+      sendError(res, 403, "Only the student can change these preferences");
+      return;
+    }
+
+    const parsed = StudentPreferencesBody.safeParse(req.body);
+    if (!parsed.success) {
+      sendError(res, 400, parsed.error.message);
+      return;
+    }
+
+    const [updated] = await db
+      .update(studentsTable)
+      .set({ aiSuggestionsEnabled: parsed.data.aiSuggestionsEnabled })
+      .where(eq(studentsTable.id, studentId))
+      .returning({
+        id: studentsTable.id,
+        aiSuggestionsEnabled: studentsTable.aiSuggestionsEnabled,
+      });
+
+    if (!updated) {
+      sendError(res, 404, "Student not found");
+      return;
+    }
+
+    sendSuccess(res, {
+      aiSuggestionsEnabled: updated.aiSuggestionsEnabled,
+    });
+  },
+);
 
 export { buildProgress };
 export default router;
