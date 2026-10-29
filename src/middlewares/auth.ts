@@ -15,6 +15,7 @@ import {
   assertTeacherProfileOrgAccess,
   sendAccessDenied,
 } from "../lib/auth/org-access";
+import { teacherCanViewStudentInDistrictDemo } from "../lib/auth/district-demo-roster";
 import { sendError } from "../lib/http/api-response";
 
 export type UserType = "student" | "teacher" | "parent" | "principal" | "district_admin";
@@ -204,6 +205,15 @@ export function requireStudentAccess(paramName = "studentId", options: { allowSe
       if (!student) { sendError(res, 404, "Student not found"); return; }
 
       if (student.guardianId && student.guardianId === auth.id) {
+        next();
+        return;
+      }
+
+      if (
+        auth.userType === "teacher"
+        && req.method === "GET"
+        && (await teacherCanViewStudentInDistrictDemo(auth.id, student))
+      ) {
         next();
         return;
       }

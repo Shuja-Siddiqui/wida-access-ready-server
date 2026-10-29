@@ -342,9 +342,11 @@ router.get("/schools/:schoolId/students", async (req, res): Promise<void> => {
       currentStreak: studentsTable.currentStreak,
       totalXp: studentsTable.totalXp,
       isActive: studentsTable.isActive,
+      email: sql<string | null>`coalesce(${studentsTable.email}, ${usersTable.email})`,
     })
     .from(studentsTable)
     .leftJoin(profilesTable, eq(studentsTable.guardianId, profilesTable.id))
+    .leftJoin(usersTable, eq(studentsTable.userId, usersTable.id))
     .where(
       or(
         eq(studentsTable.schoolId, params.data.schoolId),
