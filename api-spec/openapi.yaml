@@ -2247,6 +2247,12 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/StudentWithProgress"
+        rosterMode:
+          type: string
+          enum: [assigned, district_shared]
+          description: >
+            When district_shared (demo flag), teachers see all district students;
+            guardianId still reflects the single assigned teacher.
       required:
         - teacherId
         - totalStudents

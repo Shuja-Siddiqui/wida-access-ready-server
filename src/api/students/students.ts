@@ -89,6 +89,12 @@ const DOMAIN_TIER_PAIRS: Array<{ domain: Domain; tier: Tier }> = [
   { domain: "reading",   tier: "academic" },
   { domain: "writing",   tier: "academic" },
 ];
+
+/** Legacy practice rows may still have tier general; treat as academic for progress charts. */
+function sessionMatchesTier(sessionTier: string, tier: Tier): boolean {
+  if (sessionTier === tier) return true;
+  return tier === "academic" && sessionTier === "general";
+}
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 function sha256(raw: string): string {
@@ -1329,7 +1335,9 @@ async function buildProgress(studentId: string, assessment: Assessment) {
     const gap = Math.max(0, exitThreshold - currentLevel);
     const normalizedLevel = config.normalize(currentLevel);
 
-    const domainSessions = allSessions.filter((s) => s.domain === domain && s.tier === tier);
+    const domainSessions = allSessions.filter(
+      (s) => s.domain === domain && sessionMatchesTier(s.tier, tier),
+    );
 
     const growthRate = calculateGrowthRate(
       domainSessions.map((s) => ({

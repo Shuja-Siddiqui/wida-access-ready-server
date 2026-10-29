@@ -16,6 +16,27 @@ import { calculateGaps, rankDomains, calculateGrowthRate, projectExitDate } from
 import { sendError, sendSuccess } from "../../lib/http/api-response";
 import { requireAuth, requireTeacherAccess } from "../../middlewares/auth";
 import { assertTeacherBulkAssignAccess, sendAccessDenied } from "../../lib/auth/org-access";
+import {
+  fetchStudentsForTeacherRoster,
+  isDistrictDemoSharedRoster,
+} from "../../lib/auth/district-demo-roster";
+import type { Student } from "../../../db/schema/students";
+
+function mapStudentForTeacherApi(student: Student) {
+  return {
+    id: student.id,
+    teacherId: student.guardianId,
+    name: student.name,
+    gradeBand: student.gradeBand,
+    stateAssessment: student.stateAssessment,
+    homeLanguage: student.homeLanguage,
+    email: student.email ?? null,
+    currentStreak: student.currentStreak,
+    totalXp: student.totalXp,
+    streakShieldAvailable: student.streakShieldAvailable,
+    createdAt: student.createdAt.toISOString(),
+  };
+}
 
 const router: IRouter = createApiRouter();
 
@@ -175,10 +196,7 @@ router.get("/teachers/:teacherId/students", requireTeacherAccess("teacherId"), a
     return;
   }
 
-  const students = await db
-    .select()
-    .from(studentsTable)
-    .where(eq(studentsTable.guardianId, params.data.teacherId));
+  const students = await fetchStudentsForTeacherRoster(params.data.teacherId);
 
   const now = new Date();
   const todayStart = new Date(now);
@@ -224,18 +242,7 @@ router.get("/teachers/:teacherId/students", requireTeacherAccess("teacherId"), a
       }
 
       return {
-        student: {
-          id: student.id,
-          teacherId: student.guardianId,
-          name: student.name,
-          gradeBand: student.gradeBand,
-          stateAssessment: student.stateAssessment,
-          homeLanguage: student.homeLanguage,
-          currentStreak: student.currentStreak,
-          totalXp: student.totalXp,
-          streakShieldAvailable: student.streakShieldAvailable,
-          createdAt: student.createdAt.toISOString(),
-        },
+        student: mapStudentForTeacherApi(student),
         domains,
         lastSessionDate: lastSession?.toISOString() || null,
         isInactive,
@@ -259,10 +266,7 @@ router.get("/teachers/:teacherId/dashboard", requireTeacherAccess("teacherId"), 
     return;
   }
 
-  const students = await db
-    .select()
-    .from(studentsTable)
-    .where(eq(studentsTable.guardianId, params.data.teacherId));
+  const students = await fetchStudentsForTeacherRoster(params.data.teacherId);
 
   const now = new Date();
   const todayStart = new Date(now);
@@ -307,18 +311,7 @@ router.get("/teachers/:teacherId/dashboard", requireTeacherAccess("teacherId"), 
       }
 
       return {
-        student: {
-          id: student.id,
-          teacherId: student.guardianId,
-          name: student.name,
-          gradeBand: student.gradeBand,
-          stateAssessment: student.stateAssessment,
-          homeLanguage: student.homeLanguage,
-          currentStreak: student.currentStreak,
-          totalXp: student.totalXp,
-          streakShieldAvailable: student.streakShieldAvailable,
-          createdAt: student.createdAt.toISOString(),
-        },
+        student: mapStudentForTeacherApi(student),
         domains,
         lastSessionDate: lastSession?.toISOString() || null,
         isInactive,
@@ -343,6 +336,7 @@ router.get("/teachers/:teacherId/dashboard", requireTeacherAccess("teacherId"), 
     stalledStudents: allStudentData.filter((s) => s.isStalled),
     inactiveStudents: allStudentData.filter((s) => s.isInactive),
     allStudents: allStudentData,
+    rosterMode: isDistrictDemoSharedRoster() ? "district_shared" : "assigned",
   });
 });
 
@@ -354,10 +348,7 @@ router.get("/teachers/:teacherId/export", requireTeacherAccess("teacherId"), asy
     return;
   }
 
-  const students = await db
-    .select()
-    .from(studentsTable)
-    .where(eq(studentsTable.guardianId, params.data.teacherId));
+  const students = await fetchStudentsForTeacherRoster(params.data.teacherId);
 
   const rows = await Promise.all(
     students.map(async (student) => {

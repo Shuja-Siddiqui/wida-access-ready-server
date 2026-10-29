@@ -15,4 +15,6 @@ export interface TeacherDashboard {
   stalledStudents: StudentWithProgress[];
   inactiveStudents: StudentWithProgress[];
   allStudents: StudentWithProgress[];
+  /** Present when demo shared roster is enabled on the server. */
+  rosterMode?: "assigned" | "district_shared";
 }
