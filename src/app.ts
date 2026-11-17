@@ -9,6 +9,7 @@ import { WebhookHandlers } from "./lib/billing/webhookHandlers";
 import { buildCorsOptions } from "./lib/security/cors";
 import { resolveApiError, sendResolvedError } from "./lib/http/error-handler";
 import { sendError } from "./lib/http/api-response";
+import { apiAccessFileLogMiddleware, resolveStakeholderLabel } from "./lib/http/api-access-file-log";
 
 const app: Express = express();
 
@@ -29,8 +30,31 @@ app.use(
         };
       },
     },
+    customProps(req) {
+      const stakeholder = resolveStakeholderLabel(req);
+      const auth = req.auth;
+      if (!auth) return { stakeholder };
+      return {
+        stakeholder,
+        userId: auth.userId,
+        profileId: auth.id,
+        userType: auth.userType,
+      };
+    },
+    customSuccessMessage(req, res) {
+      const stakeholder = resolveStakeholderLabel(req);
+      const pathOnly = (req.originalUrl ?? req.url ?? "").split("?")[0] ?? "/";
+      return `${stakeholder} ${req.method} ${pathOnly} ${res.statusCode}`;
+    },
+    customErrorMessage(req, res, err) {
+      const stakeholder = resolveStakeholderLabel(req);
+      const pathOnly = (req.originalUrl ?? req.url ?? "").split("?")[0] ?? "/";
+      return `${stakeholder} ${req.method} ${pathOnly} ${res.statusCode} — ${err.message}`;
+    },
   }),
 );
+
+app.use(apiAccessFileLogMiddleware);
 
 // Stripe webhook route MUST be registered before express.json() -- it needs
 // the raw request body Buffer to verify the signature.

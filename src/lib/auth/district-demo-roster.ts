@@ -9,6 +9,7 @@
 
 import { eq, inArray, or } from "drizzle-orm";
 import { db, profilesTable, schoolsTable, studentsTable, type Student } from "../../../db";
+import { fetchStudentsForTeacherProfile } from "../students/teacher-assignments";
 import { resolveStudentOrgIds, type StudentOrgRow } from "./org-access";
 
 export function isDistrictDemoSharedRoster(): boolean {
@@ -59,15 +60,33 @@ export async function teacherCanViewStudentInDistrictDemo(
   return false;
 }
 
+/** Students assigned to this teacher (junction table). */
+export async function fetchStudentsAssignedToTeacher(teacherId: string): Promise<Student[]> {
+  return fetchStudentsForTeacherProfile(teacherId);
+}
+
+function dedupeStudentsById(rows: Student[]): Student[] {
+  const seen = new Set<string>();
+  const out: Student[] = [];
+  for (const s of rows) {
+    if (seen.has(s.id)) continue;
+    seen.add(s.id);
+    out.push(s);
+  }
+  return out;
+}
+
 /** Students shown on GET …/dashboard, …/students, and …/export for a teacher. */
 export async function fetchStudentsForTeacherRoster(teacherId: string): Promise<Student[]> {
+  const assigned = await fetchStudentsForTeacherProfile(teacherId);
+
   if (!isDistrictDemoSharedRoster()) {
-    return db.select().from(studentsTable).where(eq(studentsTable.guardianId, teacherId));
+    return assigned;
   }
 
   const districtId = await getTeacherDistrictId(teacherId);
   if (!districtId) {
-    return db.select().from(studentsTable).where(eq(studentsTable.guardianId, teacherId));
+    return assigned;
   }
 
   const schoolsInDistrict = await db
@@ -77,12 +96,13 @@ export async function fetchStudentsForTeacherRoster(teacherId: string): Promise<
 
   const schoolIds = schoolsInDistrict.map((s) => s.id);
   const districtMatch = eq(studentsTable.districtId, districtId);
-  if (schoolIds.length === 0) {
-    return db.select().from(studentsTable).where(districtMatch);
-  }
+  const districtStudents =
+    schoolIds.length === 0
+      ? await db.select().from(studentsTable).where(districtMatch)
+      : await db
+          .select()
+          .from(studentsTable)
+          .where(or(districtMatch, inArray(studentsTable.schoolId, schoolIds)));
 
-  return db
-    .select()
-    .from(studentsTable)
-    .where(or(districtMatch, inArray(studentsTable.schoolId, schoolIds)));
+  return dedupeStudentsById([...assigned, ...districtStudents]);
 }

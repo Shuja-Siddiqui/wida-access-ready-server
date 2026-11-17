@@ -9,6 +9,7 @@ export * from "./district_admins"; // district_admin
 
 // Student + learning tables
 export * from "./students";
+export * from "./student_teacher_assignments";
 export * from "./student_levels";
 export * from "./sessions";
 export * from "./session_answers";

@@ -76,6 +76,11 @@ import { ensureSchoolSeatAllocationsForImport } from "../../lib/district/ensure-
 
 const BCRYPT_ROUNDS = 12;
 import { getStudentAiUsage } from "../../lib/rate-limit/usage";
+import {
+  ensureStudentTeacherAssignment,
+  fetchAssignedTeacherIdsByStudentIds,
+  syncPrimaryGuardianAssignment,
+} from "../../lib/students/teacher-assignments";
 
 const router: IRouter = createApiRouter();
 
@@ -282,6 +287,8 @@ router.post("/students", async (req, res): Promise<void> => {
       email: normalizedEmail,
     })
     .returning();
+
+  await syncPrimaryGuardianAssignment(student.id, teacherId);
 
   // Initialize levels — either from a guardian-entered initial score, or
   // defaulted to the assessment's minimum (placement test comes later).
@@ -657,6 +664,10 @@ async function executeBulkImportStudents(params: {
           emailVerified: importEmailVerified,
         })
         .returning();
+
+      if (resolved.guardianId) {
+        await syncPrimaryGuardianAssignment(student.id, resolved.guardianId);
+      }
 
       if (schoolForSeats && (ctx.kind === "principal" || ctx.kind === "district_admin")) {
         const left = schoolSeatsRemaining.get(schoolForSeats);
@@ -1066,10 +1077,14 @@ router.get("/students/:studentId", requireStudentAccess("studentId"), async (req
     }
   }
 
+  const teacherIds = (await fetchAssignedTeacherIdsByStudentIds([student.id])).get(student.id)
+    ?? (student.guardianId ? [student.guardianId] : []);
+
   sendSuccess(res, {
     student: {
       id: student.id,
       teacherId: student.guardianId,
+      assignedTeacherIds: teacherIds,
       name: student.name,
       gradeBand: student.gradeBand,
       stateAssessment: student.stateAssessment,
@@ -1137,10 +1152,10 @@ router.patch("/students/:studentId", requireStudentAccess("studentId"), async (r
     updateData.avatarUrl = parsed.data.avatarUrl;
   }
 
-  // assignedTeacherId — principal-only field to reassign a student to a different teacher
+  // assignedTeacherId — principal adds teacher to roster (multi-teacher); sets primary guardian.
   if (parsed.data.assignedTeacherId !== undefined) {
     if (auth.userType !== "principal" && auth.role !== "super_admin") {
-      sendError(res, 403, "Only a principal can reassign a student to a different teacher");
+      sendError(res, 403, "Only a principal can assign teachers to a student");
       return;
     }
     if (parsed.data.assignedTeacherId !== null) {
@@ -1161,6 +1176,7 @@ router.patch("/students/:studentId", requireStudentAccess("studentId"), async (r
         sendError(res, 403, "Target teacher does not belong to your school");
         return;
       }
+      await ensureStudentTeacherAssignment(params.data.studentId, teacherId, principal.schoolId);
       updateData.guardianId = teacherId;
       updateData.schoolId = principal.schoolId;
       updateData.accountType = "teacher_managed";

@@ -16,6 +16,7 @@ import {
   sendAccessDenied,
 } from "../lib/auth/org-access";
 import { teacherCanViewStudentInDistrictDemo } from "../lib/auth/district-demo-roster";
+import { teacherIsAssignedToStudent } from "../lib/students/teacher-assignments";
 import { sendError } from "../lib/http/api-response";
 
 export type UserType = "student" | "teacher" | "parent" | "principal" | "district_admin";
@@ -209,13 +210,18 @@ export function requireStudentAccess(paramName = "studentId", options: { allowSe
         return;
       }
 
-      if (
-        auth.userType === "teacher"
-        && req.method === "GET"
-        && (await teacherCanViewStudentInDistrictDemo(auth.id, student))
-      ) {
-        next();
-        return;
+      if (auth.userType === "teacher") {
+        if (await teacherIsAssignedToStudent(auth.id, studentId)) {
+          next();
+          return;
+        }
+        if (
+          req.method === "GET"
+          && (await teacherCanViewStudentInDistrictDemo(auth.id, student))
+        ) {
+          next();
+          return;
+        }
       }
 
       if (auth.userType === "principal" || auth.userType === "district_admin") {
