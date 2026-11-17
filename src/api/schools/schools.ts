@@ -13,6 +13,7 @@ import {
   sendAccessDenied,
 } from "../../lib/auth/org-access";
 import { revokeStaffSessions, setUserActive } from "../../lib/auth/account-active";
+import { fetchAssignedTeacherIdsByStudentIds } from "../../lib/students/teacher-assignments";
 
 const router: IRouter = createApiRouter();
 
@@ -355,7 +356,13 @@ router.get("/schools/:schoolId/students", async (req, res): Promise<void> => {
     )
     .orderBy(studentsTable.name);
 
-  sendSuccess(res, students);
+  const assignmentMap = await fetchAssignedTeacherIdsByStudentIds(students.map((s) => s.id));
+  const enriched = students.map((s) => ({
+    ...s,
+    assignedTeacherIds: assignmentMap.get(s.id) ?? (s.guardianId ? [s.guardianId] : []),
+  }));
+
+  sendSuccess(res, enriched);
 });
 
 // Link a teacher to this school (PUT = idempotent)

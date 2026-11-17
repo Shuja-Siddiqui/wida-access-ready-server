@@ -17,15 +17,26 @@ import { sendError, sendSuccess } from "../../lib/http/api-response";
 import { requireAuth, requireTeacherAccess } from "../../middlewares/auth";
 import { assertTeacherBulkAssignAccess, sendAccessDenied } from "../../lib/auth/org-access";
 import {
+  fetchStudentsAssignedToTeacher,
   fetchStudentsForTeacherRoster,
   isDistrictDemoSharedRoster,
 } from "../../lib/auth/district-demo-roster";
+import {
+  fetchAssignedTeacherIdsByStudentIds,
+  syncTeacherStudentAssignments,
+} from "../../lib/students/teacher-assignments";
 import type { Student } from "../../../db/schema/students";
 
-function mapStudentForTeacherApi(student: Student) {
+function mapStudentForTeacherApi(student: Student, assignedTeacherIds?: string[]) {
+  const teachers = assignedTeacherIds?.length
+    ? assignedTeacherIds
+  : student.guardianId
+      ? [student.guardianId]
+      : [];
   return {
     id: student.id,
     teacherId: student.guardianId,
+    assignedTeacherIds: teachers,
     name: student.name,
     gradeBand: student.gradeBand,
     stateAssessment: student.stateAssessment,
@@ -196,7 +207,13 @@ router.get("/teachers/:teacherId/students", requireTeacherAccess("teacherId"), a
     return;
   }
 
-  const students = await fetchStudentsForTeacherRoster(params.data.teacherId);
+  const auth = req.auth!;
+  const students =
+    auth.userType === "principal" || auth.userType === "district_admin"
+      ? await fetchStudentsAssignedToTeacher(params.data.teacherId)
+      : await fetchStudentsForTeacherRoster(params.data.teacherId);
+
+  const assignmentMap = await fetchAssignedTeacherIdsByStudentIds(students.map((s) => s.id));
 
   const now = new Date();
   const todayStart = new Date(now);
@@ -242,7 +259,7 @@ router.get("/teachers/:teacherId/students", requireTeacherAccess("teacherId"), a
       }
 
       return {
-        student: mapStudentForTeacherApi(student),
+        student: mapStudentForTeacherApi(student, assignmentMap.get(student.id)),
         domains,
         lastSessionDate: lastSession?.toISOString() || null,
         isInactive,
@@ -267,6 +284,7 @@ router.get("/teachers/:teacherId/dashboard", requireTeacherAccess("teacherId"), 
   }
 
   const students = await fetchStudentsForTeacherRoster(params.data.teacherId);
+  const assignmentMap = await fetchAssignedTeacherIdsByStudentIds(students.map((s) => s.id));
 
   const now = new Date();
   const todayStart = new Date(now);
@@ -311,7 +329,7 @@ router.get("/teachers/:teacherId/dashboard", requireTeacherAccess("teacherId"), 
       }
 
       return {
-        student: mapStudentForTeacherApi(student),
+        student: mapStudentForTeacherApi(student, assignmentMap.get(student.id)),
         domains,
         lastSessionDate: lastSession?.toISOString() || null,
         isInactive,
@@ -385,9 +403,7 @@ router.get("/teachers/:teacherId/export", requireTeacherAccess("teacherId"), asy
 });
 
 // POST /api/teachers/:teacherId/students/bulk-assign
-// Principal assigns a set of school students to this teacher.
-// Replaces each student's guardianId with this teacher's id.
-// Only students that belong to the same school as the teacher are touched.
+// Syncs this teacher's roster: adds assignments without removing other teachers.
 const BulkAssignBody = z.object({
   studentIds: z.array(z.string().uuid()).min(0),
 });
@@ -457,17 +473,9 @@ router.post("/teachers/:teacherId/students/bulk-assign", async (req, res): Promi
     return;
   }
 
-  const updated = await db
-    .update(studentsTable)
-    .set({
-      guardianId: teacherId,
-      schoolId,
-      accountType: "teacher_managed",
-    })
-    .where(inArray(studentsTable.id, eligibleIds))
-    .returning({ id: studentsTable.id });
+  const assigned = await syncTeacherStudentAssignments(teacherId, eligibleIds, schoolId);
 
-  sendSuccess(res, { assigned: updated.length });
+  sendSuccess(res, { assigned });
 });
 
 export default router;

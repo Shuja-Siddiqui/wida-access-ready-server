@@ -424,6 +424,12 @@ async function applySqlMigrations(client) {
     console.log("  Skip 0023 (students table missing)");
   }
 
+  if (!(await tableExists(client, "student_teacher_assignments"))) {
+    await applyFile(client, "0024_student_teacher_assignments.sql", { continueOnMissing: true });
+  } else {
+    console.log("  Skip 0024 (student_teacher_assignments already exists)");
+  }
+
   console.log("  After:", {
     themes: await tableExists(client, "themes"),
     content_categories: await tableExists(client, "content_categories"),
@@ -441,6 +447,7 @@ async function applySqlMigrations(client) {
     users_email_role_unique: await usersEmailRoleUniqueExists(),
     users_is_active: await usersIsActiveExists(),
     students_ai_suggestions_enabled: await aiSuggestionsEnabledExists(),
+    student_teacher_assignments: await tableExists(client, "student_teacher_assignments"),
   });
 }
 

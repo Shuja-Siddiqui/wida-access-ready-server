@@ -1,6 +1,7 @@
 // Deletes rotated log files older than the configured retention window.
-// Pairs with the pino-roll file transport in ../config/logger.ts, which
-// writes one log file per day to config.logging.dir.
+// Pairs with the pino-roll file transport in ../config/logger.ts (app-*.log)
+// and plain-text API access logs from ../http/api-access-file-log.ts
+// (api-access-*-YYYY-MM-DD.log), all under config.logging.dir.
 
 import { readdir, stat, unlink } from "node:fs/promises";
 import path from "node:path";
